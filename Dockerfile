@@ -18,4 +18,4 @@ COPY data ./data
 COPY --from=web /web/dist ./web/dist
 USER app
 EXPOSE 7860
-CMD ["uvicorn", "invoice_desk.api:app", "--host", "0.0.0.0", "--port", "7860"]
+CMD ["sh", "-c", "uvicorn invoice_desk.api:app --host 0.0.0.0 --port ${PORT:-7860}"]
