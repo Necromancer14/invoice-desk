@@ -317,6 +317,11 @@ class Desk:
             self.audit("system", "run.failed", str(rid), str(exc)[:200])
 
     # ------------------------------------------------------------------ reads
+    @staticmethod
+    def _current_fields(r: dict) -> dict | None:
+        """The reviewer's corrected fields when there are any, otherwise what the reader extracted."""
+        return loads(r["final_fields"]) or loads(r["fields"])
+
     def _run_view(self, r: dict, full: bool = False) -> dict:
         ex = loads(r["extraction"], {}) or {}
         out = dict(id=r["id"], filename=r["filename"], content_type=r["content_type"], size=r["size"], source=r["source"],
@@ -324,7 +329,7 @@ class Desk:
                    decided_at=r["decided_at"], decision_by=r["decision_by"], submitted_by=r["submitted_by"],
                    edited=bool(r["edited"]), error=r["error"], rules_version=r["rules_version"],
                    confidence=ex.get("confidence"), extractor=ex.get("extractor"),
-                   fields=loads(r["final_fields"]) or loads(r["fields"]))
+                   fields=self._current_fields(r))
         if out["fields"]:
             out["summary"] = {k: out["fields"].get(k) for k in ("invoice_number", "seller_name", "total", "currency")}
         if full:
@@ -362,6 +367,19 @@ class Desk:
     def next_review(self, after_id: int | None = None) -> dict | None:
         r = self.db.one("SELECT * FROM runs WHERE status='needs_review' ORDER BY id LIMIT 1")
         return self._run_view(r, True) if r else None
+
+    def review_queue(self) -> list[dict]:
+        """Every run waiting for a person, oldest first, without blobs or traces: enough to draw a list."""
+        rows = self.db.all("SELECT id,filename,created_at,fields,final_fields,results FROM runs "
+                           "WHERE status='needs_review' ORDER BY id")
+        out = []
+        for r in rows:
+            f = self._current_fields(r) or {}
+            results = loads(r["results"], [])
+            out.append(dict(id=r["id"], filename=r["filename"], created_at=r["created_at"], seller=f.get("seller_name"),
+                            invoice_number=f.get("invoice_number"), total=f.get("total"), currency=f.get("currency"),
+                            failed_checks=sum(1 for x in results if x["status"] == "fail" and x["severity"] == "review")))
+        return out
 
     # ----------------------------------------------------------------- review
     def review(self, rid: int, decision: str, actor: str, edits: dict | None = None, note: str = "") -> dict:

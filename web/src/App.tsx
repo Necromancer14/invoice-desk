@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, demoLogin, passwordLogin, session, setUnauthorizedHandler } from "./api";
-import { AppCtx, Err, makeT } from "./common";
+import { AppCtx, Err, makeT, setFormatLang } from "./common";
 import type { Role, Stats } from "./types";
 import type { Lang } from "./i18n";
 import Dashboard from "./views/Dashboard";
@@ -91,7 +91,7 @@ export default function App() {
   useEffect(() => { if (!toastMsg) return; const id = setTimeout(() => setToastMsg(null), 4000); return () => clearTimeout(id); }, [toastMsg]);
 
   const go = useCallback((tab: string, arg?: string) => { location.hash = `#/${tab}${arg ? "/" + arg : ""}`; }, []);
-  const t = useMemo(() => makeT(lang), [lang]);
+  const t = useMemo(() => { setFormatLang(lang); return makeT(lang); }, [lang]);
   const ctx = useMemo(() => ({ t, lang, role: role ?? "viewer", name, toast: (msg: string, kind: "ok" | "err" = "ok") => setToastMsg({ msg, kind }), refreshCounts, go }), [t, lang, role, name, refreshCounts, go]);
 
   if (!checked) return null;
@@ -101,7 +101,7 @@ export default function App() {
     switch (route.tab) {
       case "intake": return <Intake />;
       case "runs": return <Runs openId={route.arg ? Number(route.arg) : undefined} />;
-      case "review": return <Review />;
+      case "review": return <Review openId={route.arg ? Number(route.arg) : undefined} />;
       case "rules": return <Rules />;
       case "evaluation": return <Evaluation />;
       case "audit": return <Audit />;

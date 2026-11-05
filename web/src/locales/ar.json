@@ -1,0 +1,17 @@
+{
+  "Dashboard": "لوحة المتابعة", "Upload invoices": "رفع الفواتير", "Runs": "العمليات", "Review queue": "قائمة المراجعة", "Rules": "القواعد",
+  "Evaluation": "التقييم", "Audit log": "سجل التدقيق", "Settings": "الإعدادات", "Approve": "اعتماد", "Reject": "رفض", "Sign out": "تسجيل الخروج",
+  "Sign in as": "الدخول بصفة", "Viewer": "مشاهد", "Reviewer": "مراجع", "Admin": "مدير", "Approved": "معتمدة", "Needs review": "تحتاج مراجعة",
+  "Rejected": "مرفوضة", "Failed": "فشلت", "Save": "حفظ", "Cancel": "إلغاء", "Search": "بحث", "Upload": "رفع", "Language": "اللغة", "Theme": "المظهر",
+  "Invoice number": "رقم الفاتورة", "Seller": "البائع", "Total": "الإجمالي", "Status": "الحالة", "File": "الملف", "Created": "التاريخ",
+  "Approved by a person": "اعتمدها مراجع", "Rejected by a person": "رفضها مراجع", "Processing": "قيد المعالجة", "Queued": "في الانتظار",
+
+  "Invoices the rules could not settle on their own. Check the original, fix anything the reader got wrong, then decide.": "فواتير لم تتمكن القواعد من البتّ فيها تلقائيًا. راجع المستند الأصلي، وصحّح ما أخطأ القارئ في استخراجه، ثم اتخذ القرار.",
+  "Shortcuts": "اختصارات لوحة المفاتيح", "next": "التالية", "previous": "السابقة", "approve": "اعتماد", "jump to note": "الانتقال إلى الملاحظة",
+  "Invoice #{id} is no longer waiting for review.": "الفاتورة رقم {id} لم تعد بانتظار المراجعة.", "Open it in Runs": "افتحها في العمليات",
+  "The queue is clear": "لا توجد فواتير بانتظار المراجعة", "Nothing is waiting for a person right now.": "لا يوجد حاليًا ما يحتاج إلى مراجعة بشرية.",
+  "Upload more invoices": "رفع مزيد من الفواتير", "Invoices waiting for review": "الفواتير بانتظار المراجعة", "Search the queue": "البحث في القائمة",
+  "Nothing matches the search.": "لا توجد نتائج مطابقة للبحث.", "Back to the list": "العودة إلى القائمة", "Previous": "السابق", "Next": "التالي",
+  "{n} of {total}": "{n} من {total}", "Why this needs a person": "سبب الحاجة إلى مراجعة بشرية",
+  "{n} checks failed": { "zero": "لم يفشل أي فحص", "one": "فشل فحص واحد", "two": "فشل فحصان", "few": "فشلت {n} فحوص", "many": "فشل {n} فحصًا", "other": "فشل {n} فحص" }
+}

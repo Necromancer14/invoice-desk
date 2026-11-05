@@ -187,3 +187,30 @@ kbd { font: 12px var(--font); padding: 1px 7px; border: 1px solid var(--line-str
 :root[data-theme="dark"] .btn.primary kbd { border-color: rgba(0, 0, 0, .4); }
 .hbar { grid-template-columns: minmax(0, 1.7fr) 1.3fr 30px; }
 .grid.g2 { align-items: start; }
+
+/* review queue: a list on the inline-start side, the selected invoice beside it */
+.rq { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 18px; align-items: start; }
+.rq > * { min-width: 0; }
+.rq-list { position: sticky; top: 14px; display: flex; flex-direction: column; gap: 10px; padding: 14px; max-height: calc(100vh - 28px); }
+.rq-items { overflow-y: auto; min-height: 0; flex: 1; display: flex; flex-direction: column; gap: 6px; padding: 2px; margin: 0 -4px; padding-inline: 4px; }
+.rq-item { all: unset; box-sizing: border-box; cursor: pointer; display: flex; flex-direction: column; gap: 3px; padding: 10px 13px; border-radius: 16px; background: var(--row); border: 1px solid var(--line); transition: background .15s, border-color .15s; }
+.rq-item:hover { background: var(--accent-soft); }
+.rq-item:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 55%, transparent); }
+.rq-item[aria-selected="true"] { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 3px var(--accent-soft), inset 0 1px 0 var(--glass-hi); }
+.rq-top { display: flex; align-items: baseline; gap: 10px; } .rq-top b { flex: 1; min-width: 0; max-width: none; font-weight: 650; }
+.rq-sub { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rq-fails { color: var(--amber); font-weight: 600; }
+.rq-back { display: none; }
+.rq .split { grid-template-columns: minmax(0, 1fr); }
+.main:has(.rq) { max-width: 1640px; }
+@media (min-width: 1400px) { .rq .split { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+@media (max-width: 1000px) { .rq { grid-template-columns: 260px minmax(0, 1fr); } }
+/* phones: the list is the first screen, the invoice the second, with a Back button */
+@media (max-width: 800px) {
+  .rq { grid-template-columns: minmax(0, 1fr); }
+  .rq-list { position: static; max-height: none; }
+  .rq.show-detail .rq-list, .rq:not(.show-detail) .rq-detail { display: none; }
+  .rq-back { display: inline-flex; }
+  .rq-keys { display: none; }
+}
+:root[dir="rtl"] .flip-rtl { transform: scaleX(-1); }

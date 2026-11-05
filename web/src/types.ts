@@ -16,6 +16,10 @@ export interface RunSummary {
   error: string | null; confidence: number | null; extractor: string | null; fields: Fields | null;
   summary?: { invoice_number: string | null; seller_name: string | null; total: number | null; currency: string | null };
 }
+export interface QueueItem {
+  id: number; filename: string; created_at: string; seller: string | null; invoice_number: string | null;
+  total: number | null; currency: string | null; failed_checks: number;
+}
 export interface Extraction {
   confidence: number; field_confidence: Record<string, number>; notes: string[]; extractor: string; model: string | null;
   tokens_in: number; tokens_out: number; latency_ms: number;

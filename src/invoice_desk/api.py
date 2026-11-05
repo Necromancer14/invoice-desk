@@ -162,6 +162,10 @@ def create_app(desk: Desk | None = None, auth: Auth | None = None, rate_limit: i
     def review_next(user=Depends(need("viewer"))):
         return desk.next_review() or {}
 
+    @app.get("/api/review/queue")
+    def review_queue(user=Depends(need("viewer"))):
+        return desk.review_queue()
+
     @app.get("/api/stats")
     def stats(user=Depends(need("viewer"))):
         return desk.stats()

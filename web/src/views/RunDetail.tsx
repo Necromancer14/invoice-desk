@@ -91,9 +91,10 @@ export function ReviewForm({ run, onDone }: { run: Run; onDone: (r: Run) => void
     if (!canAct) return;
     const h = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement).tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-      if (e.key === "a") decide("approve");
-      if (e.key === "r") (document.getElementById("reject-note") as HTMLTextAreaElement | null)?.focus();
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.key === "a") { e.preventDefault(); decide("approve"); }
+      // preventDefault keeps the "r" itself from landing in the note once it has focus
+      if (e.key === "r") { e.preventDefault(); (document.getElementById("reject-note") as HTMLTextAreaElement | null)?.focus(); }
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);

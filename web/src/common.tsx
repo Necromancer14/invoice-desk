@@ -1,20 +1,41 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Role, Status } from "./types";
-import { makeT, type Lang } from "./i18n";
+import { LOCALE, makeT, type Lang, type Vars } from "./i18n";
 
 export interface Ctx {
-  t: (s: string) => string; lang: Lang; role: Role; name: string; toast: (msg: string, kind?: "ok" | "err") => void;
+  t: (s: string, vars?: Vars) => string; lang: Lang; role: Role; name: string; toast: (msg: string, kind?: "ok" | "err") => void;
   refreshCounts: () => void; go: (tab: string, arg?: string) => void;
 }
 export const AppCtx = createContext<Ctx>(null as unknown as Ctx);
 export const useApp = () => useContext(AppCtx);
 export const can = (role: Role, need: Role) => ({ viewer: 1, reviewer: 2, admin: 3 }[role] >= { viewer: 1, reviewer: 2, admin: 3 }[need]);
 
-export const money = (n: number | null | undefined, cur?: string | null) =>
-  n == null ? "–" : `${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}${cur ? " " + cur : ""}`;
-export const when = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "–");
-export const pct = (n: number | null | undefined, d = 0) => (n == null ? "–" : `${(n * 100).toFixed(d)}%`);
-export const dur = (s: number | null | undefined) => (s == null ? "–" : s < 90 ? `${s}s` : s < 5400 ? `${Math.round(s / 60)} min` : `${(s / 3600).toFixed(1)} h`);
+/** The language numbers and dates are formatted in. App sets it whenever the language changes, then re-renders. */
+let fmtLang: Lang = "en";
+export const setFormatLang = (l: Lang) => { fmtLang = l; };
+const loc = () => LOCALE[fmtLang];
+
+export const num = (n: number | null | undefined, digits = 0) =>
+  n == null ? "–" : n.toLocaleString(loc(), { minimumFractionDigits: digits, maximumFractionDigits: digits });
+/** Amount plus currency code. Wrap it in <bdi dir="ltr"> where it sits inside Arabic text so the code stays after the number. */
+export const money = (n: number | null | undefined, cur?: string | null) => (n == null ? "–" : `${num(n, 2)}${cur ? " " + cur : ""}`);
+export const when = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleString(loc(), { dateStyle: "medium", timeStyle: "short" }) : "–");
+export const day = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleDateString(loc(), { dateStyle: "medium" }) : "–");
+export const pct = (n: number | null | undefined, d = 0) =>
+  n == null ? "–" : n.toLocaleString(loc(), { style: "percent", minimumFractionDigits: d, maximumFractionDigits: d });
+const unit = (n: number, u: "second" | "minute" | "hour") => n.toLocaleString(loc(), { style: "unit", unit: u, unitDisplay: "short", maximumFractionDigits: 1 });
+export const dur = (s: number | null | undefined) => (s == null ? "–" : s < 90 ? unit(s, "second") : s < 5400 ? unit(Math.round(s / 60), "minute") : unit(s / 3600, "hour"));
+/** "5 minutes ago", in the active language. */
+export function ago(iso: string | null | undefined): string {
+  if (!iso) return "–";
+  const s = Math.round((new Date(iso).getTime() - Date.now()) / 1000);
+  const rtf = new Intl.RelativeTimeFormat(loc(), { numeric: "auto", style: "short" });
+  const a = Math.abs(s);
+  if (a < 60) return rtf.format(s, "second");
+  if (a < 3600) return rtf.format(Math.round(s / 60), "minute");
+  if (a < 86400) return rtf.format(Math.round(s / 3600), "hour");
+  return rtf.format(Math.round(s / 86400), "day");
+}
 
 export const STATUS_LABEL: Record<Status, string> = {
   approved: "Approved", needs_review: "Needs review", rejected: "Rejected", approved_human: "Approved by a person",
@@ -83,3 +104,4 @@ export function Head({ title, sub, children }: { title: string; sub?: string; ch
   return <div className="page-head"><div className="grow"><h1>{title}</h1>{sub && <p>{sub}</p>}</div>{children}</div>;
 }
 export { makeT };
+export { tk } from "./i18n";
