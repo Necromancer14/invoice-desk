@@ -120,3 +120,44 @@ def test_llm_headers_reach_the_pipeline_and_are_not_stored(auth):
     assert seen["mode"] == "ai" and seen["llm"] == {"provider": "gemini", "key": "AIza-secret", "model": "gemini-2.5-flash"}
     dump = " ".join(str(r) for t in ("runs", "audit", "settings") for r in d.db.all(f"SELECT * FROM {t}"))
     assert "AIza-secret" not in dump
+
+
+def _needs_review(n: int) -> bytes:
+    """An invoice with no invoice number: the required-fields rule sends it to review."""
+    return GOOD.replace("Invoice No: ACM-2026-0001\n", "").replace("Beta Foods", f"Buyer {n}").encode()
+
+
+def test_review_queue_lists_waiting_runs_oldest_first(client):
+    r = H(client, "reviewer")
+    clean = client.post("/api/runs", files={"files": ("clean.txt", GOOD, "text/plain")}, headers=r).json()["ids"][0]
+    waiting = [client.post("/api/runs", files={"files": (f"w{i}.txt", _needs_review(i), "text/plain")}, headers=r).json()["ids"][0]
+               for i in range(3)]
+    bad_vat = GOOD.replace("300000000000003", "12345")
+    rejected = client.post("/api/runs", files={"files": ("bad.txt", bad_vat, "text/plain")}, headers=r).json()["ids"][0]
+    assert client.get(f"/api/runs/{clean}", headers=r).json()["status"] == "approved"
+    assert client.get(f"/api/runs/{rejected}", headers=r).json()["status"] == "rejected"
+
+    q = client.get("/api/review/queue", headers=r).json()
+    assert [x["id"] for x in q] == waiting
+    first = q[0]
+    assert set(first) == {"id", "filename", "created_at", "seller", "invoice_number", "total", "currency", "failed_checks"}
+    assert first["filename"] == "w0.txt" and first["seller"] == "Acme Trading" and first["invoice_number"] is None
+    assert first["total"] == 1150.0 and first["currency"] == "SAR" and first["failed_checks"] == 2  # required fields + low confidence
+
+
+def test_review_queue_roles(client):
+    assert client.get("/api/review/queue").status_code == 401
+    for role in ("viewer", "reviewer", "admin"):
+        assert client.get("/api/review/queue", headers=H(client, role)).status_code == 200
+
+
+def test_review_queue_updates_after_decisions(client):
+    r = H(client, "reviewer")
+    ids = [client.post("/api/runs", files={"files": (f"w{i}.txt", _needs_review(i), "text/plain")}, headers=r).json()["ids"][0]
+           for i in range(3)]
+    client.post(f"/api/runs/{ids[1]}/review", json=dict(decision="approve", edits={"invoice_number": "Z-9"}), headers=r)
+    assert [x["id"] for x in client.get("/api/review/queue", headers=r).json()] == [ids[0], ids[2]]
+    client.post(f"/api/runs/{ids[0]}/review", json=dict(decision="reject", note="not ours"), headers=r)
+    assert [x["id"] for x in client.get("/api/review/queue", headers=r).json()] == [ids[2]]
+    client.post(f"/api/runs/{ids[2]}/review", json=dict(decision="approve", edits={"invoice_number": "Z-10"}), headers=r)
+    assert client.get("/api/review/queue", headers=r).json() == []
