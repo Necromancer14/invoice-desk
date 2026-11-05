@@ -5,17 +5,37 @@ const PROVIDER = "id-llm-provider";
 const MODEL = "id-llm-model";
 const keyName = (p: string) => `id-llm-key-${p}`;
 
-const ls = (k: string) => { try { return localStorage.getItem(k) || ""; } catch { return ""; } };
-const lsSet = (k: string, v: string) => { try { v ? localStorage.setItem(k, v) : localStorage.removeItem(k); } catch { /* storage blocked */ } };
+/**
+ * Browser storage with an in-memory fallback. When storage is blocked (private mode, disabled site data,
+ * sandboxed frames) or a write fails, values still live in memory for the current page view.
+ * Anything written during this page view is read back from memory, so a failed write never loses it.
+ */
+function store(area: () => Storage) {
+  const memory = new Map<string, string>(); // "" marks a value removed during this page view
+  return {
+    get(k: string): string {
+      const m = memory.get(k);
+      if (m !== undefined) return m;
+      try { return area().getItem(k) || ""; } catch { return ""; }
+    },
+    set(k: string, v: string): void {
+      memory.set(k, v);
+      try { v ? area().setItem(k, v) : area().removeItem(k); } catch { /* storage blocked: memory only */ }
+    },
+  };
+}
+
+const local = store(() => localStorage);
+// API keys live in sessionStorage only: gone when the tab closes, sent only to this server as a request header.
+const tab = store(() => sessionStorage);
 
 export const session = {
-  get token() { try { return localStorage.getItem(TOKEN); } catch { return null; } },
-  set token(v: string | null) { lsSet(TOKEN, v || ""); },
-  get provider() { return ls(PROVIDER); }, set provider(v: string) { lsSet(PROVIDER, v); },
-  get model() { return ls(MODEL); }, set model(v: string) { lsSet(MODEL, v); },
-  // API keys live in sessionStorage only: gone when the tab closes, sent only to this server as a request header.
-  key(provider: string) { try { return sessionStorage.getItem(keyName(provider)) || ""; } catch { return ""; } },
-  setKey(provider: string, v: string) { try { v ? sessionStorage.setItem(keyName(provider), v) : sessionStorage.removeItem(keyName(provider)); } catch { /* storage blocked */ } },
+  get token() { return local.get(TOKEN) || null; },
+  set token(v: string | null) { local.set(TOKEN, v || ""); },
+  get provider() { return local.get(PROVIDER); }, set provider(v: string) { local.set(PROVIDER, v); },
+  get model() { return local.get(MODEL); }, set model(v: string) { local.set(MODEL, v); },
+  key(provider: string) { return tab.get(keyName(provider)); },
+  setKey(provider: string, v: string) { tab.set(keyName(provider), v); },
   /** Ready to send AI requests: a provider is chosen and, unless it runs locally, a key is present. */
   aiReady(localProviders: string[] = ["ollama"]) { const p = this.provider; return !!p && (localProviders.includes(p) || !!this.key(p)); },
 };
