@@ -72,6 +72,21 @@ with sync_playwright() as pw:
     assert page.evaluate("document.documentElement.dir") == "rtl"
     page.screenshot(path=OUT / "10-arabic-rtl.png")
 
+    # Arabic in the light theme: the screens people look at most. Labels are Arabic now, so navigate by URL
+    # and wait for an Arabic heading plus a line that only shows once the page has its data.
+    page.get_by_role("button", name="تغيير المظهر").click()  # "Switch theme"
+    for shot, tab, heading, ready in [
+        ("13-dashboard-ar", "dashboard", "لوحة المتابعة", "أُنجزت دون تدخل بشري"),
+        ("14-review-ar", "review", "قائمة المراجعة", "سبب الحاجة إلى مراجعة بشرية"),
+        ("15-rules-ar", "rules", "القواعد", "سجل الإصدارات"),
+    ]:
+        page.evaluate(f"location.hash = '#/{tab}'")
+        expect(page.get_by_role("heading", name=heading, exact=True)).to_be_visible()
+        page.wait_for_selector(f"text={ready}")
+        page.wait_for_timeout(500)
+        assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), f"{tab} scrolls sideways in Arabic"
+        page.screenshot(path=OUT / f"{shot}.png")
+
     m = b.new_page(viewport={"width": 390, "height": 800}, device_scale_factor=2)
     m.goto(BASE)
     m.get_by_role("button", name="Reviewer").click()

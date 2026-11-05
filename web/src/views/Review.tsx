@@ -100,7 +100,7 @@ export default function Review({ openId }: { openId?: number }) {
             <div className="rq-items" role="listbox" aria-label={t("Invoices waiting for review")}>
               {shown.map((i) => (
                 <button key={i.id} role="option" aria-selected={i.id === selected} className="rq-item" onClick={() => select(i.id)}>
-                  <span className="rq-top"><b className="ellip">{i.seller || i.filename}</b><span className="num"><bdi dir="ltr">{money(i.total, i.currency)}</bdi></span></span>
+                  <span className="rq-top"><b className="ellip" dir="auto">{i.seller || i.filename}</b><span className="num"><bdi dir="ltr">{money(i.total, i.currency)}</bdi></span></span>
                   <span className="rq-sub muted small">
                     <bdi dir="ltr">{i.invoice_number || `#${i.id}`}</bdi>
                     <span className="rq-fails">{t("{n} checks failed", { n: i.failed_checks })}</span>

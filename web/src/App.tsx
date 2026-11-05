@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, demoLogin, passwordLogin, session, setUnauthorizedHandler } from "./api";
-import { AppCtx, Err, makeT, setFormatLang } from "./common";
+import { AppCtx, Err, makeT, setFormatLang, tk } from "./common";
 import type { Role, Stats } from "./types";
 import type { Lang } from "./i18n";
 import Dashboard from "./views/Dashboard";
@@ -13,15 +13,17 @@ import Audit from "./views/Audit";
 import Settings from "./views/Settings";
 
 const TABS: { id: string; label: string; icon: string }[] = [
-  { id: "dashboard", label: "Dashboard", icon: "M3 13h5V3H3zM10 21h5V8h-5zM17 21h5V12h-5z" },
-  { id: "intake", label: "Upload invoices", icon: "M12 16V4m0 0l-4 4m4-4l4 4M4 20h16" },
-  { id: "runs", label: "Runs", icon: "M4 6h16M4 12h16M4 18h10" },
-  { id: "review", label: "Review queue", icon: "M5 12l4 4 10-10" },
-  { id: "rules", label: "Rules", icon: "M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M8 14v6" },
-  { id: "evaluation", label: "Evaluation", icon: "M4 20V10m6 10V4m6 16v-7m4 7H2" },
-  { id: "audit", label: "Audit log", icon: "M7 3h8l4 4v14H7zM15 3v4h4M10 12h6M10 16h6" },
-  { id: "settings", label: "Settings", icon: "M12 15a3 3 0 100-6 3 3 0 000 6zM19 12a7 7 0 00-.1-1.2l2-1.5-2-3.4-2.3.9a7 7 0 00-2-1.2L14 3h-4l-.6 2.6a7 7 0 00-2 1.2l-2.3-.9-2 3.4 2 1.5a7 7 0 000 2.4l-2 1.5 2 3.4 2.3-.9a7 7 0 002 1.2L10 21h4l.6-2.6a7 7 0 002-1.2l2.3.9 2-3.4-2-1.5c.1-.4.1-.8.1-1.2z" },
+  { id: "dashboard", label: tk("Dashboard"), icon: "M3 13h5V3H3zM10 21h5V8h-5zM17 21h5V12h-5z" },
+  { id: "intake", label: tk("Upload invoices"), icon: "M12 16V4m0 0l-4 4m4-4l4 4M4 20h16" },
+  { id: "runs", label: tk("Runs"), icon: "M4 6h16M4 12h16M4 18h10" },
+  { id: "review", label: tk("Review queue"), icon: "M5 12l4 4 10-10" },
+  { id: "rules", label: tk("Rules"), icon: "M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M8 14v6" },
+  { id: "evaluation", label: tk("Evaluation"), icon: "M4 20V10m6 10V4m6 16v-7m4 7H2" },
+  { id: "audit", label: tk("Audit log"), icon: "M7 3h8l4 4v14H7zM15 3v4h4M10 12h6M10 16h6" },
+  { id: "settings", label: tk("Settings"), icon: "M12 15a3 3 0 100-6 3 3 0 000 6zM19 12a7 7 0 00-.1-1.2l2-1.5-2-3.4-2.3.9a7 7 0 00-2-1.2L14 3h-4l-.6 2.6a7 7 0 00-2 1.2l-2.3-.9-2 3.4 2 1.5a7 7 0 000 2.4l-2 1.5 2 3.4 2.3-.9a7 7 0 002 1.2L10 21h4l.6-2.6a7 7 0 002-1.2l2.3.9 2-3.4-2-1.5c.1-.4.1-.8.1-1.2z" },
 ];
+
+const ROLE_LABEL: Record<Role, string> = { admin: tk("Admin"), reviewer: tk("Reviewer"), viewer: tk("Viewer") };
 
 const LogoMark = () => (
   <svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#19ac60" /><stop offset="1" stopColor="#006c35" /></linearGradient></defs><rect width="32" height="32" rx="10" fill="url(#lg)" /><path d="M9 7.5h10l4.5 4.5v12.5H9z" fill="none" stroke="#fff" strokeWidth="2" strokeLinejoin="round" /><path d="M13 17.5l3 3 5-6" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
@@ -32,11 +34,11 @@ function parseHash(): { tab: string; arg?: string } {
   return { tab: TABS.some((t) => t.id === tab) ? tab : "dashboard", arg };
 }
 
-function Login({ onIn }: { onIn: (r: Role, name: string) => void }) {
+function Login({ onIn, t, lang, setLang }: { onIn: (r: Role, name: string) => void; t: (s: string) => string; lang: Lang; setLang: (l: Lang) => void }) {
   const [demo, setDemo] = useState<boolean | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [name, setName] = useState(""); const [pw, setPw] = useState("");
-  useEffect(() => { fetch("/api/health").then((r) => r.json()).then((h) => setDemo(!!h.demo)).catch(() => setErr("Cannot reach the server.")); }, []);
+  useEffect(() => { fetch("/api/health").then((r) => r.json()).then((h) => setDemo(!!h.demo)).catch(() => setErr(t("Cannot reach the server."))); }, []);
   async function pick(role: Role) {
     try { const r = await demoLogin(role); session.token = r.token; onIn(r.role, r.name); } catch (e) { setErr((e as Error).message); }
   }
@@ -46,18 +48,19 @@ function Login({ onIn }: { onIn: (r: Role, name: string) => void }) {
   }
   return (
     <div className="login"><div className="panel">
-      <div className="row" style={{ gap: 12 }}><svg width="40" height="40" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#006c35" /><path d="M9 7.5h10l4.5 4.5v12.5H9z" fill="none" stroke="#fff" strokeWidth="2" strokeLinejoin="round" /><path d="M13 17.5l3 3 5-6" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg><div><h1>invoice-desk</h1><p className="muted">Saudi e-invoice intake with human review</p></div></div>
+      <div className="row" style={{ gap: 12 }}><svg width="40" height="40" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#006c35" /><path d="M9 7.5h10l4.5 4.5v12.5H9z" fill="none" stroke="#fff" strokeWidth="2" strokeLinejoin="round" /><path d="M13 17.5l3 3 5-6" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg><div className="grow"><h1>invoice-desk</h1><p className="muted">{t("Saudi e-invoice intake with human review")}</p></div>
+        <button className="chip" style={{ alignSelf: "start" }} onClick={() => setLang(lang === "en" ? "ar" : "en")} aria-label={t("Switch language")}>{lang === "en" ? "العربية" : "English"}</button></div>
       <Err msg={err} />
-      {demo && <div className="roles" role="group" aria-label="Sign in as">
-        <p className="muted small">This is a demo with made-up data. Pick a role to look around.</p>
-        <button onClick={() => pick("admin")}><b>Admin</b><span className="muted small">Everything, including editing rules and settings</span></button>
-        <button onClick={() => pick("reviewer")}><b>Reviewer</b><span className="muted small">Upload invoices and decide the ones waiting for review</span></button>
-        <button onClick={() => pick("viewer")}><b>Viewer</b><span className="muted small">Read-only</span></button>
+      {demo && <div className="roles" role="group" aria-label={t("Sign in as")}>
+        <p className="muted small">{t("This is a demo with made-up data. Pick a role to look around.")}</p>
+        <button onClick={() => pick("admin")}><b>{t("Admin")}</b><span className="muted small">{t("Everything, including editing rules and settings")}</span></button>
+        <button onClick={() => pick("reviewer")}><b>{t("Reviewer")}</b><span className="muted small">{t("Upload invoices and decide the ones waiting for review")}</span></button>
+        <button onClick={() => pick("viewer")}><b>{t("Viewer")}</b><span className="muted small">{t("Read-only")}</span></button>
       </div>}
       {demo === false && <form className="col" onSubmit={submit}>
-        <label className="f">Name<input type="text" value={name} onChange={(e) => setName(e.target.value)} autoComplete="username" /></label>
-        <label className="f">Password<input type="password" value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="current-password" /></label>
-        <button className="btn primary" type="submit">Sign in</button></form>}
+        <label className="f">{t("Name")}<input type="text" value={name} onChange={(e) => setName(e.target.value)} autoComplete="username" /></label>
+        <label className="f">{t("Password")}<input type="password" value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="current-password" /></label>
+        <button className="btn primary" type="submit">{t("Sign in")}</button></form>}
     </div></div>
   );
 }
@@ -95,7 +98,7 @@ export default function App() {
   const ctx = useMemo(() => ({ t, lang, role: role ?? "viewer", name, toast: (msg: string, kind: "ok" | "err" = "ok") => setToastMsg({ msg, kind }), refreshCounts, go }), [t, lang, role, name, refreshCounts, go]);
 
   if (!checked) return null;
-  if (!role) return <Login onIn={(r, n) => { setRole(r); setName(n); }} />;
+  if (!role) return <Login t={t} lang={lang} setLang={setLang} onIn={(r, n) => { setRole(r); setName(n); }} />;
 
   const view = (() => {
     switch (route.tab) {
@@ -112,23 +115,23 @@ export default function App() {
 
   return (
     <AppCtx.Provider value={ctx}>
-      <div className="topbar"><button aria-label="Open menu" onClick={() => setOpen(true)}>☰</button>invoice-desk</div>
+      <div className="topbar"><button aria-label={t("Open menu")} onClick={() => setOpen(true)}>☰</button>invoice-desk</div>
       <div className="shell">
-        <aside className={`side ${open ? "open" : ""}`} aria-label="Main">
+        <aside className={`side ${open ? "open" : ""}`} aria-label={t("Main")}>
           <div className="brand"><LogoMark />invoice-desk</div>
           <nav className="nav">
             {TABS.map((tab) => (
               <button key={tab.id} aria-current={route.tab === tab.id ? "page" : undefined} onClick={() => go(tab.id)}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={tab.icon} /></svg>
-                {t(tab.label)}{tab.id === "review" && queue > 0 && <span className="count" aria-label={`${queue} waiting`}>{queue}</span>}
+                {t(tab.label)}{tab.id === "review" && queue > 0 && <span className="count" aria-label={t("{n} waiting", { n: queue })}>{queue}</span>}
               </button>
             ))}
           </nav>
           <div className="side-foot">
-            <div className="who">{name} · {t(role[0].toUpperCase() + role.slice(1))}</div>
+            <div className="who">{name} · {t(ROLE_LABEL[role])}</div>
             <div className="row">
-              <button className="chip" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} aria-label="Switch theme">{theme === "dark" ? "☀ Light" : "☾ Dark"}</button>
-              <button className="chip" onClick={() => setLang(lang === "en" ? "ar" : "en")} aria-label="Switch language">{lang === "en" ? "العربية" : "English"}</button>
+              <button className="chip" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} aria-label={t("Switch theme")}>{theme === "dark" ? `☀ ${t("Light")}` : `☾ ${t("Dark")}`}</button>
+              <button className="chip" onClick={() => setLang(lang === "en" ? "ar" : "en")} aria-label={t("Switch language")}>{lang === "en" ? "العربية" : "English"}</button>
               <button className="chip" onClick={logout}>{t("Sign out")}</button>
             </div>
           </div>

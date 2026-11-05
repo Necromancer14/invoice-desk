@@ -1,3 +1,18 @@
 {
-  "{n} checks failed": { "one": "{n} check failed", "other": "{n} checks failed" }
+  "{n} checks failed": { "one": "{n} check failed", "other": "{n} checks failed" },
+  "{n} invoices": { "one": "{n} invoice", "other": "{n} invoices" },
+  "{n} invoices received": { "one": "{n} invoice received", "other": "{n} invoices received" },
+  "Process {n} files": { "one": "Process {n} file", "other": "Process {n} files" },
+  "Show the {n} disagreements": { "one": "Show the {n} disagreement", "other": "Show the {n} disagreements" },
+  "Hide the {n} disagreements": { "one": "Hide the {n} disagreement", "other": "Hide the {n} disagreements" },
+  "{n} tokens": { "one": "{n} token", "other": "{n} tokens" },
+  "Load {n} text samples": { "one": "Load {n} text sample", "other": "Load {n} text samples" },
+  "Checked against {n} past invoices: no decision would change.": {
+    "one": "Checked against {n} past invoice: its decision would not change.",
+    "other": "Checked against {n} past invoices: no decision would change."
+  },
+  "{changed} of {n} past invoices would get a different decision.": {
+    "one": "{changed} of {n} past invoice would get a different decision.",
+    "other": "{changed} of {n} past invoices would get a different decision."
+  }
 }

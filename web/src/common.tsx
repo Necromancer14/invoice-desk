@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Role, Status } from "./types";
-import { LOCALE, makeT, type Lang, type Vars } from "./i18n";
+import { LOCALE, makeT, tk, type Lang, type Vars } from "./i18n";
 
 export interface Ctx {
   t: (s: string, vars?: Vars) => string; lang: Lang; role: Role; name: string; toast: (msg: string, kind?: "ok" | "err") => void;
@@ -20,7 +20,9 @@ export const num = (n: number | null | undefined, digits = 0) =>
 /** Amount plus currency code. Wrap it in <bdi dir="ltr"> where it sits inside Arabic text so the code stays after the number. */
 export const money = (n: number | null | undefined, cur?: string | null) => (n == null ? "–" : `${num(n, 2)}${cur ? " " + cur : ""}`);
 export const when = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleString(loc(), { dateStyle: "medium", timeStyle: "short" }) : "–");
-export const day = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleDateString(loc(), { dateStyle: "medium" }) : "–");
+/** A calendar date. Plain YYYY-MM-DD values are read as that day, not as UTC midnight shifted into local time. */
+export const day = (iso: string | null | undefined) =>
+  iso ? new Date(iso).toLocaleDateString(loc(), { dateStyle: "medium", ...(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? { timeZone: "UTC" } : {}) }) : "–";
 export const pct = (n: number | null | undefined, d = 0) =>
   n == null ? "–" : n.toLocaleString(loc(), { style: "percent", minimumFractionDigits: d, maximumFractionDigits: d });
 const unit = (n: number, u: "second" | "minute" | "hour") => n.toLocaleString(loc(), { style: "unit", unit: u, unitDisplay: "short", maximumFractionDigits: 1 });
@@ -38,9 +40,17 @@ export function ago(iso: string | null | undefined): string {
 }
 
 export const STATUS_LABEL: Record<Status, string> = {
-  approved: "Approved", needs_review: "Needs review", rejected: "Rejected", approved_human: "Approved by a person",
-  rejected_human: "Rejected by a person", failed: "Failed", queued: "Queued", processing: "Processing",
+  approved: tk("Approved"), needs_review: tk("Needs review"), rejected: tk("Rejected"), approved_human: tk("Approved by a person"),
+  rejected_human: tk("Rejected by a person"), failed: tk("Failed"), queued: tk("Queued"), processing: tk("Processing"),
 };
+
+/** Display names for the invoice fields. The field ids themselves stay as they are in expressions and the API. */
+export const FIELD_LABEL: Record<string, string> = {
+  invoice_number: tk("Invoice number"), issue_date: tk("Issue date"), due_date: tk("Due date"), seller_name: tk("Seller"),
+  seller_vat: tk("Seller VAT number"), buyer_name: tk("Buyer"), buyer_vat: tk("Buyer VAT number"), currency: tk("Currency"),
+  subtotal: tk("Subtotal"), vat_amount: tk("VAT amount"), total: tk("Total"), qr_payload: tk("QR code"), line_items: tk("Line items"),
+};
+const CHECK_LABEL = { pass: tk("Check passed"), fail: tk("Check failed"), skip: tk("Check skipped") };
 
 const Icon = ({ d }: { d: string }) => (
   <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>
@@ -55,10 +65,12 @@ export function StatusPill({ status }: { status: Status }) {
   return <span className={`pill s-${status}`}><Icon d={ICONS[status]} />{t(STATUS_LABEL[status])}</span>;
 }
 export function CheckMark({ s }: { s: "pass" | "fail" | "skip" }) {
-  return <span className={`pill ${s}`} style={{ padding: 3 }} role="img" aria-label={s}><Icon d={ICONS[s]} /></span>;
+  const { t } = useApp();
+  return <span className={`pill ${s}`} style={{ padding: 3 }} role="img" aria-label={t(CHECK_LABEL[s])}><Icon d={ICONS[s]} /></span>;
 }
 
 export function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+  const { t } = useApp();
   useEffect(() => {
     const h = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", h);
@@ -67,7 +79,7 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
   return (
     <div className="modal-bg" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal" role="dialog" aria-modal="true" aria-label={title}>
-        <div className="row"><h2>{title}</h2><button className="btn ghost small right" onClick={onClose} aria-label="Close">✕</button></div>
+        <div className="row"><h2>{title}</h2><button className="btn ghost small right" onClick={onClose} aria-label={t("Close")}>✕</button></div>
         {children}
       </div>
     </div>
@@ -103,5 +115,4 @@ export const Empty = ({ title, hint, children }: { title: string; hint?: string;
 export function Head({ title, sub, children }: { title: string; sub?: string; children?: ReactNode }) {
   return <div className="page-head"><div className="grow"><h1>{title}</h1>{sub && <p>{sub}</p>}</div>{children}</div>;
 }
-export { makeT };
-export { tk } from "./i18n";
+export { makeT, tk };
