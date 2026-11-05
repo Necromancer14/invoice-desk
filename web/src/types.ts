@@ -48,9 +48,19 @@ export interface Sample { id: string; file: string; format: string; lang: string
 export interface EvalRow { id: string; file: string; format: string; lang: string; scenario: string; expected: string; got: string; agree: boolean; unsafe: boolean; false_reject: boolean; fields_ok: number; fields_total: number }
 export interface Slice { n: number; agree: number; fields_ok: number; fields_total: number }
 export interface EvalResult {
-  mode: string; count: number; as_of: string; ran_at?: string; field_accuracy: number; decision_agreement: number; auto_approve_rate: number;
-  review_rate: number; unsafe_auto_approvals: number; false_rejections: number; tokens_in: number; tokens_out: number;
+  mode?: string; count: number; errors?: number; fields_total?: number; as_of?: string; ran_at?: string; rules_version?: number;
+  field_accuracy: number | null; decision_agreement: number | null; auto_approve_rate: number | null;
+  review_rate: number | null; unsafe_auto_approvals: number; false_rejections: number; tokens_in?: number; tokens_out?: number;
   by_field: Record<string, number>; by_format: Record<string, Slice>; by_lang: Record<string, Slice>; by_scenario: Record<string, Slice>; rows: EvalRow[];
 }
+export interface EvalErrorRow { id: string; file: string; format: string; lang: string; scenario: string; outcome: "error"; error: string }
+/** Everything evaluated so far with one AI model, combined across runs. */
+export interface AiTotals extends EvalResult {
+  provider: string; model: string; first_at: string; last_at: string; rules_versions: [number, number]; samples_total: number; error_rows: EvalErrorRow[];
+}
+export interface AiLastRun {
+  provider: string; model: string; seed: number; sample_size: number; picked: number; attempted: number; evaluated: number; errors: number;
+  stopped: { reason: "quota" | "rate_limit"; message: string } | null; rpm: number; only_new: boolean; skipped: number; ran_at: string; error_rows: EvalErrorRow[];
+}
 export interface Settings { default_mode: "rules" | "ai"; price_in_per_mtok: string; price_out_per_mtok: string; auto_approve: "true" | "false" }
-export interface Provider { id: string; label: string; free: boolean; model: string; images: boolean; key_url: string; note: string; needs_key: boolean }
+export interface Provider { id: string; label: string; free: boolean; model: string; alt_models: string[]; images: boolean; key_url: string; note: string; needs_key: boolean }

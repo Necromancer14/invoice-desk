@@ -1,18 +1,20 @@
 {
-  "{n} checks failed": { "one": "{n} check failed", "other": "{n} checks failed" },
-  "{n} invoices": { "one": "{n} invoice", "other": "{n} invoices" },
-  "{n} invoices received": { "one": "{n} invoice received", "other": "{n} invoices received" },
-  "Process {n} files": { "one": "Process {n} file", "other": "Process {n} files" },
-  "Show the {n} disagreements": { "one": "Show the {n} disagreement", "other": "Show the {n} disagreements" },
-  "Hide the {n} disagreements": { "one": "Hide the {n} disagreement", "other": "Hide the {n} disagreements" },
-  "{n} tokens": { "one": "{n} token", "other": "{n} tokens" },
-  "Load {n} text samples": { "one": "Load {n} text sample", "other": "Load {n} text samples" },
-  "Checked against {n} past invoices: no decision would change.": {
-    "one": "Checked against {n} past invoice: its decision would not change.",
-    "other": "Checked against {n} past invoices: no decision would change."
-  },
-  "{changed} of {n} past invoices would get a different decision.": {
-    "one": "{changed} of {n} past invoice would get a different decision.",
-    "other": "{changed} of {n} past invoices would get a different decision."
-  }
+  "{n} checks failed": {"one": "{n} check failed", "other": "{n} checks failed"},
+  "{n} invoices": {"one": "{n} invoice", "other": "{n} invoices"},
+  "{n} invoices received": {"one": "{n} invoice received", "other": "{n} invoices received"},
+  "Process {n} files": {"one": "Process {n} file", "other": "Process {n} files"},
+  "Show the {n} disagreements": {"one": "Show the {n} disagreement", "other": "Show the {n} disagreements"},
+  "Hide the {n} disagreements": {"one": "Hide the {n} disagreement", "other": "Hide the {n} disagreements"},
+  "{n} tokens": {"one": "{n} token", "other": "{n} tokens"},
+  "Load {n} text samples": {"one": "Load {n} text sample", "other": "Load {n} text samples"},
+  "Checked against {n} past invoices: no decision would change.": {"one": "Checked against {n} past invoice: its decision would not change.", "other": "Checked against {n} past invoices: no decision would change."},
+  "{changed} of {n} past invoices would get a different decision.": {"one": "{changed} of {n} past invoice would get a different decision.", "other": "{changed} of {n} past invoices would get a different decision."},
+  "n = {n} fields": {"one": "n = {n} field", "other": "n = {n} fields"},
+  "{n} errors": {"one": "{n} error", "other": "{n} errors"},
+  "{n} errors so far": {"one": "{n} error so far", "other": "{n} errors so far"},
+  "{n} requests a minute": {"one": "{n} request a minute", "other": "{n} requests a minute"},
+  "{n} already evaluated were skipped": {"one": "{n} already evaluated was skipped", "other": "{n} already evaluated were skipped"},
+  "About {n} minutes at this pace.": {"one": "About {n} minute at this pace.", "other": "About {n} minutes at this pace."},
+  "{done} of {n} invoices evaluated": {"one": "{done} of {n} invoice evaluated", "other": "{done} of {n} invoices evaluated"},
+  "{n} not reached": {"one": "{n} not reached", "other": "{n} not reached"}
 }

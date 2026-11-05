@@ -91,8 +91,9 @@ def test_gemini_request_and_parse():
 
 
 def test_gemini_default_model():
-    assert next(p for p in public_providers() if p["id"] == "gemini")["model"] == "gemini-3.8-flash"
-    assert build_extractor({"provider": "gemini", "key": "k"}).model == "gemini-3.8-flash"
+    gemini = next(p for p in public_providers() if p["id"] == "gemini")
+    assert gemini["model"] == "gemini-3.5-flash-lite" and gemini["alt_models"] == ["gemini-3.8-flash"]
+    assert build_extractor({"provider": "gemini", "key": "k"}).model == "gemini-3.5-flash-lite"
 
 
 def test_gemini_unknown_model_says_what_to_do():
@@ -100,7 +101,7 @@ def test_gemini_unknown_model_says_what_to_do():
         return httpx.Response(404, json={"error": {"code": 404, "message": "models/gemini-2.5-flash is not found for API version v1beta. Use gemini-3.8-flash.", "status": "NOT_FOUND"}})
     with pytest.raises(ProviderError) as err:
         GeminiExtractor("k", "gemini-2.5-flash", fake(gone)).extract(GOOD.encode(), "text/plain")
-    assert str(err.value) == "That model name isn't available. Type a current model name in the Model box (see aistudio.google.com)."
+    assert str(err.value) == "That model name isn't available. Type a current model name, as listed at aistudio.google.com, in the Model box."
 
 
 def test_gemini_rejects_odd_model_names():

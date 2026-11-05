@@ -8,7 +8,7 @@ You need Python 3.11 or newer. Check in Command Prompt: `py --version`. If it is
 4. Open http://localhost:8000 in your browser and pick **Admin**.
 5. Press **Upload invoices**, then **Load 12 text samples**. They appear under **Runs**; some go to **Review queue**.
 6. Try **Rules**: add a rule, press **Check impact on past invoices**, save, restore the old version.
-7. Optional, for images and odd layouts: **Settings** → Google Gemini → paste a free key from aistudio.google.com/apikey → **Save and test connection**. Then on **Upload invoices** choose **AI model** and load the image samples.
+7. Optional, for images and odd layouts: **Settings** → Google Gemini → paste a free key from aistudio.google.com/apikey → **Save and test connection**. Then on **Upload invoices** choose **AI model** and load the image samples. If the test says the model isn't available, type a current model name from aistudio.google.com in the **Model** box (`gemini-3.8-flash` is one to try) and test again. The free tier allows only about 20 requests a day per model, so on the **Evaluation** page keep the default sample of 20 and tick *Only invoices not yet evaluated with this model* to continue the next day.
 8. Stop the server with Ctrl+C in the Command Prompt.
 
 Data is kept in memory, so restarting gives you a clean demo. To keep data between runs: `set INVOICE_DESK_DB=desk.db` before step 3.

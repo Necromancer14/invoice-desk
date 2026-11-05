@@ -2,7 +2,7 @@
 
 ## Short version (LinkedIn Featured description)
 
-Saudi e-invoice intake desk. Invoices (text, PDF, photo, Arabic or English) are read by a free built-in reader or an AI model of the user's choice (Gemini, Groq, OpenRouter, Ollama, Claude, OpenAI), checked against rules stored in a database, auto-approved when clean, and routed to a person when not. Rules are edited in the portal with a dry run and version rollback, so policy changes need no deployment. React and TypeScript front end, FastAPI back end, 95 tests, evaluation harness, MCP server. Synthetic data, not ZATCA-certified.
+Saudi e-invoice intake desk. Invoices (text, PDF, photo, Arabic or English) are read by a free built-in reader or an AI model of the user's choice (Gemini, Groq, OpenRouter, Ollama, Claude, OpenAI), checked against rules stored in a database, auto-approved when clean, and routed to a person when not. Rules are edited in the portal with a dry run and version rollback, so policy changes need no deployment. React and TypeScript front end, FastAPI back end, 116 tests, evaluation harness, MCP server. Synthetic data, not ZATCA-certified.
 
 ## Long version
 

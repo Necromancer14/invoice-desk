@@ -17,7 +17,7 @@ from . import __version__
 from .auth import Auth, AuthError, allows
 from .db import dumps, loads
 from .desk import Desk, DeskError
-from .evaluation import evaluate
+from .evaluation import ai_history, evaluate, evaluate_ai, evaluated_ids, save_ai_rows
 from .providers import ProviderError, build_extractor, public_providers
 from .rules import HELP_FUNCS, RULE_TYPES
 from .samples import list_samples, sample_bytes
@@ -70,7 +70,18 @@ def llm_from(request: Request) -> dict | None:
     return dict(provider=h.get("x-llm-provider", ""), key=h.get("x-llm-key", ""), model=h.get("x-llm-model", ""))
 
 
-def create_app(desk: Desk | None = None, auth: Auth | None = None, rate_limit: int = 40) -> FastAPI:
+def _int(body: dict, key: str, default: int, lo: int, hi: int) -> int:
+    try:
+        v = int(body.get(key, default))
+    except (TypeError, ValueError):
+        raise HTTPException(400, f"{key} must be a whole number") from None
+    if not lo <= v <= hi:
+        raise HTTPException(400, f"{key} must be between {lo} and {hi}")
+    return v
+
+
+def create_app(desk: Desk | None = None, auth: Auth | None = None, rate_limit: int = 40, eval_transport=None) -> FastAPI:
+    """eval_transport: an httpx transport for the AI evaluation's provider calls (tests use a fake one)."""
     desk = desk or Desk(os.environ.get("INVOICE_DESK_DB", ":memory:"))
     auth = auth or Auth()
     limiter = RateLimiter(rate_limit)
@@ -259,6 +270,25 @@ def create_app(desk: Desk | None = None, auth: Auth | None = None, rate_limit: i
         return Response(blob, media_type=guess_type(name, None))
 
     # ------------------------------------------------------------- evaluation
+    def _run_eval_ai(job_id: str, llm: dict, opts: dict):
+        job = jobs[job_id]
+        try:
+            model = build_extractor(llm).model
+            skip = evaluated_ids(desk.db, llm["provider"], model) if opts["only_new"] else []
+            res = evaluate_ai(llm, desk.rules(), sample_size=opts["sample_size"], seed=opts["seed"], rpm=opts["rpm"],
+                              skip_ids=skip, transport=eval_transport, progress=job.update)
+            version = desk.rules_version()
+            save_ai_rows(desk.db, res["provider"], res["model"], version, res["rows"])
+            last = {k: res[k] for k in ("provider", "model", "seed", "sample_size", "attempted", "evaluated", "errors", "stopped")}
+            last.update(picked=len(res["picked"]), rpm=opts["rpm"], only_new=opts["only_new"], skipped=len(skip),
+                        rules_version=version, ran_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                        error_rows=[r for r in res["rows"] if r["outcome"] == "error"])
+            desk.db.run("INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                        ("eval_ai_last", dumps(last)))
+            job.update(status="done", stopped=res["stopped"], evaluated=res["evaluated"], errors=res["errors"], total=len(res["picked"]))
+        except Exception as exc:
+            job.update(status="error", error=f"{type(exc).__name__}: {exc}")
+
     def _run_eval(job_id: str, mode: str, llm: dict | None):
         try:
             res = evaluate(mode=mode, llm=llm, rules=desk.rules())
@@ -273,6 +303,9 @@ def create_app(desk: Desk | None = None, auth: Auth | None = None, rate_limit: i
 
     @app.post("/api/evaluation/run")
     def eval_run(body: dict, request: Request, user=Depends(need("admin"))):
+        """mode=rules: all 60 samples with the built-in reader.
+        mode=ai: sample_size (1-60, default 20) picked by seed, paced at rpm requests a minute (default 4),
+        only_new skips samples already scored with this model."""
         mode = body.get("mode", "rules")
         llm = llm_from(request)
         if mode == "ai":
@@ -280,12 +313,19 @@ def create_app(desk: Desk | None = None, auth: Auth | None = None, rate_limit: i
                 build_extractor(llm or {})
             except ProviderError as exc:
                 raise HTTPException(400, str(exc)) from exc
+            if any(j.get("status") == "running" and j.get("mode") == "ai" for j in jobs.values()):
+                raise HTTPException(409, "an AI evaluation is already running")
+            opts = dict(sample_size=_int(body, "sample_size", 20, 1, 60), rpm=_int(body, "rpm", 4, 1, 60),
+                        seed=_int(body, "seed", 1, 0, 1_000_000), only_new=bool(body.get("only_new")))
         elif mode != "rules":
             raise HTTPException(400, "mode must be rules or ai")
         job = f"job{len(jobs) + 1}"
         jobs[job] = dict(status="running", mode=mode)
-        desk.audit(user["sub"], "evaluation.run", mode)
-        threading.Thread(target=_run_eval, args=(job, mode, llm), daemon=True).start()
+        desk.audit(user["sub"], "evaluation.run", mode if mode == "rules" else f"ai {llm['provider']} n={opts['sample_size']} rpm={opts['rpm']}")
+        if mode == "ai":
+            threading.Thread(target=_run_eval_ai, args=(job, llm, opts), daemon=True).start()
+        else:
+            threading.Thread(target=_run_eval, args=(job, mode, llm), daemon=True).start()
         return dict(job=job)
 
     @app.get("/api/evaluation/jobs/{job}")
@@ -294,10 +334,10 @@ def create_app(desk: Desk | None = None, auth: Auth | None = None, rate_limit: i
 
     @app.get("/api/evaluation")
     def eval_results(user=Depends(need("viewer"))):
-        out = {}
-        for mode in ("rules", "ai"):
-            row = desk.db.one("SELECT value FROM settings WHERE key=?", (f"eval_{mode}",))
-            out[mode] = loads(row["value"]) if row else None
+        row = desk.db.one("SELECT value FROM settings WHERE key='eval_rules'")
+        last = desk.db.one("SELECT value FROM settings WHERE key='eval_ai_last'")
+        out = dict(rules=loads(row["value"]) if row else None, ai_models=ai_history(desk.db),
+                   ai_last=loads(last["value"]) if last else None)
         recorded = RECORDED / "evaluation_ai.json"
         out["recorded_ai"] = loads(recorded.read_text(encoding="utf-8")) if recorded.exists() else None
         return out

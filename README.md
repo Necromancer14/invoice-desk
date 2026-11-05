@@ -24,7 +24,7 @@ A Saudi e-invoice intake desk. Invoices come in as text, PDF or photo. A built-i
 - **Audit log** of every action, including automatic decisions.
 - **Evaluation** page: scores the reader and rules on 60 synthetic invoices with a known answer key (field accuracy, decision agreement, unsafe approvals, false rejections).
 - **Roles**: viewer, reviewer, admin. Signed tokens. Demo mode lets visitors pick a role; set `DEMO_MODE=0` and `INVOICE_DESK_USERS` for real sign-in.
-- **Portal**: React and TypeScript, about 75 KB gzipped, no UI or chart library. A frosted-glass design in flag green and white, light and dark themes, responsive down to phone width.
+- **Portal**: React and TypeScript, about 78 KB gzipped, no UI or chart library. A frosted-glass design in flag green and white, light and dark themes, responsive down to phone width.
 - **Full Arabic** with a right-to-left layout: every screen is translated, with Arabic plural forms, and numbers and dates are formatted for the chosen language, while invoice numbers, VAT numbers, amounts and currency codes stay left-to-right. `node tools/check_i18n.mjs` (run in CI) fails if any text in the portal is missing its Arabic.
 - **MCP server** so Claude Desktop or Claude Code can read and check invoices.
 
@@ -57,7 +57,9 @@ The default needs no key. To read images, scans and unusual layouts, open **Sett
 | Anthropic Claude | Paid API key (a Claude Pro chat plan does not include API credits) | Yes, and PDFs | console.anthropic.com |
 | OpenAI | Paid | Yes | platform.openai.com |
 
-The key stays in the browser tab's session storage, travels in a request header to this server, is used for that request and is not stored or logged (there are tests for that). Free tiers have rate limits, and Google may use free-tier content to improve its products, so use only made-up invoices. If an AI call fails, the invoice falls back to the built-in reader and the trace says so. Model names are editable because providers rename them.
+The key stays in the browser tab's session storage, travels in a request header to this server, is used for that request and is not stored or logged (there are tests for that). Free tiers have rate limits, and Google may use free-tier content to improve its products, so use only made-up invoices. If an AI call fails during normal intake, the invoice falls back to the built-in reader and the trace says so.
+
+**Model names.** Providers rename and retire models, and a name that works for an older key can be refused for a new one, so the **Model** box in Settings is always editable and no default is guaranteed. Gemini starts with `gemini-3.5-flash-lite`; `gemini-3.8-flash` is suggested as an alternative to try. If Gemini answers that a model isn't available, the message asks you to type a current model name, as listed at aistudio.google.com. (`gemini-2.5-flash` and `gemini-2.5-flash-lite` are refused for new free keys.)
 
 The provider adapters are tested against a fake HTTP server (request shape, error messages, fenced JSON, retry without JSON mode). They have not been run against the live services from the build environment, so press **Save and test connection** once with your own key.
 
@@ -76,6 +78,15 @@ The provider adapters are tested against a fake HTTP server (request shape, erro
 Unsafe auto-approvals: 0. Wrongly rejected: 0. When the rule-based reader cannot read something, the invoice goes to a person, it is not guessed at.
 
 **Read these numbers carefully.** The invoices are synthetic and follow formats the rule-based reader was written against, so its text and PDF scores are optimistic. The image and unusual-wording rows are the honest weak spot, and they are where a language model is supposed to help. No AI-model run is included in these numbers. Run the Evaluation page with Gemini's free key and compare. Do not quote AI accuracy figures until you have.
+
+### Evaluating an AI model on a free tier
+
+Gemini's free tier allows only about 5 to 10 requests a minute and around 20 a day per model, so all 60 invoices cannot be read in one go. The Evaluation page handles that:
+
+- **A sample, not all 60.** Choose how many invoices (default 20). The pick is stratified: it always includes every file type (text, PDF, image), every language, every kind of defect, a duplicate and the prompt-injection sample, and fills the rest in proportion to the full set. The same seed gives the same invoices.
+- **Continue tomorrow.** Tick *Only invoices not yet evaluated with this model* and the next run picks from what is left. Results are stored per provider and model with the date, and the page shows combined totals over everything evaluated so far, with the sample size *n* next to every percentage.
+- **Paced.** *Requests per minute* (default 4) spaces the calls. A 429 or 503 is retried up to 3 times, honouring `Retry-After` (or Gemini's `retryDelay`) when given and backing off otherwise. A daily-quota answer stops the run at once with a clear message; what was done is kept.
+- **No silent fallback.** During evaluation a failed AI call is never handed to the built-in reader. That invoice is recorded as an error, shown in the count ("14 of 20 evaluated, 6 errors") and left out of every percentage.
 
 ## Architecture
 
@@ -105,7 +116,7 @@ flowchart LR
 
 ```bash
 pip install -e ".[dev,mcp]"
-pytest -q          # 98 tests: rules, expression safety, pipeline, review and the review queue, versioning, API roles, provider adapters (fake servers), evaluation
+pytest -q          # 116 tests: rules, expression safety, pipeline, review and the review queue, versioning, API roles, provider adapters and 429/503 retries (fake servers), evaluation and the AI sample
 python tools/e2e.py   # with the server running: drives the portal in Chromium
 ```
 

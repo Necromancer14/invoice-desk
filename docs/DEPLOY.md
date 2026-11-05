@@ -51,5 +51,5 @@ Never put an API key in the repo, in a public Space variable, or in a screenshot
 ## Before you publish
 
 - This project is yours and unrelated to Oz. Do not add anything from your work, and check your contract if you are unsure.
-- Run an AI model once yourself (Gemini's free key is enough) so you can speak to real numbers.
+- Run an AI model yourself (Gemini's free key is enough) so you can speak to real numbers. The free tier allows about 20 requests a day per model, so evaluate a sample of 20 a day with *Only invoices not yet evaluated with this model* ticked, and quote the combined totals with their *n*.
 - Read the code. You should be able to explain every file in an interview.

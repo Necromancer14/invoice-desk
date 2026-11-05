@@ -62,6 +62,8 @@ export default function Settings({ theme, setTheme, lang, setLang }: { theme: st
                 )}
                 <label className="f">{t("Model")} <span className="hint">{t("(leave empty for {model})", { model: cur.model })}</span>
                   <input type="text" dir="ltr" value={model} placeholder={cur.model} onChange={(e) => setModel(e.target.value)} />
+                  {cur.alt_models.length > 0 && <span className="hint">{t("Also worth trying: {models}.", { models: cur.alt_models.join(", ") })}</span>}
+                  <span className="hint">{t("Providers rename and retire models, and a name that works for one key may not work for a new one. If the test says a model isn't available, type a current name from the provider's site.")}</span>
                 </label>
                 <div className="row wrap">
                   <button className="btn primary" onClick={test} disabled={testing}>{testing ? t("Testing…") : t("Save and test connection")}</button>

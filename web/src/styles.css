@@ -220,3 +220,8 @@ kbd { font: 12px var(--font); padding: 1px 7px; border: 1px solid var(--line-str
 :root[dir="rtl"] input[dir="ltr"], :root[dir="rtl"] textarea[dir="ltr"] { text-align: right; }
 /* a row of filter buttons wider than a phone scrolls on its own instead of widening the page */
 .seg { max-width: 100%; overflow-x: auto; scrollbar-width: none; } .seg button { flex-shrink: 0; }
+/* evaluation: the sample size beside each figure, and the run's outcome line */
+.fact .n-note { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.notice .outcome { font-size: 17px; }
+.eval-opts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 800px) { .eval-opts { grid-template-columns: 1fr; } }

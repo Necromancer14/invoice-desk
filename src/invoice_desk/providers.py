@@ -2,9 +2,13 @@
 from __future__ import annotations
 
 import base64
+import email.utils
 import os
 import re
 import time
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from typing import Callable
 
 import httpx
 
@@ -12,8 +16,10 @@ from .extractors import (IMAGE_TYPES, JSON_PROMPT, ClaudeExtractor, Extraction, 
                          parse_json_loose, pdf_text)
 
 PROVIDERS: dict[str, dict] = {
-    "gemini": dict(label="Google Gemini", kind="gemini", free=True, model="gemini-3.8-flash", images=True, pdf=True,
-                   key_url="https://aistudio.google.com/apikey",
+    # Google retires model names for new keys without much notice, so the default is only a starting point:
+    # the Model box stays editable and alt_models are shown as other names to try.
+    "gemini": dict(label="Google Gemini", kind="gemini", free=True, model="gemini-3.5-flash-lite", alt_models=["gemini-3.8-flash"],
+                   images=True, pdf=True, key_url="https://aistudio.google.com/apikey",
                    note="Free key from Google AI Studio, no card needed. Reads images and PDFs. Google may use free-tier content to improve its products, so only use made-up invoices."),
     "groq": dict(label="Groq", kind="openai", base="https://api.groq.com/openai/v1", free=True, model="llama-3.3-70b-versatile", images=False, pdf=False,
                  key_url="https://console.groq.com/keys",
@@ -36,14 +42,71 @@ class ProviderError(Exception):
     pass
 
 
+class RateLimited(ProviderError):
+    """The provider kept answering 429 or 503 after the allowed retries."""
+
+
+class DailyQuotaReached(ProviderError):
+    """The provider says the day's request quota for this key and model is used up. Retrying today will not help."""
+
+
+@dataclass
+class RetryPolicy:
+    """How to ride out 429 Too Many Requests and 503 Unavailable. Used by the evaluation; normal intake does not retry."""
+    retries: int = 3
+    backoff: float = 15.0  # seconds before the first retry when the provider gives no Retry-After; doubles each time
+    max_wait: float = 120.0
+    sleep: Callable[[float], None] = field(default=time.sleep)
+
+
+# Gemini names the exhausted quota in the error body, e.g. "GenerateRequestsPerDayPerProjectPerModel-FreeTier".
+_DAILY = re.compile(r"per ?day|daily", re.I)
+
+
+def _retry_after(resp: httpx.Response) -> float | None:
+    v = resp.headers.get("retry-after")
+    if v:
+        try:
+            return max(0.0, float(v))
+        except ValueError:
+            try:
+                return max(0.0, (email.utils.parsedate_to_datetime(v) - datetime.now(timezone.utc)).total_seconds())
+            except (TypeError, ValueError):
+                return None
+    try:  # Gemini sends {"error": {"details": [{"retryDelay": "37s"}]}} instead of the header
+        for d in resp.json()["error"]["details"]:
+            if "retryDelay" in d:
+                return max(0.0, float(str(d["retryDelay"]).rstrip("s")))
+    except Exception:
+        pass
+    return None
+
+
+def _post(http: httpx.Client, label: str, retry: RetryPolicy | None, url: str, **kw) -> httpx.Response:
+    """POST, and with a retry policy wait out 429/503: Retry-After when given, otherwise back off and double."""
+    attempt = 0
+    while True:
+        r = http.post(url, **kw)
+        if retry is None or r.status_code not in (429, 503):
+            return r
+        if r.status_code == 429 and _DAILY.search(r.text):
+            raise DailyQuotaReached(f"{label}: the daily request quota for this model is used up. "
+                                    "Continue tomorrow, or switch to another model or provider.")
+        if attempt >= retry.retries:
+            raise RateLimited(f"{_clean_error(r, label)} (still refused after {retry.retries} retries)")
+        wait = _retry_after(r)
+        retry.sleep(min(retry.backoff * 2 ** attempt if wait is None else wait, retry.max_wait))
+        attempt += 1
+
+
 def public_providers() -> list[dict]:
     allow_local = os.environ.get("INVOICE_DESK_ALLOW_LOCAL") == "1"
     out = []
     for pid, p in PROVIDERS.items():
         if p.get("local") and not allow_local:
             continue
-        out.append(dict(id=pid, label=p["label"], free=p["free"], model=p["model"], images=p["images"], key_url=p["key_url"],
-                        note=p["note"], needs_key=not p.get("local")))
+        out.append(dict(id=pid, label=p["label"], free=p["free"], model=p["model"], alt_models=p.get("alt_models", []),
+                        images=p["images"], key_url=p["key_url"], note=p["note"], needs_key=not p.get("local")))
     return out
 
 
@@ -71,16 +134,17 @@ def _pdf_pages_png(blob: bytes, limit: int = 3) -> list[bytes]:
     return out
 
 
-GEMINI_MODEL_NOT_FOUND = "That model name isn't available. Type a current model name in the Model box (see aistudio.google.com)."
+GEMINI_MODEL_NOT_FOUND = ("That model name isn't available. Type a current model name, as listed at aistudio.google.com, "
+                          "in the Model box.")
 
 
 class GeminiExtractor:
     name = "gemini"
 
-    def __init__(self, api_key: str, model: str, transport: httpx.BaseTransport | None = None):
+    def __init__(self, api_key: str, model: str, transport: httpx.BaseTransport | None = None, retry: RetryPolicy | None = None):
         if not re.fullmatch(r"[A-Za-z0-9._-]{1,80}", model or ""):
             raise ProviderError("model name has characters that are not allowed")
-        self.key, self.model = api_key, model
+        self.key, self.model, self.retry = api_key, model, retry
         self.http = httpx.Client(timeout=90, transport=transport)
 
     def extract(self, blob: bytes, content_type: str, filename: str = "") -> Extraction:
@@ -92,8 +156,8 @@ class GeminiExtractor:
         body = {"systemInstruction": {"parts": [{"text": JSON_PROMPT}]},
                 "contents": [{"role": "user", "parts": [part, {"text": "Extract this invoice and reply with the JSON object."}]}],
                 "generationConfig": {"temperature": 0, "responseMimeType": "application/json"}}
-        r = self.http.post(f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent",
-                           headers={"x-goog-api-key": self.key}, json=body)
+        r = _post(self.http, "Gemini", self.retry, f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent",
+                  headers={"x-goog-api-key": self.key}, json=body)
         if r.status_code == 404:
             # Google retires model names; say what to do rather than echo its long message.
             raise ProviderError(GEMINI_MODEL_NOT_FOUND)
@@ -113,8 +177,10 @@ class GeminiExtractor:
 class OpenAICompatExtractor:
     """Groq, OpenRouter, OpenAI and Ollama all speak this chat-completions format."""
 
-    def __init__(self, provider: str, api_key: str | None, model: str, transport: httpx.BaseTransport | None = None):
+    def __init__(self, provider: str, api_key: str | None, model: str, transport: httpx.BaseTransport | None = None,
+                 retry: RetryPolicy | None = None):
         p = PROVIDERS[provider]
+        self.retry = retry
         if not re.fullmatch(r"[A-Za-z0-9._:/-]{1,100}", model or ""):
             raise ProviderError("model name has characters that are not allowed")
         self.name, self.label, self.base, self.key, self.model = provider, p["label"], p["base"], api_key, model
@@ -149,10 +215,10 @@ class OpenAICompatExtractor:
         body = {"model": self.model, "temperature": 0, "response_format": {"type": "json_object"},
                 "messages": [{"role": "system", "content": JSON_PROMPT}, {"role": "user", "content": content}]}
         headers = {"Authorization": f"Bearer {self.key}"} if self.key else {}
-        r = self.http.post(f"{self.base}/chat/completions", headers=headers, json=body)
+        r = _post(self.http, self.label, self.retry, f"{self.base}/chat/completions", headers=headers, json=body)
         if r.status_code == 400 and "response_format" in r.text.lower():  # some hosts do not support JSON mode
             body.pop("response_format")
-            r = self.http.post(f"{self.base}/chat/completions", headers=headers, json=body)
+            r = _post(self.http, self.label, self.retry, f"{self.base}/chat/completions", headers=headers, json=body)
         if r.status_code >= 400:
             raise ProviderError(_clean_error(r, self.label))
         j = r.json()
@@ -166,8 +232,9 @@ class OpenAICompatExtractor:
                           u.get("completion_tokens", 0) or 0, int((time.time() - t0) * 1000))
 
 
-def build_extractor(llm: dict, transport: httpx.BaseTransport | None = None):
-    """llm = {provider, key, model?}. Raises ProviderError with a message a person can act on."""
+def build_extractor(llm: dict, transport: httpx.BaseTransport | None = None, retry: RetryPolicy | None = None):
+    """llm = {provider, key, model?}. Raises ProviderError with a message a person can act on.
+    retry: wait out 429/503 (the evaluation uses this; Claude's SDK does its own retrying)."""
     pid = (llm or {}).get("provider") or ""
     p = PROVIDERS.get(pid)
     if not p or (p.get("local") and os.environ.get("INVOICE_DESK_ALLOW_LOCAL") != "1"):
@@ -179,5 +246,5 @@ def build_extractor(llm: dict, transport: httpx.BaseTransport | None = None):
     if p["kind"] == "anthropic":
         return ClaudeExtractor(api_key=key, model=model)
     if p["kind"] == "gemini":
-        return GeminiExtractor(key, model, transport)
-    return OpenAICompatExtractor(pid, key or None, model, transport)
+        return GeminiExtractor(key, model, transport, retry)
+    return OpenAICompatExtractor(pid, key or None, model, transport, retry)

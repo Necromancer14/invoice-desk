@@ -17,6 +17,8 @@ CREATE TABLE IF NOT EXISTS rules(key TEXT PRIMARY KEY, position INTEGER, name TE
 CREATE TABLE IF NOT EXISTS rule_versions(version INTEGER PRIMARY KEY AUTOINCREMENT, snapshot TEXT, author TEXT, note TEXT, created_at TEXT);
 CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, actor TEXT, action TEXT, target TEXT, detail TEXT);
 CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT);
+CREATE TABLE IF NOT EXISTS eval_results(provider TEXT, model TEXT, sample_id TEXT, outcome TEXT, evaluated_at TEXT,
+  rules_version INTEGER, row TEXT, PRIMARY KEY(provider, model, sample_id));
 """
 
 
