@@ -82,12 +82,25 @@ def test_gemini_request_and_parse():
         text = "```json\n" + json.dumps(ANSWER) + "\n```"  # fenced, as models sometimes do
         return httpx.Response(200, json={"candidates": [{"content": {"parts": [{"text": text}]}}],
                                          "usageMetadata": {"promptTokenCount": 50, "candidatesTokenCount": 20}})
-    e = GeminiExtractor("KEY", "gemini-2.5-flash", fake(h)).extract(b"\x89PNGxx", "image/png", "a.png")
-    assert seen["url"].endswith("/models/gemini-2.5-flash:generateContent") and seen["key"] == "KEY" and "KEY" not in seen["url"]
+    e = GeminiExtractor("KEY", "gemini-3.8-flash", fake(h)).extract(b"\x89PNGxx", "image/png", "a.png")
+    assert seen["url"].endswith("/models/gemini-3.8-flash:generateContent") and seen["key"] == "KEY" and "KEY" not in seen["url"]
     part = seen["body"]["contents"][0]["parts"][0]
     assert part["inline_data"]["mime_type"] == "image/png"
     assert seen["body"]["generationConfig"]["responseMimeType"] == "application/json"
     assert e.fields["total"] == 1150.0 and (e.tokens_in, e.tokens_out, e.extractor) == (50, 20, "gemini")
+
+
+def test_gemini_default_model():
+    assert next(p for p in public_providers() if p["id"] == "gemini")["model"] == "gemini-3.8-flash"
+    assert build_extractor({"provider": "gemini", "key": "k"}).model == "gemini-3.8-flash"
+
+
+def test_gemini_unknown_model_says_what_to_do():
+    def gone(req):
+        return httpx.Response(404, json={"error": {"code": 404, "message": "models/gemini-2.5-flash is not found for API version v1beta. Use gemini-3.8-flash.", "status": "NOT_FOUND"}})
+    with pytest.raises(ProviderError) as err:
+        GeminiExtractor("k", "gemini-2.5-flash", fake(gone)).extract(GOOD.encode(), "text/plain")
+    assert str(err.value) == "That model name isn't available. Type a current model name in the Model box (see aistudio.google.com)."
 
 
 def test_gemini_rejects_odd_model_names():

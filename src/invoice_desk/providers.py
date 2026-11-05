@@ -12,7 +12,7 @@ from .extractors import (IMAGE_TYPES, JSON_PROMPT, ClaudeExtractor, Extraction, 
                          parse_json_loose, pdf_text)
 
 PROVIDERS: dict[str, dict] = {
-    "gemini": dict(label="Google Gemini", kind="gemini", free=True, model="gemini-2.5-flash", images=True, pdf=True,
+    "gemini": dict(label="Google Gemini", kind="gemini", free=True, model="gemini-3.8-flash", images=True, pdf=True,
                    key_url="https://aistudio.google.com/apikey",
                    note="Free key from Google AI Studio, no card needed. Reads images and PDFs. Google may use free-tier content to improve its products, so only use made-up invoices."),
     "groq": dict(label="Groq", kind="openai", base="https://api.groq.com/openai/v1", free=True, model="llama-3.3-70b-versatile", images=False, pdf=False,
@@ -71,6 +71,9 @@ def _pdf_pages_png(blob: bytes, limit: int = 3) -> list[bytes]:
     return out
 
 
+GEMINI_MODEL_NOT_FOUND = "That model name isn't available. Type a current model name in the Model box (see aistudio.google.com)."
+
+
 class GeminiExtractor:
     name = "gemini"
 
@@ -91,6 +94,9 @@ class GeminiExtractor:
                 "generationConfig": {"temperature": 0, "responseMimeType": "application/json"}}
         r = self.http.post(f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent",
                            headers={"x-goog-api-key": self.key}, json=body)
+        if r.status_code == 404:
+            # Google retires model names; say what to do rather than echo its long message.
+            raise ProviderError(GEMINI_MODEL_NOT_FOUND)
         if r.status_code >= 400:
             raise ProviderError(_clean_error(r, "Gemini"))
         j = r.json()

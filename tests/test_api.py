@@ -115,9 +115,9 @@ def test_llm_headers_reach_the_pipeline_and_are_not_stored(auth):
         return RuleBasedExtractor()
     d = Desk(":memory:", today=TODAY, sync=True, extractor_factory=factory)
     c = TestClient(create_app(d, auth))
-    h = {**H(c, "reviewer"), "X-LLM-Provider": "gemini", "X-LLM-Key": "AIza-secret", "X-LLM-Model": "gemini-2.5-flash"}
+    h = {**H(c, "reviewer"), "X-LLM-Provider": "gemini", "X-LLM-Key": "AIza-secret", "X-LLM-Model": "gemini-3.8-flash"}
     assert c.post("/api/runs", files={"files": ("a.txt", GOOD, "text/plain")}, data={"mode": "ai"}, headers=h).status_code == 200
-    assert seen["mode"] == "ai" and seen["llm"] == {"provider": "gemini", "key": "AIza-secret", "model": "gemini-2.5-flash"}
+    assert seen["mode"] == "ai" and seen["llm"] == {"provider": "gemini", "key": "AIza-secret", "model": "gemini-3.8-flash"}
     dump = " ".join(str(r) for t in ("runs", "audit", "settings") for r in d.db.all(f"SELECT * FROM {t}"))
     assert "AIza-secret" not in dump
 
