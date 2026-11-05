@@ -2,23 +2,30 @@
 
 A Saudi e-invoice intake desk. Invoices come in as text, PDF or photo. A built-in reader, or an AI model you choose (free options included), pulls out the fields, a rule engine checks them, clean invoices are approved automatically, doubtful ones go to a person, and every decision is logged. The rules live in the database and are edited in the portal, so changing a policy needs no deployment.
 
+**Live demo: https://invoice-desk-ct8w.onrender.com** (pick a role to look around; all data is made up). It runs on Render's free tier, so the first load after a quiet spell can take about a minute while the server wakes up, and its data resets whenever the server restarts.
+
 ![Dashboard](docs/screens/03-dashboard.png)
 
 | Review queue | Rules admin |
 |---|---|
 | ![Review](docs/screens/04-review.png) | ![Rules](docs/screens/06-rules.png) |
 
+| Arabic dashboard | Arabic review queue | Arabic rules |
+|---|---|---|
+| ![Dashboard in Arabic](docs/screens/13-dashboard-ar.png) | ![Review queue in Arabic](docs/screens/14-review-ar.png) | ![Rules in Arabic](docs/screens/15-rules-ar.png) |
+
 ## What it does
 
 - **Reads invoices** in English, Arabic or both, from text, PDFs and images. Two kinds of reader: a free built-in rule-based reader that needs nothing, and an AI model of your choice: **Google Gemini (free key)**, **Groq (free)**, **OpenRouter (free models)**, **Ollama (runs on your own computer)**, Anthropic Claude or OpenAI. All of them go through one extractor interface, with a guard against instructions hidden in the document.
 - **Validates** with 14 rule types: required fields, Saudi VAT number format, 15% VAT, totals, line arithmetic, dates, currency, amount limits, QR code agreement (TLV payload), duplicates, extraction confidence, regex, and a custom expression type.
 - **Routes** each invoice: approved automatically, sent to review, or rejected. Severity is set per rule.
-- **Human review** screen: original beside the extracted fields, edit anything, approve or reject with a note, keyboard shortcut for approve. Corrections are kept next to the original extraction.
+- **Human review** queue: a searchable list of everything waiting, beside the original and its extracted fields. Edit anything, approve or reject with a note, and move through the queue with Previous/Next or the keyboard (`j` next, `k` previous, `a` approve, `r` jump to the note). Each invoice has its own link (`#/review/<id>`), and after a decision the next one opens. Corrections are kept next to the original extraction.
 - **Rules as data**: add, edit, reorder, switch off and delete rules in the portal. Every change is a version you can restore. A dry run shows how many past invoices would get a different decision before you save.
 - **Audit log** of every action, including automatic decisions.
 - **Evaluation** page: scores the reader and rules on 60 synthetic invoices with a known answer key (field accuracy, decision agreement, unsafe approvals, false rejections).
 - **Roles**: viewer, reviewer, admin. Signed tokens. Demo mode lets visitors pick a role; set `DEMO_MODE=0` and `INVOICE_DESK_USERS` for real sign-in.
-- **Portal**: React and TypeScript, about 62 KB gzipped, no UI or chart library. A frosted-glass design in flag green and white, light and dark themes, English and Arabic with right-to-left layout, responsive down to phone width.
+- **Portal**: React and TypeScript, about 75 KB gzipped, no UI or chart library. A frosted-glass design in flag green and white, light and dark themes, responsive down to phone width.
+- **Full Arabic** with a right-to-left layout: every screen is translated, with Arabic plural forms, and numbers and dates are formatted for the chosen language, while invoice numbers, VAT numbers, amounts and currency codes stay left-to-right. `node tools/check_i18n.mjs` (run in CI) fails if any text in the portal is missing its Arabic.
 - **MCP server** so Claude Desktop or Claude Code can read and check invoices.
 
 ## Run it
@@ -98,7 +105,7 @@ flowchart LR
 
 ```bash
 pip install -e ".[dev,mcp]"
-pytest -q          # 95 tests: rules, expression safety, pipeline, review, versioning, API roles, provider adapters (fake servers), evaluation
+pytest -q          # 98 tests: rules, expression safety, pipeline, review and the review queue, versioning, API roles, provider adapters (fake servers), evaluation
 python tools/e2e.py   # with the server running: drives the portal in Chromium
 ```
 
@@ -108,7 +115,7 @@ python tools/e2e.py   # with the server running: drives the portal in Chromium
 - All sample data is invented, including company names and VAT numbers. Do not upload real invoices to a public demo.
 - AI providers are tested against fakes only. Their accuracy is yours to measure.
 - Data is held in SQLite. On free hosting without a volume it resets when the container restarts.
-- Arabic UI covers navigation and main labels, not every screen.
+- The Arabic interface translates everything the portal itself writes. Invoice contents, rule names an admin types, check details and server error messages are shown as written, usually in English.
 
 ## Licence
 

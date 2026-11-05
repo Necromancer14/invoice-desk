@@ -15,6 +15,8 @@ with sync_playwright() as pw:
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.on("console", lambda m: m.type == "error" and errors.append(m.text))
     page.goto(BASE)
+    # Steady screenshots: no half-finished transitions, and no notification toasts covering a corner.
+    page.add_style_tag(content="*, *::before, *::after { transition: none !important; animation: none !important; } .toast { visibility: hidden !important; }")
     page.get_by_role("button", name="Admin").click()
     expect(page.get_by_role("heading", name="Dashboard")).to_be_visible()
     page.screenshot(path=OUT / "01-empty-dashboard.png")
@@ -89,6 +91,7 @@ with sync_playwright() as pw:
 
     m = b.new_page(viewport={"width": 390, "height": 800}, device_scale_factor=2)
     m.goto(BASE)
+    m.add_style_tag(content="*, *::before, *::after { transition: none !important; animation: none !important; } .toast { visibility: hidden !important; }")
     m.get_by_role("button", name="Reviewer").click()
     m.wait_for_timeout(600)
     m.screenshot(path=OUT / "11-mobile.png")
