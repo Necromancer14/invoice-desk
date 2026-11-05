@@ -1,0 +1,12 @@
+services:
+  invoice-desk:
+    build: .
+    ports: ["7860:7860"]
+    environment:
+      DEMO_MODE: "1"                       # set to 0 and define INVOICE_DESK_USERS to require real sign-in
+      INVOICE_DESK_SECRET: "change-me"     # signs login tokens
+      INVOICE_DESK_DB: "/data/desk.db"
+      # INVOICE_DESK_USERS: "alice:a-long-password:admin,bob:another:reviewer"
+    volumes: ["desk-data:/data"]
+volumes:
+  desk-data:

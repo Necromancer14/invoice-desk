@@ -1,0 +1,19 @@
+TAX INVOICE
+Invoice No: HCS-2026-0131
+Issue Date: 2026-09-08
+Due Date: 2026-10-08
+Seller: Hejaz Catering Services
+Seller VAT No: 377695923130983
+Buyer: Al Amal Clinics
+Buyer VAT No: 339046576827163
+Currency: SAR
+
+Description   Qty   Unit price   Total
+1. Training session   4   2,841.45   11,365.80
+2. Cleaning service   11   667.93   7,347.23
+3. Printing and delivery   12   156.00   1,872.00
+
+Subtotal: 20,585.03 SAR
+VAT (15%): 3,087.75 SAR
+Total (including VAT): 23,672.78 SAR
+QR: ARJBbCBXYWhhIFRlY2hub2xvZ3kCDzM3NzY5NTkyMzEzMDk4MwMUMjAyNi0wOS0wOFQwOTozMDowMFoECDIzNjcyLjc4BQczMDg3Ljc1

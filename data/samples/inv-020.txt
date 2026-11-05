@@ -1,0 +1,20 @@
+TAX INVOICE
+Invoice No: RSL-2026-0120
+Issue Date: 2026-09-18
+Due Date: 2026-10-18
+Seller: Red Sea Logistics
+Seller VAT No: 322044507179273
+Buyer: Harbor Retail Group
+Buyer VAT No: 311062540348933
+Currency: USD
+
+Description   Qty   Unit price   Total
+1. Cleaning service   6   635.18   3,811.08
+2. Maintenance contract   11   2,785.47   30,640.17
+3. Vehicle rental   3   480.62   1,441.86
+4. Office furniture   8   3,475.10   27,800.80
+
+Subtotal: 63,693.91 USD
+VAT (15%): 9,554.09 USD
+Total (including VAT): 73,248.00 USD
+QR: ARFSZWQgU2VhIExvZ2lzdGljcwIPMzIyMDQ0NTA3MTc5MjczAxQyMDI2LTA5LTE4VDA5OjMwOjAwWgQINzMyNDguMDAFBzk1NTQuMDk=

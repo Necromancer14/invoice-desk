@@ -1,0 +1,20 @@
+TAX INVOICE
+Invoice No: TE-2026-0153
+Issue Date: 2026-09-05
+Due Date: 2026-10-05
+Seller: Tuwaiq Engineering
+Seller VAT No: 303816460278483
+Buyer: Nakheel Hospitality
+Buyer VAT No: 311258542984803
+Currency: SAR
+
+Description   Qty   Unit price   Total
+1. Office furniture   8   2,634.56   21,076.48
+2. Catering package   12   686.26   8,235.12
+3. Maintenance contract   8   2,859.76   22,878.08
+4. Software license   3   5,225.73   15,677.19
+
+Subtotal: 67,866.87 SAR
+VAT (15%): 10,180.03 SAR
+Total (including VAT): 78,046.90 SAR
+QR: ARJUdXdhaXEgRW5naW5lZXJpbmcCDzMwMzgxNjQ2MDI3ODQ4MwMUMjAyNi0wOS0wNVQwOTozMDowMFoECDc4MDQ2LjkwBQgxMDE4MC4wMw==

@@ -1,0 +1,18 @@
+TAX INVOICE
+Invoice No: AWT-2026-0129
+Issue Date: 2026-09-07
+Due Date: 2026-10-07
+Seller: الواحة للتقنية
+Seller VAT No: 328617486089703
+Buyer: بيان للمقاولات
+Currency: SAR
+
+Description   Qty   Unit price   Total
+1. Catering package   8   510.39   4,083.12
+2. Printing and delivery   3   182.32   546.96
+3. Maintenance contract   3   2,068.04   6,204.12
+4. Consulting services   8   2,398.11   19,184.88
+
+Subtotal: 30,019.08 SAR
+VAT (15%): 4,502.86 SAR
+Total (including VAT): 34,521.94 SAR

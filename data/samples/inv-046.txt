@@ -1,0 +1,19 @@
+TAX INVOICE
+Invoice No: GHC-2026-0146
+Issue Date: 2026-09-06
+Due Date: 2026-10-06
+Seller: Gulf Horizon Consulting
+Seller VAT No: 325006057695133
+Buyer: Al Amal Clinics
+Currency: SAR
+
+Description   Qty   Unit price   Total
+1. Catering package   7   599.12   4,193.84
+2. Medical consumables   4   297.41   1,189.64
+3. Catering package   9   775.85   6,982.65
+4. Consulting services   10   2,196.03   21,960.30
+
+Subtotal: 34,326.43 SAR
+VAT (15%): 5,148.96 SAR
+Total (including VAT): 39,475.39 SAR
+QR: ARdHdWxmIEhvcml6b24gQ29uc3VsdGluZwIPMzI1MDA2MDU3Njk1MTMzAxQyMDI2LTA5LTA2VDA5OjMwOjAwWgQIMzk0NzUuMzkFBzUxNDguOTY=

@@ -1,0 +1,20 @@
+TAX INVOICE
+Invoice No: NOS-2026-0121
+Issue Date: 2026-10-13
+Due Date: 2026-11-13
+Seller: Najd Office Supplies Co.
+Seller VAT No: 322916926427953
+Buyer: Al Amal Clinics
+Buyer VAT No: 348271123390593
+Currency: SAR
+
+Description   Qty   Unit price   Total
+1. Maintenance contract   4   14,234.94   56,939.76
+2. Maintenance contract   3   11,215.40   33,646.20
+3. Training session   9   9,066.18   81,595.62
+4. Printing and delivery   6   15,710.36   94,262.16
+
+Subtotal: 266,443.74 SAR
+VAT (15%): 39,966.56 SAR
+Total (including VAT): 306,410.30 SAR
+QR: ARhOYWpkIE9mZmljZSBTdXBwbGllcyBDby4CDzMyMjkxNjkyNjQyNzk1MwMUMjAyNi0xMC0xM1QwOTozMDowMFoECTMwNjQxMC4zMAUIMzk5NjYuNTY=

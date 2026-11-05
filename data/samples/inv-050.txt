@@ -1,0 +1,15 @@
+TAX INVOICE
+Invoice No: SFR-2026-0150
+Issue Date: 2026-08-17
+Due Date: 2026-09-17
+Seller: Sahara Fleet Rentals
+Seller VAT No: 382689849788753
+Buyer: Al Amal Clinics
+Currency: SAR
+
+Description   Qty   Unit price   Total
+1. Consulting services   9   2,031.08   18,279.72
+
+Subtotal: 18,279.72 SAR
+VAT (15%): 2,741.96 SAR
+Total (including VAT): 21,107.18 SAR

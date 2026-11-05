@@ -1,0 +1,17 @@
+TAX INVOICE
+Reference: AQC-2026-0123
+Billed on: 09/08/2026
+Pay by: 09/09/2026
+Issued by: Al Qasr Cleaning Co.
+Supplier tax id: 376910299427483
+Billed to: Mawrid Foods
+Currency: SAR
+
+Description   Qty   Unit price   Total
+1. Cleaning service   7   218.75   1,531.25
+2. Catering package   8   614.23   4,913.84
+
+Net before tax: 6,445.09 SAR
+Tax charged: 966.76 SAR
+Amount payable: 7,411.85 SAR
+QR: ARRBbCBRYXNyIENsZWFuaW5nIENvLgIPMzc2OTEwMjk5NDI3NDgzAxQyMDI2LTA4LTA5VDA5OjMwOjAwWgQHNzQxMS44NQUGOTY2Ljc2

@@ -1,0 +1,20 @@
+TAX INVOICE
+Invoice No: JME-2026-0159
+Issue Date: 2026-09-04
+Due Date: 2026-10-04
+Seller: Jabal Medical Equipment
+Seller VAT No: 30321947526401
+Buyer: Al Amal Clinics
+Buyer VAT No: 303363277366333
+Currency: SAR
+
+Description   Qty   Unit price   Total
+1. Printing and delivery   5   146.01   730.05
+2. Maintenance contract   5   4,929.72   24,648.60
+3. Office furniture   12   2,551.61   30,619.32
+4. Medical consumables   3   179.44   538.32
+
+Subtotal: 56,536.29 SAR
+VAT (15%): 8,480.44 SAR
+Total (including VAT): 65,016.73 SAR
+QR: ARdKYWJhbCBNZWRpY2FsIEVxdWlwbWVudAIOMzAzMjE5NDc1MjY0MDEDFDIwMjYtMDktMDRUMDk6MzA6MDBaBAg2NTAxNi43MwUHODQ4MC40NA==

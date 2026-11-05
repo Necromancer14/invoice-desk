@@ -1,0 +1,18 @@
+TAX INVOICE
+Invoice No: AQC-2026-0156
+Issue Date: 2026-08-24
+Due Date: 2026-09-24
+Seller: القصر للنظافة
+Seller VAT No: 376910299427483
+Buyer: عيادات الأمل
+Buyer VAT No: 305626482950233
+Currency: SAR
+
+Description   Qty   Unit price   Total
+1. Maintenance contract   4   4,390.63   17,562.52
+2. Printing and delivery   4   58.20   232.80
+
+Subtotal: 17,795.32 SAR
+VAT (15%): 2,669.30 SAR
+Total (including VAT): 20,464.62 SAR
+QR: ARRBbCBRYXNyIENsZWFuaW5nIENvLgIPMzc2OTEwMjk5NDI3NDgzAxQyMDI2LTA4LTI0VDA5OjMwOjAwWgQIMjA0NjQuNjIFBzI2NjkuMzA=

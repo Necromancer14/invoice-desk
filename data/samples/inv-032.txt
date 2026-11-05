@@ -1,0 +1,19 @@
+TAX INVOICE
+Reference: RSL-2026-0132
+Billed on: 14/08/2026
+Pay by: 14/09/2026
+Issued by: Red Sea Logistics
+Supplier tax id: 322044507179273
+Billed to: Bayan Construction
+Buyer VAT No: 375864125372313
+Currency: SAR
+
+Description   Qty   Unit price   Total
+1. Vehicle rental   3   613.30   1,839.90
+2. Printing and delivery   10   297.72   2,977.20
+3. Medical consumables   12   249.73   2,996.76
+
+Net before tax: 7,813.86 SAR
+Tax charged: 1,172.08 SAR
+Amount payable: 8,985.94 SAR
+QR: ARFSZWQgU2VhIExvZ2lzdGljcwIPMzIyMDQ0NTA3MTc5MjczAxQyMDI2LTA4LTE0VDA5OjMwOjAwWgQHODk4NS45NAUHMTE3Mi4wOA==

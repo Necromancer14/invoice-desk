@@ -1,0 +1,19 @@
+TAX INVOICE
+Invoice No: HCS-2026-0158
+Issue Date: 2026-08-10
+Due Date: 2026-09-10
+Seller: Hejaz Catering Services
+Seller VAT No: 377695923130983
+Buyer: Mawrid Foods
+Buyer VAT No: 363234389501043
+Currency: SAR
+
+Description   Qty   Unit price   Total
+1. Training session   6   11,732.60   70,395.60
+2. Cleaning service   10   12,986.85   129,868.50
+3. Catering package   2   10,006.28   20,012.56
+
+Subtotal: 220,276.66 SAR
+VAT (15%): 33,041.50 SAR
+Total (including VAT): 253,318.16 SAR
+QR: ARdIZWpheiBDYXRlcmluZyBTZXJ2aWNlcwIPMzc3Njk1OTIzMTMwOTgzAxQyMDI2LTA4LTEwVDA5OjMwOjAwWgQJMjUzMzE4LjE2BQgzMzA0MS41MA==

@@ -1,0 +1,17 @@
+TAX INVOICE
+Invoice No: AWT-2026-0125
+Issue Date: 2026-09-22
+Due Date: 2026-10-22
+Seller: Al Waha Technology
+Seller VAT No: 328617486089703
+Buyer: Al Amal Clinics
+Currency: SAR
+
+Description   Qty   Unit price   Total
+1. Office furniture   7   2,458.13   17,206.91
+2. Training session   12   1,715.85   20,590.20
+
+Subtotal: 37,797.11 SAR
+VAT (15%): 5,669.57 SAR
+Total (including VAT): 43,466.68 SAR
+QR: ARJBbCBXYWhhIFRlY2hub2xvZ3kCDzMyODYxNzQ4NjA4OTcwMwMUMjAyNi0wOS0yMlQwOTozMDowMFoECDQzNDY2LjY4BQc1NjY5LjU3

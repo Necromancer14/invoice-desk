@@ -1,0 +1,18 @@
+TAX INVOICE
+Invoice No: HCS-2026-0145
+Issue Date: 2026-08-28
+Due Date: 2026-09-28
+Seller: Hejaz Catering Services
+Seller VAT No: 377695923130983
+Buyer: Nakheel Hospitality
+Currency: SAR
+
+Description   Qty   Unit price   Total
+1. Maintenance contract   11   3,841.85   42,260.35
+2. Cleaning service   7   631.40   4,419.80
+3. Software license   11   5,798.98   63,788.78
+
+Subtotal: 110,468.93 SAR
+VAT (15%): 11,046.89 SAR
+Total (including VAT): 121,515.82 SAR
+QR: ARdIZWpheiBDYXRlcmluZyBTZXJ2aWNlcwIPMzc3Njk1OTIzMTMwOTgzAxQyMDI2LTA4LTI4VDA5OjMwOjAwWgQJMTIxNTE1LjgyBQgxMTA0Ni44OQ==

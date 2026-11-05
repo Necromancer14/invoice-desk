@@ -1,0 +1,19 @@
+TAX INVOICE
+Invoice No: HCS-2026-0131
+Issue Date: 2026-10-19
+Due Date: 2026-11-19
+Seller: حجاز لخدمات التموين
+Seller VAT No: 377695923130983
+Buyer: نخيل للضيافة
+Buyer VAT No: 305195878645693
+Currency: SAR
+
+Description   Qty   Unit price   Total
+1. Training session   1   859.90   859.90
+2. Catering package   8   452.91   3,623.28
+3. Consulting services   7   2,401.89   16,813.23
+
+Subtotal: 21,296.41 SAR
+VAT (15%): 3,194.46 SAR
+Total (including VAT): 24,490.87 SAR
+QR: ARdIZWpheiBDYXRlcmluZyBTZXJ2aWNlcwIPMzc3Njk1OTIzMTMwOTgzAxQyMDI2LTEwLTE5VDA5OjMwOjAwWgQIMjQ0OTAuODcFBzMxOTQuNDY=

@@ -1,0 +1,20 @@
+TAX INVOICE
+Invoice No: TE-2026-0142
+Issue Date: 2031-03-14
+Due Date: 2031-04-14
+Seller: Tuwaiq Engineering
+Seller VAT No: 303816460278483
+Buyer: Mawrid Foods
+Buyer VAT No: 335896581486933
+Currency: SAR
+
+Description   Qty   Unit price   Total
+1. Software license   1   881.71   881.71
+2. Office furniture   8   2,251.66   18,013.28
+3. Vehicle rental   12   248.93   2,987.16
+4. Medical consumables   3   166.32   498.96
+
+Subtotal: 22,381.11 SAR
+VAT (15%): 3,357.17 SAR
+Total (including VAT): 25,738.28 SAR
+QR: ARJUdXdhaXEgRW5naW5lZXJpbmcCDzMwMzgxNjQ2MDI3ODQ4MwMUMjAzMS0wMy0xNFQwOTozMDowMFoECDI1NzM4LjI4BQczMzU3LjE3

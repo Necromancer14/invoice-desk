@@ -1,0 +1,14 @@
+TAX INVOICE
+Invoice No: RSL-2026-0151
+Issue Date: 2026-09-24
+Due Date: 2026-10-24
+Seller: Red Sea Logistics
+Buyer: Nakheel Hospitality
+Currency: SAR
+
+Description   Qty   Unit price   Total
+1. Vehicle rental   8   569.84   4,558.72
+
+Subtotal: 4,558.72 SAR
+VAT (15%): 683.81 SAR
+Total (including VAT): 5,242.53 SAR

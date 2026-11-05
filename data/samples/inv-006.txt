@@ -1,0 +1,17 @@
+TAX INVOICE
+Invoice No: GHC-2026-0106
+Issue Date: 2026-10-25
+Due Date: 2026-11-25
+Seller: Gulf Horizon Consulting
+Seller VAT No: 325006057695133
+Buyer: Al Amal Clinics
+Buyer VAT No: 336764335605303
+Currency: SAR
+
+Description   Qty   Unit price   Total
+1. Maintenance contract   6   2,269.59   13,617.54
+
+Subtotal: 13,617.54 SAR
+VAT (15%): 2,042.63 SAR
+Total (including VAT): 15,660.17 SAR
+QR: ARdHdWxmIEhvcml6b24gQ29uc3VsdGluZwIPMzI1MDA2MDU3Njk1MTMzAxQyMDI2LTEwLTI1VDA5OjMwOjAwWgQIMTU5MTAuMTcFBzIwNDIuNjM=

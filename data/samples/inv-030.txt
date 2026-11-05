@@ -1,0 +1,19 @@
+TAX INVOICE
+Invoice No: RSL-2026-0130
+Issue Date: 2026-08-16
+Due Date: 2026-09-16
+Seller: Red Sea Logistics
+Seller VAT No: 322044507179273
+Buyer: Al Amal Clinics
+Buyer VAT No: 369271721582693
+Currency: SAR
+
+Description   Qty   Unit price   Total
+1. Office furniture   8   319.86   2,558.88
+2. Vehicle rental   10   678.80   6,788.00
+3. Training session   5   1,769.43   8,847.15
+
+Subtotal: 18,194.03 SAR
+VAT (15%): 2,729.10 SAR
+Total (including VAT): 21,223.13 SAR
+QR: ARFSZWQgU2VhIExvZ2lzdGljcwIPMzIyMDQ0NTA3MTc5MjczAxQyMDI2LTA4LTE2VDA5OjMwOjAwWgQIMjEyMjMuMTMFBzI3MjkuMTA=

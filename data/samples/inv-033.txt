@@ -1,0 +1,18 @@
+TAX INVOICE
+Reference: NOS-2026-0133
+Billed on: 08/08/2026
+Pay by: 08/09/2026
+Issued by: Najd Office Supplies Co.
+Supplier tax id: 322916926427953
+Billed to: Bayan Construction
+Buyer VAT No: 337223497370793
+Currency: SAR
+
+Description   Qty   Unit price   Total
+1. Vehicle rental   2   399.72   799.44
+2. Maintenance contract   2   2,514.75   5,029.50
+3. Cleaning service   11   547.63   6,023.93
+
+Net before tax: 11,852.87 SAR
+Tax charged: 1,777.93 SAR
+Amount payable: 13,630.80 SAR

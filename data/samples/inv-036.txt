@@ -1,0 +1,19 @@
+TAX INVOICE
+Reference: TE-2026-0136
+Billed on: 03/10/2026
+Pay by: 03/11/2026
+Issued by: Tuwaiq Engineering
+Supplier tax id: 303816460278483
+Billed to: Bayan Construction
+Buyer VAT No: 343002339273363
+Currency: SAR
+
+Description   Qty   Unit price   Total
+1. Training session   1   1,568.92   1,568.92
+2. Cleaning service   11   424.46   4,669.06
+3. Training session   9   2,390.23   21,512.07
+
+Net before tax: 27,750.05 SAR
+Tax charged: 4,162.51 SAR
+Amount payable: 31,912.56 SAR
+QR: ARJUdXdhaXEgRW5naW5lZXJpbmcCDzMwMzgxNjQ2MDI3ODQ4MwMUMjAyNi0xMC0wM1QwOTozMDowMFoECDMxOTEyLjU2BQc0MTYyLjUx

@@ -1,0 +1,17 @@
+TAX INVOICE
+Invoice No: DRP-2026-0111
+Issue Date: 2026-10-14
+Due Date: 2026-11-14
+Seller: Desert Rose Printing
+Seller VAT No: 345946419931163
+Buyer: Bayan Construction
+Currency: SAR
+
+Description   Qty   Unit price   Total
+1. Consulting services   4   773.35   3,093.40
+2. Printing and delivery   3   55.03   165.09
+
+Subtotal: 3,258.49 SAR
+VAT (15%): 162.92 SAR
+Total (including VAT): 3,421.41 SAR
+QR: ARREZXNlcnQgUm9zZSBQcmludGluZwIPMzQ1OTQ2NDE5OTMxMTYzAxQyMDI2LTEwLTE0VDA5OjMwOjAwWgQHMzQyMS40MQUGMTYyLjky

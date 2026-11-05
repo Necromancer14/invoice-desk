@@ -1,0 +1,18 @@
+TAX INVOICE
+Invoice No: SFR-2026-0137
+Issue Date: 2026-09-08
+Due Date: 2026-10-08
+Seller: Sahara Fleet Rentals
+Seller VAT No: 382689849788753
+Buyer: Harbor Retail Group
+Buyer VAT No: 347581978005123
+Currency: SAR
+
+Description   Qty   Unit price   Total
+1. Consulting services   11   2,067.02   22,737.22
+2. Office furniture   6   2,075.85   12,455.10
+
+Subtotal: 35,192.32 SAR
+VAT (15%): 3,519.23 SAR
+Total (including VAT): 38,711.55 SAR
+QR: ARRTYWhhcmEgRmxlZXQgUmVudGFscwIPMzgyNjg5ODQ5Nzg4NzUzAxQyMDI2LTA5LTA4VDA5OjMwOjAwWgQIMzg3MTEuNTUFBzM1MTkuMjM=

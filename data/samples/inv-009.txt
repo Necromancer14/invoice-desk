@@ -1,0 +1,17 @@
+TAX INVOICE
+Invoice No: AQC-2026-0109
+Issue Date: 2026-10-04
+Due Date: 2026-11-04
+Seller: Al Qasr Cleaning Co.
+Seller VAT No: 376910299427483
+Buyer: Mawrid Foods
+Currency: SAR
+
+Description   Qty   Unit price   Total
+1. Medical consumables   8   61.55   492.40
+2. Office furniture   9   863.80   7,774.20
+
+Subtotal: 8,266.60 SAR
+VAT (15%): 1,239.99 SAR
+Total (including VAT): 9,506.59 SAR
+QR: ARRBbCBRYXNyIENsZWFuaW5nIENvLgIPMzc2OTEwMjk5NDI3NDgzAxQyMDI2LTEwLTA0VDA5OjMwOjAwWgQHOTUwNi41OQUHMTIzOS45OQ==

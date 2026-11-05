@@ -1,0 +1,17 @@
+TAX INVOICE
+Invoice No: MTI-2026-0141
+Issue Date: 2026-08-22
+Due Date: 2026-09-22
+Seller: مدار للتدريب
+Seller VAT No: 303895844204933
+Buyer: نخيل للضيافة
+Currency: SAR
+
+Description   Qty   Unit price   Total
+1. Printing and delivery   10   367.14   3,671.40
+2. Medical consumables   6   255.88   1,535.28
+
+Subtotal: 5,206.68 SAR
+VAT (15%): 781.00 SAR
+Total (including VAT): 5,987.68 SAR
+QR: ARhNYWRhciBUcmFpbmluZyBJbnN0aXR1dGUCDzMwMzg5NTg0NDIwNDkzMwMUMjAyNi0wOC0yMlQwOTozMDowMFoEBzU5ODcuNjgFBjc4MS4wMA==

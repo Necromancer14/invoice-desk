@@ -1,0 +1,18 @@
+TAX INVOICE
+Invoice No: SFR-2026-0112
+Issue Date: 2026-10-22
+Due Date: 2026-09-01
+Seller: Sahara Fleet Rentals
+Seller VAT No: 382689849788753
+Buyer: Bayan Construction
+Buyer VAT No: 332678935887103
+Currency: SAR
+
+Description   Qty   Unit price   Total
+1. Software license   2   5,560.74   11,121.48
+2. Consulting services   1   2,247.24   2,247.24
+
+Subtotal: 13,368.72 SAR
+VAT (15%): 2,005.31 SAR
+Total (including VAT): 15,374.03 SAR
+QR: ARRTYWhhcmEgRmxlZXQgUmVudGFscwIPMzgyNjg5ODQ5Nzg4NzUzAxQyMDI2LTEwLTIyVDA5OjMwOjAwWgQIMTUzNzQuMDMFBzIwMDUuMzE=

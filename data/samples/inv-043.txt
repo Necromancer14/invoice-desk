@@ -1,0 +1,17 @@
+TAX INVOICE
+Invoice No: NOS-2026-0122
+Issue Date: 2026-09-24
+Due Date: 2026-10-24
+Seller: Najd Office Supplies Co.
+Seller VAT No: 322916926427953
+Buyer: Mawrid Foods
+Buyer VAT No: 353803111644393
+Currency: SAR
+
+Description   Qty   Unit price   Total
+1. Vehicle rental   3   687.37   2,062.11
+
+Subtotal: 2,062.11 SAR
+VAT (15%): 309.32 SAR
+Total (including VAT): 2,371.43 SAR
+QR: ARhaYW1hbiBTb2Z0d2FyZSBTb2x1dGlvbnMCDzMyMjkxNjkyNjQyNzk1MwMUMjAyNi0wOS0yNFQwOTozMDowMFoEBzIzNzEuNDMFBjMwOS4zMg==
