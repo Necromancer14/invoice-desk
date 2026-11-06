@@ -34,7 +34,7 @@ function CsvImport({ path, label, onDone }: { path: string; label: string; onDon
       </label>
       <Err msg={err} />
       {result && result.error_count > 0 && (
-        <div className="notice warn" style={{ flexBasis: "100%" }}>
+        <div className="notice warn full">
           {t("{n} rows were not imported", { n: result.error_count })}
           {/* the problems come from the server in English and point at CSV rows, so they stay as written */}
           <ul className="small" style={{ margin: "6px 0 0" }}>{result.errors.map((e) => <li key={e.row}>{t("Row {n}", { n: e.row })}: <bdi dir="ltr">{e.message}</bdi></li>)}</ul>
@@ -104,26 +104,26 @@ export default function Vendors() {
       <Head title={t("Vendors")} sub={t("The vendor master: who you buy from, their VAT number and the bank account you pay. Invoices are matched to it by name or VAT number.")}>
         {admin && <button className="btn primary" onClick={() => setEdit("new")}>{t("Add vendor")}</button>}
       </Head>
-      {!admin && <div className="notice warn" style={{ marginBottom: 14 }}>{t("Only admins can change vendors and purchase orders.")}</div>}
-      <div className="row wrap" style={{ marginBottom: 12 }}>
-        <input type="search" placeholder={t("Search vendors")} aria-label={t("Search vendors")} value={q} onChange={(e) => setQ(e.target.value)} />
+      {!admin && <div className="notice warn mb">{t("Only admins can change vendors and purchase orders.")}</div>}
+      <div className="toolbar">
+        <input type="search" className="toolbar-search first" placeholder={t("Search vendors")} aria-label={t("Search vendors")} value={q} onChange={(e) => setQ(e.target.value)} />
         {admin && <CsvImport path="/vendors/import" label={t("Import vendors from CSV")} onDone={vendors.reload} />}
       </div>
-      {admin && <p className="muted small" style={{ marginTop: -4 }}>{t("CSV columns:")} <bdi dir="ltr">name_en, name_ar, vat_number, iban, currency, status</bdi></p>}
+      {admin && <p className="csv-note">{t("CSV columns:")} <bdi dir="ltr">name_en, name_ar, vat_number, iban, currency, status</bdi></p>}
       <Err msg={vendors.error} />
       <div className="panel flush">
         {vendors.data && !shown.length ? <Empty title={q ? t("Nothing matches the search.") : t("No vendors yet")} /> : (
           <div className="tw"><table>
-            <thead><tr><th>{t("Name")}</th><th>{t("VAT number")}</th><th>{t("IBAN")}</th><th>{t("Currency")}</th><th>{t("Status")}</th><th>{t("Linked names")}</th>{admin && <th><span className="sr-only">{t("Actions")}</span></th>}</tr></thead>
+            <thead><tr><th>{t("Name")}</th><th>{t("VAT number")}</th><th>{t("IBAN")}</th><th>{t("Currency")}</th><th>{t("Status")}</th><th className="n">{t("Linked names")}</th>{admin && <th><span className="sr-only">{t("Actions")}</span></th>}</tr></thead>
             <tbody>{shown.map((v) => (
               <tr key={v.id}>
                 <td><div className="cell-text" dir="auto">{v.name_en}</div>{v.name_ar && <div className="cell-text small muted" dir="rtl" lang="ar">{v.name_ar}</div>}</td>
                 <td className="num"><bdi dir="ltr">{v.vat || "–"}</bdi></td>
-                <td className="num small" style={{ whiteSpace: "nowrap" }}><bdi dir="ltr">{ibanText(v.iban)}</bdi></td>
+                <td className="num small nowrap"><bdi dir="ltr">{ibanText(v.iban)}</bdi></td>
                 <td><bdi dir="ltr">{v.currency}</bdi></td>
                 <td><span className={`pill ${v.status === "blocked" ? "s-rejected" : "s-approved"}`}>{t(STATUS[v.status])}</span></td>
-                <td className="num">{v.linked_names}</td>
-                {admin && <td className="row" style={{ gap: 6, justifyContent: "flex-end" }}>
+                <td className="n">{v.linked_names}</td>
+                {admin && <td className="td-actions">
                   <button className="btn small" onClick={() => setEdit(v)} aria-label={t("Edit {name}", { name: v.name_en || v.name_ar || "" })}>{t("Edit")}</button>
                   <button className="btn small danger" onClick={() => remove(v)} aria-label={t("Delete {name}", { name: v.name_en || v.name_ar || "" })}>{t("Delete")}</button>
                 </td>}
@@ -133,9 +133,9 @@ export default function Vendors() {
         )}
       </div>
 
-      <h2 style={{ marginTop: 28 }}>{t("Purchase orders")}</h2>
-      <p className="muted small">{t("An invoice that gives a PO number is compared with that PO: its vendor, currency and amount. The tolerance is set on the rule.")}</p>
-      {admin && <div className="row wrap" style={{ marginBottom: 12 }}>
+      <h2 className="sec-head">{t("Purchase orders")}</h2>
+      <p className="page-note sec-note">{t("An invoice that gives a PO number is compared with that PO: its vendor, currency and amount. The tolerance is set on the rule.")}</p>
+      {admin && <div className="toolbar">
         <CsvImport path="/purchase-orders/import" label={t("Import purchase orders from CSV")} onDone={pos.reload} />
         <span className="muted small">{t("CSV columns:")} <bdi dir="ltr">po_number, vendor, amount, currency, status</bdi></span>
       </div>}
@@ -149,8 +149,8 @@ export default function Vendors() {
                 <td><bdi dir="ltr">{p.po_number}</bdi></td>
                 <td><span className="cell-text" dir="auto">{p.vendor_name || "–"}</span>{!p.vendor_id && p.vendor_name && <span className="small muted"> · {t("not in the vendor master")}</span>}</td>
                 <td className="n"><bdi dir="ltr">{money(p.amount, p.currency)}</bdi></td>
-                <td>{t(PO_STATUS[p.status])}</td>
-                {admin && <td style={{ textAlign: "end" }}><button className="btn small danger" onClick={() => removePo(p)} aria-label={t("Delete PO {n}", { n: p.po_number })}>{t("Delete")}</button></td>}
+                <td><span className={`tag${p.status === "closed" ? " closed" : ""}`}>{t(PO_STATUS[p.status])}</span></td>
+                {admin && <td className="td-actions"><button className="btn small danger" onClick={() => removePo(p)} aria-label={t("Delete PO {n}", { n: p.po_number })}>{t("Delete")}</button></td>}
               </tr>
             ))}</tbody>
           </table></div>
