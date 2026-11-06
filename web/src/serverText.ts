@@ -25,6 +25,12 @@ export const SERVER_TEXT = [
   tk("Duplicate invoice"), tk("The same seller VAT number and invoice number must not be received twice."),
   tk("Extraction confidence"), tk("Overall confidence of the extraction must reach a threshold."),
   tk("Custom expression"), tk("Write your own condition. It must be true for the invoice to pass."),
+  tk("Known vendor"), tk("The seller must be in the vendor master, by name (English, Arabic or a linked name) or VAT number."),
+  tk("Vendor not blocked"), tk("The matched vendor must not be blocked in the vendor master."),
+  tk("VAT number matches vendor master"), tk("The seller VAT number must be the one held for the matched vendor."),
+  tk("IBAN matches vendor master"), tk("The IBAN on the invoice must be valid and the one held for the matched vendor. A failure is marked high risk."),
+  tk("Within the purchase order"), tk("The invoice amount must not be above its purchase order's amount, allowing a tolerance."),
+  tk("min score"), tk("0 to 1; how close a name must be"), tk("share of the PO amount, 0.01 is 1%"),
   tk("fields"), tk("field"), tk("pattern"), tk("optional"), tk("rate"), tk("tolerance"), tk("not future"), tk("max age days"),
   tk("first"), tk("second"), tk("allowed"), tk("min"), tk("max"), tk("required"), tk("threshold"), tk("expr"),
 
@@ -33,6 +39,8 @@ export const SERVER_TEXT = [
   tk("Line quantity times price"), tk("Issue date is real and not in the future"), tk("Due date is not before issue date"),
   tk("Currency is SAR"), tk("Total above 50,000 needs a second look"), tk("QR code agrees with printed values"),
   tk("Not a duplicate"), tk("Extraction confidence is high enough"), tk("Total is not negative"),
+  tk("Vendor is in the vendor master"), tk("Vendor is not blocked"), tk("Seller VAT number matches the vendor master"),
+  tk("IBAN matches the vendor master"), tk("Invoice is within the purchase order"),
 
   // AI providers
   tk("Ollama (on this computer)"),
@@ -48,6 +56,8 @@ export const SERVER_TEXT = [
   tk("Totals do not add up"), tk("Issue date in the future"), tk("Duplicate of an earlier invoice"), tk("QR code disagrees with printed total"),
   tk("Foreign currency"), tk("High value invoice"), tk("Seller VAT number missing"), tk("Due date before issue date"),
   tk("VAT number in Arabic digits, grouped with spaces"), tk("Arabic-Indic digits and decimal separators"), tk("Zero-rated line, VAT on the rest only"), tk("Exempt line, VAT on the rest only"), tk("VAT charged on a zero-rated line"), tk("Hijri issue date"), tk("Hijri issue date in the future"), tk("No QR code on the invoice"), tk("Simplified tax invoice"),
+  tk("Known vendor, IBAN and PO agree"), tk("Vendor name written differently"), tk("IBAN differs from the vendor master"), tk("Blocked vendor"),
+  tk("Vendor not in the vendor master"), tk("VAT number differs from the vendor master"), tk("Invoice above its purchase order"),
 
   // AI connection test (api.py llm_test)
   tk("Connected and read the test invoice correctly."), tk("Connected, but the test invoice was not read as expected. Try another model."),

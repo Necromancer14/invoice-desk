@@ -242,7 +242,41 @@ def xml_is_indented(page: Page) -> None:
     check("XML reads left-to-right in Arabic", pre.evaluate("e => getComputedStyle(e).direction") == "ltr")
 
 
-CHECKS = [mixed_direction, review_badge, waking_screen, rule_with_open_limit, error_messages, damaged_file, provider_failure, xml_is_indented]
+def vendors_and_risk(page: Page) -> None:
+    """The Vendors page lists the demo vendor master in Arabic; a changed IBAN is marked high risk in the queue and the
+    run detail; a seller can be linked to a vendor in one click; a malformed IBAN is refused with a message."""
+    sign_in(page, lang="ar")
+    load_samples(page, ["inv-083.txt", "inv-086.txt"])
+    page.evaluate("location.hash = '#/vendors'")
+    rows = page.locator("table").first.locator("tbody tr")
+    expect(rows.first).to_be_visible()
+    check("Vendors page lists the vendor master", rows.count() >= 13, rows.count())
+    iban = page.locator("table").first.locator("tbody tr td.num bdi").nth(1)
+    check("IBAN reads left-to-right in Arabic", iban.evaluate("e => getComputedStyle(e).direction") == "ltr")
+    page.get_by_role("button", name="إضافة مورد").click()
+    page.locator(".modal input").first.fill("Test Vendor")
+    page.locator(".modal input").nth(4).fill("SA00 1234")
+    page.locator(".modal .btn.primary").click()
+    expect(page.locator(".modal .notice.err")).to_be_visible()
+    check("A malformed IBAN is refused with a message", "IBAN" in page.locator(".modal .notice.err").inner_text())
+    page.keyboard.press("Escape")
+    page.evaluate("location.hash = '#/review'")
+    expect(page.locator(".rq-item").first).to_be_visible()
+    check("Changed IBAN is marked high risk in the queue", page.locator(".rq-item .risk-pill").count() == 1)
+    page.locator(".rq-item", has=page.locator(".risk-pill")).click()
+    expect(page.locator(".checks .high-risk")).to_be_visible()
+    check("Run detail shows the high-risk check", page.locator(".checks .high-risk .risk-pill").count() == 1)
+    check("Run detail shows the PO", page.locator(".po-line").count() == 1)
+    page.locator(".rq-item", has_not=page.locator(".risk-pill")).click()
+    link = page.get_by_role("button", name="ربط بالمورد").first
+    expect(link).to_be_visible()
+    link.click()
+    expect(page.locator(".vm .pill.s-approved")).to_be_visible()
+    check("Link to vendor matches the seller", "اسم مرتبط" in page.locator(".vm").first.inner_text())
+
+
+CHECKS = [mixed_direction, review_badge, waking_screen, rule_with_open_limit, error_messages, damaged_file, provider_failure, xml_is_indented,
+          vendors_and_risk]
 
 if __name__ == "__main__":
     with sync_playwright() as pw:

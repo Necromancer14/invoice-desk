@@ -53,7 +53,7 @@ export const FIELD_LABEL: Record<string, string> = {
   invoice_number: tk("Invoice number"), issue_date: tk("Issue date"), due_date: tk("Due date"), seller_name: tk("Seller"),
   seller_vat: tk("Seller VAT number"), buyer_name: tk("Buyer"), buyer_vat: tk("Buyer VAT number"), currency: tk("Currency"),
   subtotal: tk("Subtotal"), vat_amount: tk("VAT amount"), total: tk("Total"), qr_payload: tk("QR code"), line_items: tk("Line items"),
-  invoice_type: tk("Invoice type"),
+  invoice_type: tk("Invoice type"), iban: tk("IBAN"), po_number: tk("PO number"),
 };
 const CHECK_LABEL = { pass: tk("Check passed"), fail: tk("Check failed"), skip: tk("Check skipped") };
 

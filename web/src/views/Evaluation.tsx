@@ -15,6 +15,9 @@ const SCENARIO: Record<string, string> = {
   duplicate: tk("Duplicate of an earlier invoice"), qr_mismatch: tk("QR code disagrees with printed total"), non_sar: tk("Foreign currency"),
   over_limit: tk("High value invoice"), missing_vat: tk("Seller VAT number missing"), due_before_issue: tk("Due date before issue date"),
   vat_digits_spaced: tk("VAT number in Arabic digits, grouped with spaces"), arabic_decimals: tk("Arabic-Indic digits and decimal separators"), zero_rated: tk("Zero-rated line, VAT on the rest only"), exempt: tk("Exempt line, VAT on the rest only"), zero_rated_wrong: tk("VAT charged on a zero-rated line"), hijri_date: tk("Hijri issue date"), hijri_future: tk("Hijri issue date in the future"), qr_missing: tk("No QR code on the invoice"), simplified: tk("Simplified tax invoice"),
+  vendor_ok: tk("Known vendor, IBAN and PO agree"), vendor_fuzzy: tk("Vendor name written differently"), iban_changed: tk("IBAN differs from the vendor master"),
+  blocked_vendor: tk("Blocked vendor"), unknown_vendor: tk("Vendor not in the vendor master"), vendor_vat_mismatch: tk("VAT number differs from the vendor master"),
+  po_over: tk("Invoice above its purchase order"),
 };
 const DEFAULTS: AiOptions = { sample_size: 20, rpm: 4, only_new: false, seed: 1 };
 const OPTIONS_KEY = "id-eval-ai";

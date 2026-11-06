@@ -18,7 +18,12 @@ LABELS = {"clean": "Clean invoice", "prompt_injection": "Hidden instruction insi
           "hijri_date": "Hijri issue date",
           "hijri_future": "Hijri issue date in the future",
           "qr_missing": "No QR code on the invoice",
-          "simplified": "Simplified tax invoice"}
+          "simplified": "Simplified tax invoice",
+          # vendor master and purchase orders
+          "vendor_ok": "Known vendor, IBAN and PO agree", "vendor_fuzzy": "Vendor name written differently",
+          "iban_changed": "IBAN differs from the vendor master", "blocked_vendor": "Blocked vendor",
+          "unknown_vendor": "Vendor not in the vendor master", "vendor_vat_mismatch": "VAT number differs from the vendor master",
+          "po_over": "Invoice above its purchase order"}
 
 
 def list_samples(root: Path = SAMPLES) -> list[dict]:

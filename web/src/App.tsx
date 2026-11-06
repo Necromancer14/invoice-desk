@@ -10,6 +10,7 @@ import Review from "./views/Review";
 import Rules from "./views/Rules";
 import Evaluation from "./views/Evaluation";
 import Audit from "./views/Audit";
+import Vendors from "./views/Vendors";
 import Settings from "./views/Settings";
 
 const TABS: { id: string; label: string; icon: string }[] = [
@@ -18,6 +19,7 @@ const TABS: { id: string; label: string; icon: string }[] = [
   { id: "runs", label: tk("Runs"), icon: "M4 6h16M4 12h16M4 18h10" },
   { id: "review", label: tk("Review queue"), icon: "M5 12l4 4 10-10" },
   { id: "rules", label: tk("Rules"), icon: "M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M8 14v6" },
+  { id: "vendors", label: tk("Vendors"), icon: "M3 21h18M5 21V8l7-4 7 4v13M9 21v-6h6v6M9 11h.01M15 11h.01" },
   { id: "evaluation", label: tk("Evaluation"), icon: "M4 20V10m6 10V4m6 16v-7m4 7H2" },
   { id: "audit", label: tk("Audit log"), icon: "M7 3h8l4 4v14H7zM15 3v4h4M10 12h6M10 16h6" },
   { id: "settings", label: tk("Settings"), icon: "M12 15a3 3 0 100-6 3 3 0 000 6zM19 12a7 7 0 00-.1-1.2l2-1.5-2-3.4-2.3.9a7 7 0 00-2-1.2L14 3h-4l-.6 2.6a7 7 0 00-2 1.2l-2.3-.9-2 3.4 2 1.5a7 7 0 000 2.4l-2 1.5 2 3.4 2.3-.9a7 7 0 002 1.2L10 21h4l.6-2.6a7 7 0 002-1.2l2.3.9 2-3.4-2-1.5c.1-.4.1-.8.1-1.2z" },
@@ -182,6 +184,7 @@ export default function App() {
       case "runs": return <Runs openId={route.arg ? Number(route.arg) : undefined} />;
       case "review": return <Review openId={route.arg ? Number(route.arg) : undefined} />;
       case "rules": return <Rules />;
+      case "vendors": return <Vendors />;
       case "evaluation": return <Evaluation />;
       case "audit": return <Audit />;
       case "settings": return <Settings theme={theme} setTheme={setTheme} lang={lang} setLang={setLang} />;

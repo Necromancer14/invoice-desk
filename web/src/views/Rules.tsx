@@ -38,7 +38,7 @@ export default function Rules() {
       <Head title={t("Rules")} sub={t("These rules decide whether an invoice is approved, sent to a person or rejected. Change them here and the next invoice follows the new rule. No deployment needed.")}>
         {admin && <button className="btn primary" onClick={() => setEdit("new")}>{t("Add rule")}</button>}
       </Head>
-      <p className="muted small" style={{ margin: "-12px 0 16px", maxWidth: "64ch" }}>{t("These include checks against ZATCA e-invoicing fields: VAT number, VAT amounts, dates (Hijri too), the QR code and UBL XML. Signatures are not verified and nothing is sent to Fatoora.")}</p>
+      <p className="muted small" style={{ margin: "-12px 0 16px", maxWidth: "64ch" }}>{t("These include checks against ZATCA e-invoicing fields: VAT number, VAT amounts, dates (Hijri too), the QR code and UBL XML. Signatures are not verified and nothing is sent to Fatoora.")} {t("The vendor rules compare the invoice with your vendor master and purchase orders; they skip while the vendor master is empty.")}</p>
       {!admin && <div className="notice warn" style={{ marginBottom: 14 }}>{t("Only admins can change rules. You can read them and the history.")}</div>}
       <Err msg={rules.error || types.error} />
       <div className="grid g2">

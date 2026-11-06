@@ -106,6 +106,7 @@ export default function Review({ openId }: { openId?: number }) {
                   <span className="rq-sub muted small">
                     <bdi dir="ltr">{i.invoice_number || `#${i.id}`}</bdi>
                     <span className="rq-fails">{t("{n} checks failed", { n: i.failed_checks })}</span>
+                    {i.high_risk && <span className="pill s-rejected risk-pill">{t("High risk")}</span>}
                     <span className="right">{ago(i.created_at)}</span>
                   </span>
                 </button></li>
@@ -129,7 +130,7 @@ export default function Review({ openId }: { openId?: number }) {
                   <Document run={current} />
                   <div className="panel"><ReviewForm run={current} onDone={() => decided(current.id)} /></div>
                 </div>
-                <div className="panel"><h2>{t("Why this needs a person")}</h2><Evidence run={current} /></div>
+                <div className="panel"><h2>{t("Why this needs a person")}</h2><Evidence run={current} onChange={setRun} /></div>
               </>
             )}
           </section>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, fileBlobUrl } from "../api";
-import type { Fields, RunDetail as Run } from "../types";
+import type { Fields, PoStatus, RunDetail as Run } from "../types";
 import { CheckMark, Err, FIELD_LABEL, StatusPill, can, money, num, pct, tk, useApp, when } from "../common";
 
 /** ltr: codes, dates and amounts, typed and shown left-to-right even in Arabic. Labels come from FIELD_LABEL. */
@@ -9,7 +9,7 @@ const EDIT_FIELDS: { key: keyof Fields; type?: "number" | "date"; wide?: boolean
   { key: "seller_name", wide: true }, { key: "seller_vat", ltr: true },
   { key: "due_date", type: "date", ltr: true }, { key: "buyer_name", wide: true }, { key: "buyer_vat", ltr: true },
   { key: "currency", ltr: true }, { key: "subtotal", type: "number", ltr: true }, { key: "vat_amount", type: "number", ltr: true },
-  { key: "total", type: "number", ltr: true },
+  { key: "total", type: "number", ltr: true }, { key: "iban", wide: true, ltr: true }, { key: "po_number", ltr: true },
 ];
 
 /** UBL tax category of a line. Lines without one are standard-rated. */
@@ -85,11 +85,70 @@ function decodeQr(payload: string | null | undefined): Record<number, string> | 
 }
 const QR_TAGS: [number, string][] = [[1, tk("Seller")], [2, tk("Seller VAT number")], [3, tk("Time stamp")], [4, tk("Total")], [5, tk("VAT amount")]];
 
-export function Evidence({ run }: { run: Run }) {
+const MATCHED_ON = { "English name": tk("English name"), "Arabic name": tk("Arabic name"), "linked name": tk("linked name"), "VAT number": tk("VAT number") };
+const PO_STATUS: Record<PoStatus, string> = {
+  no_po: tk("The invoice gives no PO number"), not_found: tk("PO {po} is not among the purchase orders"),
+  vendor_mismatch: tk("PO {po} belongs to another vendor"), currency_mismatch: tk("PO {po} is in another currency"),
+  closed: tk("PO {po} is closed"), over: tk("Above PO {po}"), matched: tk("Within PO {po}"),
+};
+const PO_TONE: Record<PoStatus, string> = { no_po: "", not_found: "warn", vendor_mismatch: "warn", currency_mismatch: "warn", closed: "warn", over: "err", matched: "ok" };
+
+/** Which vendor the invoice was matched to, how closely and on what, plus its purchase order.
+ *  Reviewers can link an unmatched seller name to a vendor; the run's checks are then run again. */
+function VendorPanel({ run, onChange }: { run: Run; onChange?: (r: Run) => void }) {
+  const { t, role, toast } = useApp();
+  const [busy, setBusy] = useState(false);
+  const vm = run.vendor_match, po = run.po_match;
+  if (!vm && (!po || po.status === "no_po")) return null;
+  const name = (v: { name_en: string | null; name_ar: string | null }) => v.name_en || v.name_ar || "";
+  const canLink = onChange && can(role, "reviewer") && run.status === "needs_review" && !!(run.final_fields ?? run.extracted)?.seller_name;
+  async function link(id: number) {
+    setBusy(true);
+    try { const r = await api<Run>(`/runs/${run.id}/link-vendor`, { body: { vendor_id: id } }); toast(t("Linked. The checks were run again.")); onChange!(r); }
+    catch (e) { toast((e as Error).message, "err"); } finally { setBusy(false); }
+  }
+  return (
+    <section>
+      <h3 style={{ marginBottom: 6 }}>{t("Vendor and purchase order")}</h3>
+      {vm && (vm.vendor ? (
+        <div className="vm">
+          <div className="row wrap" style={{ gap: 8 }}>
+            <b className="cell-text" dir="auto">{name(vm.vendor)}</b>
+            {vm.vendor.status === "blocked" && <span className="pill s-rejected">{t("Blocked")}</span>}
+            <span className="pill s-approved">{t("match {pct}", { pct: pct(vm.score) })}</span>
+          </div>
+          <div className="small muted">{t("Matched on the {what}", { what: t(MATCHED_ON[vm.matched_on!] || vm.matched_on || "") })}</div>
+        </div>
+      ) : (
+        <div className="vm">
+          <div className="notice warn">{t("No vendor in the vendor master matches this seller well enough.")}</div>
+          {vm.suggestions.length > 0 && <ul className="vm-sugg">{vm.suggestions.map((s) => (
+            <li key={s.id}>
+              <span className="cell-text" dir="auto">{name(s)}</span>
+              <span className="muted small num">{t("match {pct}", { pct: pct(s.score) })}</span>
+              {canLink && <button className="btn small" disabled={busy} onClick={() => link(s.id)}>{t("Link to vendor")}<span className="sr-only">: {name(s)}</span></button>}
+            </li>
+          ))}</ul>}
+        </div>
+      ))}
+      {/* the explanation is the server's own sentence, in English, with the names as written */}
+      {vm && <p className="small muted" style={{ margin: "4px 0 0" }}><bdi dir="auto">{vm.why}</bdi></p>}
+      {po && po.status !== "no_po" && (
+        <div className={`po-line ${PO_TONE[po.status]}`}>
+          <b>{t(PO_STATUS[po.status], { po: po.po_number || "" })}</b>
+          {po.po_amount != null && <span className="small">{t("PO amount")}: <bdi dir="ltr">{money(po.po_amount, po.po_currency)}</bdi>{po.amount != null && <> · {t("invoice")}: <bdi dir="ltr">{money(po.amount, po.po_currency)}</bdi></>}</span>}
+        </div>
+      )}
+    </section>
+  );
+}
+
+export function Evidence({ run, onChange }: { run: Run; onChange?: (r: Run) => void }) {
   const { t } = useApp();
   const qr = decodeQr((run.final_fields ?? run.extracted)?.qr_payload);
   return (
     <div className="col" style={{ gap: 18 }}>
+      <VendorPanel run={run} onChange={onChange} />
       {qr && (
         <section>
           <h3 style={{ marginBottom: 6 }}>{t("What the QR code says")}</h3>
@@ -100,7 +159,7 @@ export function Evidence({ run }: { run: Run }) {
         <h3 style={{ marginBottom: 6 }}>{t("Checks")}</h3>
         <div className="checks">
           {run.results.map((r) => (
-            <div key={r.key}><CheckMark s={r.status} /><div>{t(r.name)}<small>{r.status === "pass" ? "" : <bdi dir="auto">{r.detail}</bdi>}{r.status === "fail" ? ` · ${r.severity === "reject" ? t("would reject") : t("sends to review")}` : ""}</small></div></div>
+            <div key={r.key} className={r.risk === "high" ? "high-risk" : undefined}><CheckMark s={r.status} /><div>{t(r.name)}{r.risk === "high" && <span className="pill s-rejected risk-pill">{t("High risk")}</span>}<small>{r.status === "pass" ? "" : <bdi dir="auto">{r.detail}</bdi>}{r.status === "fail" ? ` · ${r.severity === "reject" ? t("would reject") : t("sends to review")}` : ""}</small></div></div>
           ))}
           {!run.results.length && <p className="muted small">{t("No checks ran.")}</p>}
         </div>
