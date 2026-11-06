@@ -691,6 +691,10 @@ class Desk:
             self.pool.submit(self.process, rid, llm)
 
     # ------------------------------------------------------------------ stats
+    def clear_evaluation_runs(self) -> int:
+        """Remove the runs kept from earlier evaluations; uploads are never touched."""
+        return self.db.run("DELETE FROM runs WHERE source='evaluation'").rowcount
+
     def record_evaluation_runs(self, runs: list[dict]) -> int:
         """Keep the runs an evaluation made on its scratch database, tagged evaluation, so they can be opened later.
         They are scored against the answer key and never wait in the review queue."""

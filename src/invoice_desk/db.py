@@ -31,6 +31,8 @@ CREATE TABLE IF NOT EXISTS eval_results(provider TEXT, model TEXT, sample_id TEX
 class DB:
     def __init__(self, path: str = ":memory:"):
         self.lock = threading.RLock()
+        self.path = path
+        self.in_memory = path == ":memory:" or path.startswith("file::memory:")
         self.conn = sqlite3.connect(path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         if path != ":memory:":

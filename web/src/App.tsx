@@ -48,7 +48,7 @@ const WAKE_SAY_SO_MS = 3_000;
  * browser also waits for this page itself, before any of this code runs.
  */
 function useHealth(attempt: number) {
-  const [health, setHealth] = useState<{ demo: boolean } | null>(null);
+  const [health, setHealth] = useState<{ demo: boolean; inMemory: boolean } | null>(null);
   const [state, setState] = useState<"checking" | "waking" | "failed">("checking");
   const [waited, setWaited] = useState(0);
   useEffect(() => {
@@ -66,7 +66,7 @@ function useHealth(attempt: number) {
         const cut = window.setTimeout(() => ctrl.abort(), 15_000);
         try {
           const r = await fetch("/api/health", { signal: ctrl.signal, cache: "no-store" });
-          if (r.ok) { const h = await r.json(); if (!stop) { setHealth({ demo: !!h.demo }); } return; }
+          if (r.ok) { const h = await r.json(); if (!stop) { setHealth({ demo: !!h.demo, inMemory: !!h.in_memory }); } return; }
         } catch { /* asleep, starting or offline: ask again */ } finally { window.clearTimeout(cut); }
         if (Date.now() - started >= WAKE_GIVE_UP_MS) { if (!stop) setState("failed"); return; }
         await new Promise((res) => setTimeout(res, 3000));
@@ -216,7 +216,8 @@ export default function App() {
           </div>
         </aside>
         <main className="main" id="main">
-          {health.demo && <p className="demo-note" role="note">{t("Demo with sample data. Resets on restart. Do not upload real invoices.")}</p>}
+          {/* "Resets on restart" is only true when the database lives in memory */}
+          {health.demo && <p className="demo-note" role="note">{health.inMemory ? t("Demo with sample data. Resets on restart. Do not upload real invoices.") : t("Demo with sample data. Do not upload real invoices.")}</p>}
           {view}
         </main>
       </div>

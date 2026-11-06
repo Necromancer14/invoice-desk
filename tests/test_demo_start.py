@@ -103,3 +103,28 @@ def test_api_welcome_set_stats_and_reset(auth):
     assert c.get("/api/stats", headers=v).json()["total"] == 0
     assert len(c.get("/api/vendors", headers=v).json()) == n_vendors
     assert [x["action"] for x in c.get("/api/audit", headers=a).json()] == ["demo.reset"]
+
+
+def test_a_new_evaluation_replaces_the_previous_evaluation_runs_only(auth, tmp_path):
+    d = Desk(":memory:", today=TODAY, sync=True, seed_vendors=True)
+    up = d.submit("a.txt", GOOD.encode(), "text/plain", "r")
+    d.record_evaluation_runs(evaluate(limit=3).pop("_runs"))
+    old = [r["id"] for r in d.list_runs(source="evaluation")["items"]]
+    assert len(old) == 3
+    c = TestClient(create_app(d, auth, rate_limit=1000))
+    a = {"Authorization": "Bearer " + c.post("/api/auth/demo", json={"role": "admin"}).json()["token"]}
+    job = c.post("/api/evaluation/run", json={"mode": "rules"}, headers=a).json()["job"]
+    assert not set(old) & {r["id"] for r in d.list_runs(source="evaluation", limit=200)["items"]}   # gone at the start
+    import time
+    for _ in range(600):
+        if c.get(f"/api/evaluation/jobs/{job}", headers=a).json()["status"] != "running":
+            break
+        time.sleep(0.1)
+    assert d.list_runs(source="evaluation", limit=200)["total"] == len(load_answers()["invoices"])
+    assert d.get_run(up)["source"] == "upload" and d.list_runs(source="upload")["total"] == 1
+
+
+def test_health_says_whether_the_database_is_in_memory(auth, tmp_path):
+    mem = TestClient(create_app(Desk(":memory:", today=TODAY, sync=True), auth)).get("/api/health").json()
+    disk = TestClient(create_app(Desk(str(tmp_path / "x.db"), today=TODAY, sync=True), auth)).get("/api/health").json()
+    assert mem["in_memory"] is True and disk["in_memory"] is False

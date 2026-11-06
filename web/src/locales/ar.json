@@ -540,5 +540,6 @@
   "Clears every invoice and the audit log, restores the default rules and reloads the sample vendors and purchase orders.": "يمسح كل الفواتير وسجل التدقيق، ويعيد القواعد الافتراضية، ويعيد تحميل الموردين وأوامر الشراء النموذجية.",
   "Reset demo data?": "إعادة ضبط البيانات التجريبية؟",
   "Every invoice and every audit entry will be deleted, and the rules go back to the defaults. This cannot be undone.": "ستُحذف كل الفواتير وكل قيود التدقيق، وتعود القواعد إلى الوضع الافتراضي. لا يمكن التراجع عن ذلك.",
-  "Yes, reset": "نعم، أعد الضبط"
+  "Yes, reset": "نعم، أعد الضبط",
+  "Demo with sample data. Do not upload real invoices.": "نسخة تجريبية ببيانات نموذجية. لا ترفع فواتير حقيقية."
 }

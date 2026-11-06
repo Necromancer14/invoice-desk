@@ -117,7 +117,7 @@ def create_app(desk: Desk | None = None, auth: Auth | None = None, rate_limit: i
     # ---------------------------------------------------------------- session
     @app.get("/api/health")
     def health():
-        return dict(ok=True, version=__version__, demo=auth.demo)
+        return dict(ok=True, version=__version__, demo=auth.demo, in_memory=desk.db.in_memory)
 
     @app.post("/api/auth/demo")
     def demo_login(body: dict):
@@ -401,6 +401,7 @@ def create_app(desk: Desk | None = None, auth: Auth | None = None, rate_limit: i
             raise HTTPException(400, "mode must be rules or ai")
         job = f"job{len(jobs) + 1}"
         jobs[job] = dict(status="running", mode=mode)
+        desk.clear_evaluation_runs()  # only the most recent evaluation's runs are kept
         desk.audit(user["sub"], "evaluation.run", mode if mode == "rules" else f"ai {llm['provider']} n={opts['sample_size']} rpm={opts['rpm']}")
         if mode == "ai":
             threading.Thread(target=_run_eval_ai, args=(job, llm, opts), daemon=True).start()
