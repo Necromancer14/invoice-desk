@@ -127,6 +127,24 @@ def review_layout(page: Page) -> None:
     check("run detail: failed checks come first", "ck-fail" in page.locator(".modal .ck").first.get_attribute("class"))
 
 
+def dashboard_layout(page: Page) -> None:
+    """Dashboard: one headline figure before the status bar; a single busy day draws as one bar with its count,
+    the empty days as faint ticks, on a scale whose halfway mark is a whole number."""
+    sign_in(page)
+    load_samples(page, ["inv-003.txt", "inv-016.pdf", "inv-089.txt"])
+    page.evaluate("location.hash = '#/dashboard'; location.reload()")
+    page.wait_for_selector(".dc-plot")
+    order = page.evaluate("""() => { const h = document.querySelector('.headline'), s = document.querySelector('.strip');
+        return !!h && !!s && (h.compareDocumentPosition(s) & Node.DOCUMENT_POSITION_FOLLOWING) > 0; }""")
+    check("dashboard: headline figure comes before the status bar", order)
+    check("dashboard: one bar for the one busy day", page.locator(".dc-bar").count() == 1)
+    val = page.locator(".dc-val").inner_text().strip()
+    check("dashboard: the busy day is labelled with its count", val == "3", val)
+    check("dashboard: empty days drawn as ticks", page.locator(".dc-col.zero").count() == 13)
+    top, mid = page.locator(".dc-tick.top").inner_text(), page.locator(".dc-tick.mid").inner_text()
+    check("dashboard: scale has a whole-number halfway mark", top == "4" and mid == "2", f"{top} / {mid}")
+
+
 def waking_screen(page: Page) -> None:
     """While /api/health does not answer, a 'waking up' screen shows in the chosen language, then sign-in follows."""
     page.goto(BASE)
@@ -339,7 +357,7 @@ def demo_start(page: Page) -> None:
 
 
 CHECKS = [mixed_direction, review_badge, waking_screen, rule_with_open_limit, error_messages, damaged_file, provider_failure, xml_is_indented,
-          vendors_and_risk, demo_start, review_layout]
+          vendors_and_risk, demo_start, review_layout, dashboard_layout]
 
 if __name__ == "__main__":
     with sync_playwright() as pw:

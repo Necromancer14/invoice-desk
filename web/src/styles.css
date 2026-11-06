@@ -23,6 +23,7 @@
   --bad: #b42318; --bad-bg: #fdecea; --bad-solid: #b42318; --on-bad: #ffffff;
   --risk: #8f1d14; --on-risk: #ffffff;
   --info: #1f4f8f; --info-bg: #e8f0fb;
+  --data: #5b7f6c;
   --focus: #1f6feb;
   --paper: #ffffff; --paper-ink: #1b2620;
   --scrim: rgb(14 20 18 / .45);
@@ -49,6 +50,7 @@
   --bad: #ff8f86; --bad-bg: #3a1715; --bad-solid: #f0776c; --on-bad: #1e0605;
   --risk: #ff6b5e; --on-risk: #1e0605;
   --info: #93bdf2; --info-bg: #172539;
+  --data: #7fa48f;
   --focus: #79b0ff;
   --paper: #fbfcfb; --paper-ink: #1b2620;
   --scrim: rgb(0 0 0 / .6);
@@ -185,11 +187,32 @@ td.n, th.n { text-align: end; font-variant-numeric: tabular-nums; }
 .fact .n-note { display: block; margin-top: 2px; color: var(--muted); font-size: var(--t-xs); }
 .hbar { display: grid; grid-template-columns: minmax(0, 1.7fr) 1.3fr 30px; gap: var(--s3); align-items: center; padding: 5px 0; font-size: var(--t-md); }
 .hbar > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hbar .t { height: 8px; background: var(--surface-3); border-radius: 2px; overflow: hidden; } .hbar .t i { display: block; height: 100%; background: var(--warn-solid); border-radius: 2px; }
+.hbar .t { height: 8px; background: var(--surface-3); border-radius: 2px; overflow: hidden; } .hbar .t i { display: block; height: 100%; background: var(--data); border-radius: 2px; }
 .hbar.bad .t i { background: var(--bad-solid); }
 .hbar b { text-align: end; font-weight: 600; }
-.bars { display: flex; align-items: flex-end; gap: 6px; height: 130px; }
-.bars > div { flex: 1; background: var(--brand); border-radius: 2px 2px 0 0; min-height: 2px; }
+.dash { gap: var(--s4); }
+/* the headline: the share that cleared without a person, then the other figures, then where every invoice ended up */
+.hero-top { display: flex; align-items: flex-end; gap: var(--s5) var(--s6); flex-wrap: wrap; margin-bottom: var(--s5); }
+.headline { display: flex; flex-direction: column; }
+.headline b { font-size: var(--t-3xl); font-weight: 600; line-height: 1; letter-spacing: -.02em; color: var(--brand-ink); }
+.headline span { margin-top: var(--s2); color: var(--ink-2); font-weight: 500; }
+.kpis { display: flex; flex-wrap: wrap; gap: var(--s3) 0; margin-inline-start: auto; }
+.kpi { display: flex; flex-direction: column; padding-inline: var(--s5); border-inline-start: 1px solid var(--line); min-width: 120px; }
+.kpi b { font-size: var(--t-xl); font-weight: 600; line-height: 1.2; }
+.kpi span { font-size: var(--t-sm); color: var(--muted); }
+.legend b { font-weight: 600; color: var(--ink); margin-inline-start: 2px; }
+/* invoices per day */
+.daychart { margin: 0; }
+.dc-plot { position: relative; display: flex; align-items: flex-end; gap: 2px; height: 140px; margin-inline-end: 28px; border-bottom: 1px solid var(--line-strong);
+  background: linear-gradient(var(--line), var(--line)) 0 0 / 100% 1px no-repeat, linear-gradient(var(--line), var(--line)) 0 50% / 100% 1px no-repeat; }
+.dc-tick { position: absolute; inset-inline-end: -28px; font-size: var(--t-xs); color: var(--muted); transform: translateY(-50%); }
+.dc-tick.top { top: 0; } .dc-tick.mid { top: 50%; }
+.dc-col { flex: 1; height: 100%; display: flex; align-items: flex-end; position: relative; }
+.dc-col:hover { background: var(--surface-2); }
+.dc-col.zero::after { content: ""; position: absolute; inset-inline: 30%; bottom: 0; height: 2px; background: var(--line-strong); }
+.dc-bar { position: relative; width: 100%; min-height: 2px; background: var(--brand); border-radius: 4px 4px 0 0; }
+.dc-val { position: absolute; bottom: 100%; inset-inline: -12px; text-align: center; font-size: var(--t-xs); font-weight: 600; color: var(--ink); padding-bottom: 2px; }
+.dc-axis { display: flex; justify-content: space-between; margin-top: 6px; margin-inline-end: 28px; }
 
 /* ---------- documents, fields, checks ---------- */
 .split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s4); align-items: start; }
