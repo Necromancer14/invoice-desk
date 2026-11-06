@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UI overhaul: before and after</title>
+<style>
+  :root { --bg: #f3f5f4; --surface: #fff; --line: #e1e6e3; --ink: #14201a; --muted: #5b6a63; --brand: #006c35; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #0e1412; --surface: #151c19; --line: #28322e; --ink: #e5ebe8; --muted: #93a19a; --brand: #3fbf7f; } }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 system-ui, sans-serif; }
+  header { position: sticky; top: 0; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; padding: 12px 16px; background: var(--surface); border-bottom: 1px solid var(--line); z-index: 1; }
+  h1 { font-size: 16px; margin: 0 16px 0 0; }
+  label { display: flex; gap: 6px; align-items: center; color: var(--muted); }
+  select { font: inherit; padding: 4px 8px; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px; align-items: start; }
+  figure { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  figcaption { padding: 8px 12px; font-weight: 600; border-bottom: 1px solid var(--line); }
+  img { display: block; width: 100%; height: auto; }
+  @media (max-width: 900px) { .pair { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Before and after</h1>
+  <label>Page <select id="page"></select></label>
+  <label>Language <select id="lang"><option value="en">English</option><option value="ar">Arabic</option></select></label>
+  <label>Theme <select id="theme"><option value="light">Light</option><option value="dark">Dark</option></select></label>
+</header>
+<div class="pair">
+  <figure><figcaption>Before</figcaption><img id="before" alt=""></figure>
+  <figure><figcaption>After</figcaption><img id="after" alt=""></figure>
+</div>
+<script>
+  const pages = ["00-sign-in", "01-welcome", "02-dashboard", "03-intake", "04-runs", "05-run-detail", "06-review",
+    "07-rules", "08-rule-editor", "09-vendors", "10-evaluation", "11-audit", "12-settings"];
+  const sel = document.getElementById("page");
+  pages.forEach((p) => sel.add(new Option(p.slice(3).replace("-", " "), p)));
+  const show = () => {
+    const name = `${sel.value}-${document.getElementById("lang").value}-${document.getElementById("theme").value}.jpg`;
+    for (const side of ["before", "after"]) {
+      const img = document.getElementById(side);
+      img.src = `${side}/${name}`; img.alt = `${side}: ${name}`;
+    }
+  };
+  document.querySelectorAll("select").forEach((s) => s.addEventListener("change", show));
+  show();
+</script>
+</body>
+</html>
