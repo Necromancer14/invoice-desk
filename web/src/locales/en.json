@@ -16,5 +16,6 @@
   "{n} already evaluated were skipped": {"one": "{n} already evaluated was skipped", "other": "{n} already evaluated were skipped"},
   "About {n} minutes at this pace.": {"one": "About {n} minute at this pace.", "other": "About {n} minutes at this pace."},
   "{done} of {n} invoices evaluated": {"one": "{done} of {n} invoice evaluated", "other": "{done} of {n} invoices evaluated"},
-  "{n} not reached": {"one": "{n} not reached", "other": "{n} not reached"}
+  "{n} not reached": {"one": "{n} not reached", "other": "{n} not reached"},
+  "Waiting for {n} seconds": {"one": "Waiting for {n} second", "other": "Waiting for {n} seconds"}
 }

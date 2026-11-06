@@ -34,11 +34,68 @@ function parseHash(): { tab: string; arg?: string } {
   return { tab: TABS.some((t) => t.id === tab) ? tab : "dashboard", arg };
 }
 
-function Login({ onIn, t, lang, setLang }: { onIn: (r: Role, name: string) => void; t: (s: string) => string; lang: Lang; setLang: (l: Lang) => void }) {
-  const [demo, setDemo] = useState<boolean | null>(null);
+type T = (s: string, vars?: Record<string, string | number>) => string;
+
+/** How long to keep asking a sleeping server before giving up, and when to start saying so. */
+const WAKE_GIVE_UP_MS = 90_000;
+const WAKE_SAY_SO_MS = 3_000;
+
+/**
+ * Ask /api/health until it answers. A free Render instance sleeps when idle and takes about a minute to start; while it
+ * starts, requests hang or come back 502/503. Only the API part of that is visible here: on a fully cold start the
+ * browser also waits for this page itself, before any of this code runs.
+ */
+function useHealth(attempt: number) {
+  const [health, setHealth] = useState<{ demo: boolean } | null>(null);
+  const [state, setState] = useState<"checking" | "waking" | "failed">("checking");
+  const [waited, setWaited] = useState(0);
+  useEffect(() => {
+    let stop = false;
+    const started = Date.now();
+    setState("checking"); setWaited(0);
+    const tick = window.setInterval(() => {
+      const ms = Date.now() - started;
+      setWaited(Math.round(ms / 1000));
+      if (ms >= WAKE_SAY_SO_MS) setState((s) => (s === "checking" ? "waking" : s));
+    }, 1000);
+    (async () => {
+      while (!stop) {
+        const ctrl = new AbortController();
+        const cut = window.setTimeout(() => ctrl.abort(), 15_000);
+        try {
+          const r = await fetch("/api/health", { signal: ctrl.signal, cache: "no-store" });
+          if (r.ok) { const h = await r.json(); if (!stop) { setHealth({ demo: !!h.demo }); } return; }
+        } catch { /* asleep, starting or offline: ask again */ } finally { window.clearTimeout(cut); }
+        if (Date.now() - started >= WAKE_GIVE_UP_MS) { if (!stop) setState("failed"); return; }
+        await new Promise((res) => setTimeout(res, 3000));
+      }
+    })().finally(() => window.clearInterval(tick));
+    return () => { stop = true; window.clearInterval(tick); };
+  }, [attempt]);
+  return { health, state, waited };
+}
+
+function Waking({ t, lang, setLang, failed, waited, retry }: { t: T; lang: Lang; setLang: (l: Lang) => void; failed: boolean; waited: number; retry: () => void }) {
+  return (
+    <div className="login"><div className="panel" role={failed ? "alert" : "status"} aria-live="polite">
+      <div className="row" style={{ gap: 12 }}><svg width="40" height="40" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#006c35" /><path d="M9 7.5h10l4.5 4.5v12.5H9z" fill="none" stroke="#fff" strokeWidth="2" strokeLinejoin="round" /><path d="M13 17.5l3 3 5-6" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg><div className="grow"><h1>invoice-desk</h1></div>
+        <button className="chip" style={{ alignSelf: "start" }} onClick={() => setLang(lang === "en" ? "ar" : "en")} aria-label={t("Switch language")}>{lang === "en" ? "العربية" : "English"}</button></div>
+      {failed ? <>
+        <h2>{t("The demo did not wake up")}</h2>
+        <p className="muted">{t("The server has not answered for 90 seconds. It may be down, or your connection may be offline.")}</p>
+        <div><button className="btn primary" onClick={retry}>{t("Try again")}</button></div>
+      </> : <>
+        <div className="row" style={{ gap: 14 }}><span className="spinner" aria-hidden="true" /><h2>{t("Waking up the demo")}</h2></div>
+        <p className="muted">{t("This free demo server sleeps when nobody is using it, and starting it again can take about a minute. The page will carry on by itself.")}</p>
+        <p className="muted small num">{t("Waiting for {n} seconds", { n: waited })}</p>
+      </>}
+    </div></div>
+  );
+}
+
+function Login({ onIn, t, lang, setLang, demo }: { onIn: (r: Role, name: string) => void; t: T; lang: Lang; setLang: (l: Lang) => void; demo: boolean }) {
   const [err, setErr] = useState<string | null>(null);
   const [name, setName] = useState(""); const [pw, setPw] = useState("");
-  useEffect(() => { fetch("/api/health").then((r) => r.json()).then((h) => setDemo(!!h.demo)).catch(() => setErr(t("Cannot reach the server."))); }, []);
   async function pick(role: Role) {
     try { const r = await demoLogin(role); session.token = r.token; onIn(r.role, r.name); } catch (e) { setErr((e as Error).message); }
   }
@@ -57,7 +114,7 @@ function Login({ onIn, t, lang, setLang }: { onIn: (r: Role, name: string) => vo
         <button onClick={() => pick("reviewer")}><b>{t("Reviewer")}</b><span className="muted small">{t("Upload invoices and decide the ones waiting for review")}</span></button>
         <button onClick={() => pick("viewer")}><b>{t("Viewer")}</b><span className="muted small">{t("Read-only")}</span></button>
       </div>}
-      {demo === false && <form className="col" onSubmit={submit}>
+      {!demo && <form className="col" onSubmit={submit}>
         <label className="f">{t("Name")}<input type="text" value={name} onChange={(e) => setName(e.target.value)} autoComplete="username" /></label>
         <label className="f">{t("Password")}<input type="password" value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="current-password" /></label>
         <button className="btn primary" type="submit">{t("Sign in")}</button></form>}
@@ -83,10 +140,13 @@ export default function App() {
   };
   const logout = useCallback(() => { session.token = null; setRole(null); }, []);
   useEffect(() => { setUnauthorizedHandler(logout); }, [logout]);
+  const [wakeAttempt, setWakeAttempt] = useState(0);
+  const { health, state: wake, waited } = useHealth(wakeAttempt);
   useEffect(() => {
+    if (!health) return;
     if (!session.token) { setChecked(true); return; }
     api<{ name: string; role: Role }>("/auth/me").then((m) => { setRole(m.role); setName(m.name); }).catch(() => {}).finally(() => setChecked(true));
-  }, []);
+  }, [health]);
   useEffect(() => { const h = () => { setRoute(parseHash()); setOpen(false); }; window.addEventListener("hashchange", h); return () => window.removeEventListener("hashchange", h); }, []);
 
   // The review badge. A decision lowers it at once (change = -1) and the server's count follows. Only the newest
@@ -112,8 +172,9 @@ export default function App() {
   const t = useMemo(() => { setFormatLang(lang); return makeT(lang); }, [lang]);
   const ctx = useMemo(() => ({ t, lang, role: role ?? "viewer", name, toast: (msg: string, kind: "ok" | "err" = "ok") => setToastMsg({ msg, kind }), refreshCounts, setQueueCount, go }), [t, lang, role, name, refreshCounts, setQueueCount, go]);
 
+  if (!health) return wake === "checking" ? null : <Waking t={t} lang={lang} setLang={setLang} failed={wake === "failed"} waited={waited} retry={() => setWakeAttempt((a) => a + 1)} />;
   if (!checked) return null;
-  if (!role) return <Login t={t} lang={lang} setLang={setLang} onIn={(r, n) => { setRole(r); setName(n); }} />;
+  if (!role) return <Login t={t} lang={lang} setLang={setLang} demo={health.demo} onIn={(r, n) => { setRole(r); setName(n); }} />;
 
   const view = (() => {
     switch (route.tab) {

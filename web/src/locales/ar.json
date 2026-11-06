@@ -390,5 +390,11 @@
   "{done} of {n} invoices evaluated": {"zero": "قُيّمت {done} من أصل 0", "one": "قُيّمت {done} من أصل فاتورة واحدة", "two": "قُيّمت {done} من أصل فاتورتين", "few": "قُيّمت {done} من أصل {n} فواتير", "many": "قُيّمت {done} من أصل {n} فاتورة", "other": "قُيّمت {done} من أصل {n} فاتورة"},
   "Also worth trying: {models}.": "يمكنك أيضًا تجربة: {models}.",
   "Providers rename and retire models, and a name that works for one key may not work for a new one. If the test says a model isn't available, type a current name from the provider's site.": "يغيّر المزوّدون أسماء النماذج ويوقفون بعضها، وقد لا يعمل اسم صالح لمفتاح ما مع مفتاح جديد. إذا أفاد الاختبار بأن النموذج غير متاح، فاكتب اسمًا حاليًا من موقع المزوّد.",
-  "{n} not reached": {"zero": "لم يتبقَّ شيء", "one": "لم تُبلَغ فاتورة واحدة", "two": "لم تُبلَغ فاتورتان", "few": "لم تُبلَغ {n} فواتير", "many": "لم تُبلَغ {n} فاتورة", "other": "لم تُبلَغ {n} فاتورة"}
+  "{n} not reached": {"zero": "لم يتبقَّ شيء", "one": "لم تُبلَغ فاتورة واحدة", "two": "لم تُبلَغ فاتورتان", "few": "لم تُبلَغ {n} فواتير", "many": "لم تُبلَغ {n} فاتورة", "other": "لم تُبلَغ {n} فاتورة"},
+  "Waking up the demo": "جارٍ تشغيل العرض التجريبي",
+  "This free demo server sleeps when nobody is using it, and starting it again can take about a minute. The page will carry on by itself.": "يتوقف خادم العرض التجريبي المجاني عن العمل حين لا يستخدمه أحد، وقد تستغرق إعادة تشغيله نحو دقيقة. ستتابع الصفحة من تلقاء نفسها.",
+  "Waiting for {n} seconds": {"zero": "بدأ الانتظار", "one": "الانتظار منذ ثانية واحدة", "two": "الانتظار منذ ثانيتين", "few": "الانتظار منذ {n} ثوانٍ", "many": "الانتظار منذ {n} ثانية", "other": "الانتظار منذ {n} ثانية"},
+  "The demo did not wake up": "لم يبدأ العرض التجريبي",
+  "The server has not answered for 90 seconds. It may be down, or your connection may be offline.": "لم يستجب الخادم منذ 90 ثانية. قد يكون متوقفًا، أو قد يكون اتصالك بالإنترنت مقطوعًا.",
+  "Try again": "إعادة المحاولة"
 }

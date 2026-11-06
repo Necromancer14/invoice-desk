@@ -93,7 +93,44 @@ def review_badge(page: Page) -> None:
     page.unroute("**/api/stats")
 
 
-CHECKS = [mixed_direction, review_badge]
+def waking_screen(page: Page) -> None:
+    """While /api/health does not answer, a 'waking up' screen shows in the chosen language, then sign-in follows."""
+    page.goto(BASE)
+    page.evaluate("localStorage.removeItem('id-token'); localStorage.setItem('id-lang', 'ar')")
+    asleep = {"on": True}
+    page.route("**/api/health", lambda route: route.fulfill(status=503, body="waking") if asleep["on"] else route.continue_())
+    page.goto(BASE)
+    title = page.get_by_role("heading", name="جارٍ تشغيل العرض التجريبي")
+    expect(title).to_be_visible(timeout=6000)
+    check("waking screen shows in Arabic after a few seconds", title.is_visible())
+    check("waking screen is announced politely to screen readers", page.locator(".login .panel[role=status][aria-live=polite]").count() == 1)
+    check("waking screen is right-to-left", page.evaluate("document.documentElement.dir") == "rtl")
+    asleep["on"] = False
+    expect(page.locator(".roles")).to_be_visible(timeout=8000)
+    check("sign-in appears by itself once the server answers", page.locator(".roles").is_visible())
+
+    # give up after 90 s: run the page on a fake clock and jump ahead
+    page.unroute("**/api/health")
+    page.route("**/api/health", lambda route: route.fulfill(status=503, body="waking"))
+    page.clock.install()
+    page.evaluate("localStorage.setItem('id-lang', 'en')")
+    page.goto(BASE)
+    page.clock.run_for(4000)
+    expect(page.get_by_role("heading", name="Waking up the demo")).to_be_visible()
+    for _ in range(40):  # each pass lets the 3 s retry wait and a request go round
+        page.clock.run_for(3000)
+        if page.get_by_role("heading", name="The demo did not wake up").count():
+            break
+    failed = page.get_by_role("heading", name="The demo did not wake up")
+    check("after 90 seconds it says the demo did not wake up", failed.count() == 1)
+    page.unroute("**/api/health")
+    page.get_by_role("button", name="Try again").click()
+    page.clock.run_for(1000)
+    expect(page.locator(".roles")).to_be_visible(timeout=5000)
+    check("Try again reaches sign-in once the server is up", page.locator(".roles").is_visible())
+
+
+CHECKS = [mixed_direction, review_badge, waking_screen]
 
 if __name__ == "__main__":
     with sync_playwright() as pw:
