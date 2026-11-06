@@ -16,13 +16,13 @@ A Saudi e-invoice intake desk. Invoices come in as text, PDF or photo. A built-i
 
 ## What it does
 
-- **Reads invoices** in English, Arabic or both, from text, PDFs and images. Two kinds of reader: a free built-in rule-based reader that needs nothing, and an AI model of your choice: **Google Gemini (free key)**, **Groq (free)**, **OpenRouter (free models)**, **Ollama (runs on your own computer)**, Anthropic Claude or OpenAI. All of them go through one extractor interface, with a guard against instructions hidden in the document.
-- **Validates** with 14 rule types: required fields, Saudi VAT number format, 15% VAT, totals, line arithmetic, dates, currency, amount limits, QR code agreement (TLV payload), duplicates, extraction confidence, regex, and a custom expression type.
+- **Reads invoices** in English, Arabic or both, from text, PDFs, images and UBL 2.1 XML (read directly, no AI). Two kinds of reader: a free built-in rule-based reader that needs nothing, and an AI model of your choice: **Google Gemini (free key)**, **Groq (free)**, **OpenRouter (free models)**, **Ollama (runs on your own computer)**, Anthropic Claude or OpenAI. All of them go through one extractor interface, with a guard against instructions hidden in the document.
+- **Validates** with 15 rule types, including checks against ZATCA e-invoicing fields: required fields, Saudi VAT number format, 15% VAT (zero-rated and exempt lines carry none), totals, line arithmetic, dates (Gregorian or Hijri), currency, amount limits, QR code present and in agreement (TLV payload), duplicates, extraction confidence, regex, and a custom expression type.
 - **Routes** each invoice: approved automatically, sent to review, or rejected. Severity is set per rule.
 - **Human review** queue: a searchable list of everything waiting, beside the original and its extracted fields. Edit anything, approve or reject with a note, and move through the queue with Previous/Next or the keyboard (`j` next, `k` previous, `a` approve, `r` jump to the note). Each invoice has its own link (`#/review/<id>`), and after a decision the next one opens. Corrections are kept next to the original extraction.
 - **Rules as data**: add, edit, reorder, switch off and delete rules in the portal. Every change is a version you can restore. A dry run shows how many past invoices would get a different decision before you save.
 - **Audit log** of every action, including automatic decisions.
-- **Evaluation** page: scores the reader and rules on 60 synthetic invoices with a known answer key (field accuracy, decision agreement, unsafe approvals, false rejections).
+- **Evaluation** page: scores the reader and rules on 78 synthetic invoices with a known answer key (field accuracy, decision agreement, unsafe approvals, false rejections).
 - **Roles**: viewer, reviewer, admin. Signed tokens. Demo mode lets visitors pick a role; set `DEMO_MODE=0` and `INVOICE_DESK_USERS` for real sign-in.
 - **Portal**: React and TypeScript, about 78 KB gzipped, no UI or chart library. A frosted-glass design in flag green and white, light and dark themes, responsive down to phone width.
 - **Full Arabic** with a right-to-left layout: every screen is translated, with Arabic plural forms, and numbers and dates are formatted for the chosen language, while invoice numbers, VAT numbers, amounts and currency codes stay left-to-right. `node tools/check_i18n.mjs` (run in CI) fails if any text in the portal is missing its Arabic.
@@ -63,17 +63,32 @@ The key stays in the browser tab's session storage, travels in a request header 
 
 The provider adapters are tested against a fake HTTP server (request shape, error messages, fenced JSON, retry without JSON mode). They have not been run against the live services from the build environment, so press **Save and test connection** once with your own key.
 
+## Checks against ZATCA e-invoicing fields
+
+What is checked, with the default rules:
+- **VAT registration numbers**: 15 digits, starting and ending with 3, in Western or Arabic-Indic digits, grouped with spaces or not. A missing seller VAT number sends the invoice to review; a malformed one rejects it.
+- **VAT amounts**: VAT equals 15% (configurable, with a small rounding tolerance) of the standard-rated amount. Lines marked zero-rated (Z), exempt (E) or out of scope (O) carry no VAT. Subtotal plus VAT must equal the total.
+- **Currency and numbers**: SAR is the expected currency and is assumed when none is printed (with a note). Arabic-Indic digits and the Arabic decimal and thousands separators are read before any check.
+- **Dates**: Gregorian or Hijri. Hijri dates (1420 to 1500 AH) are converted to Gregorian with the Umm al-Qura calendar, from a table generated offline out of the ICU data in Node (`tools/build_hijri_table.mjs`). Future-dated invoices go to review.
+- **QR code**: the base64 TLV payload (seller name, VAT number, time stamp, total, VAT amount) is read from the printed text, from UBL XML, or from the QR image in a PDF or picture, and compared with the invoice, including the time stamp's date in Saudi time. A mismatch goes to review; no QR code at all is a warning only (the rule can be limited to simplified tax invoices).
+- **UBL 2.1 XML**: uploaded XML invoices are read directly into the same fields and checked by the same rules. XML with any DOCTYPE or ENTITY declaration is refused, so external entities cannot be used.
+
+What is not checked: cryptographic signatures, the certificate, the invoice hash chain (PIH), the cryptographic stamp and the later QR tags (6 to 9), invoice counters, and the full UBL schema and business rules. Nothing is submitted to Fatoora (clearance or reporting). The QR image reader handles clean, digitally made codes, upright or turned by a right angle; a phone photo taken at an angle may not be readable. It is a small reader written for this project, which checks every read by re-encoding it with the `qrcode` package; it does not do error correction.
+
 ## Measured results (rule-based reader, no key)
 
-60 synthetic invoices, answer key generated alongside them, `python -m invoice_desk.evaluation`:
+78 synthetic invoices (the original 60 plus 18 for the checks above), answer key generated alongside them, `python -m invoice_desk.evaluation`:
 
 | | Invoices | Right decision | Fields correct |
 |---|---|---|---|
-| All | 60 | 80% | 81% |
-| Text | 40 | 90% | 92% |
-| PDF with a text layer | 10 | 100% | 100% |
-| Image | 10 | 20% | 13% |
+| All | 78 | 83% | 83% |
+| Text | 48 | 92% | 94% |
+| PDF with a text layer | 12 | 100% | 100% |
+| UBL XML | 6 | 100% | 100% |
+| Image | 12 | 25% | 12% |
 | Unusual wording ("Billed on", "Amount payable") | 4 | 0% | 25% |
+
+On the original 60 alone the figures are unchanged (80% decisions, 81% fields). The 18 new ones score 94% and 90%; the miss is an image, which the rule-based reader cannot read.
 
 Unsafe auto-approvals: 0. Wrongly rejected: 0. When the rule-based reader cannot read something, the invoice goes to a person, it is not guessed at.
 
@@ -81,9 +96,9 @@ Unsafe auto-approvals: 0. Wrongly rejected: 0. When the rule-based reader cannot
 
 ### Evaluating an AI model on a free tier
 
-Gemini's free tier allows only about 5 to 10 requests a minute and around 20 a day per model, so all 60 invoices cannot be read in one go. The Evaluation page handles that:
+Gemini's free tier allows only about 5 to 10 requests a minute and around 20 a day per model, so all 78 invoices cannot be read in one go. The Evaluation page handles that:
 
-- **A sample, not all 60.** Choose how many invoices (default 20). The pick is stratified: it always includes every file type (text, PDF, image), every language, every kind of defect, a duplicate and the prompt-injection sample, and fills the rest in proportion to the full set. The same seed gives the same invoices.
+- **A sample, not all 78.** Choose how many invoices (default 20). The pick is stratified: it always includes every file type, every language, a duplicate and the prompt-injection sample, then as many kinds of check as fit (18 of the 21 at 20, all of them from 30), and fills the rest in proportion to the full set. The same seed gives the same invoices. UBL XML in the sample is read directly, so it costs no AI requests.
 - **Continue tomorrow.** Tick *Only invoices not yet evaluated with this model* and the next run picks from what is left. Results are stored per provider and model with the date, and the page shows combined totals over everything evaluated so far, with the sample size *n* next to every percentage.
 - **Paced.** *Requests per minute* (default 4) spaces the calls. A 429 or 503 is retried up to 3 times, honouring `Retry-After` (or Gemini's `retryDelay`) when given and backing off otherwise. A daily-quota answer stops the run at once with a clear message; what was done is kept.
 - **No silent fallback.** During evaluation a failed AI call is never handed to the built-in reader. That invoice is recorded as an error, shown in the count ("14 of 20 evaluated, 6 errors") and left out of every percentage.
@@ -108,7 +123,7 @@ flowchart LR
 
 - `src/invoice_desk/rules.py`: rule types, a hand-written evaluator for custom expressions (an allowlist of AST nodes and helper functions: no attribute access, imports, calls to anything else, or exponentiation).
 - `desk.py`: pipeline, review flow, versioned rules, simulation, stats. No HTTP in it.
-- `extractors.py` and `providers.py`: the readers. `qr.py`: ZATCA-style TLV QR encode and decode. `textnorm.py`: Arabic-Indic digits, separators, dates.
+- `extractors.py` and `providers.py`: the readers. `ubl.py`: UBL 2.1 XML. `qr.py`: ZATCA-style TLV QR encode and decode. `qrscan.py`: reading QR codes from images and PDF pages. `textnorm.py` and `hijri.py`: Arabic-Indic digits, separators, Gregorian and Hijri dates.
 - `api.py`: FastAPI, roles, rate limit, upload validation (type, 5 MB, 20 files). OpenAPI docs at `/docs`.
 - `web/`: the portal. `tools/generate_data.py` builds the sample set; `tools/e2e.py` is a browser walk-through that also produces the screenshots.
 
@@ -124,7 +139,7 @@ python tools/a11y_check.py  # with a fresh server and `npm ci` in web/: axe-core
 
 ## Limits, stated plainly
 
-- Not ZATCA-certified and not connected to Fatoora. It applies publicly documented rules (VAT number shape, 15% VAT, TLV QR tags 1 to 5) and is not tax or compliance software.
+- It runs checks against ZATCA e-invoicing fields; it has no ZATCA approval and is not connected to Fatoora. It applies publicly documented rules (VAT number shape, 15% VAT, TLV QR tags 1 to 5) and is not tax software.
 - All sample data is invented, including company names and VAT numbers. Do not upload real invoices to a public demo.
 - AI providers are tested against fakes only. Their accuracy is yours to measure.
 - Data is held in SQLite. On free hosting without a volume it resets when the container restarts.

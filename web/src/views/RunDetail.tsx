@@ -40,10 +40,34 @@ export function Document({ run }: { run: Run }) {
   );
 }
 
+/** The ZATCA-style QR payload: base64 of tag-length-value fields (1 seller, 2 VAT number, 3 time stamp, 4 total, 5 VAT). */
+function decodeQr(payload: string | null | undefined): Record<number, string> | null {
+  if (!payload) return null;
+  try {
+    const raw = Uint8Array.from(atob(payload.trim()), (c) => c.charCodeAt(0));
+    const out: Record<number, string> = {};
+    for (let i = 0; i + 2 <= raw.length;) {
+      const tag = raw[i], len = raw[i + 1];
+      if (i + 2 + len > raw.length) return null;
+      out[tag] = new TextDecoder().decode(raw.slice(i + 2, i + 2 + len));
+      i += 2 + len;
+    }
+    return Object.keys(out).length ? out : null;
+  } catch { return null; }
+}
+const QR_TAGS: [number, string][] = [[1, tk("Seller")], [2, tk("Seller VAT number")], [3, tk("Time stamp")], [4, tk("Total")], [5, tk("VAT amount")]];
+
 export function Evidence({ run }: { run: Run }) {
   const { t } = useApp();
+  const qr = decodeQr((run.final_fields ?? run.extracted)?.qr_payload);
   return (
     <div className="col" style={{ gap: 18 }}>
+      {qr && (
+        <section>
+          <h3 style={{ marginBottom: 6 }}>{t("What the QR code says")}</h3>
+          <dl className="qr-list">{QR_TAGS.filter(([n]) => qr[n]).map(([n, label]) => <div key={n}><dt>{t(label)}</dt><dd dir="auto">{qr[n]}</dd></div>)}</dl>
+        </section>
+      )}
       <section>
         <h3 style={{ marginBottom: 6 }}>{t("Checks")}</h3>
         <div className="checks">

@@ -18,7 +18,7 @@ BASE = dict(invoice_number="A-1", issue_date="2026-10-01", due_date="2026-11-01"
 
 def outcome(**over):
     res = run_rules(RULES, dict(BASE, **over), Ctx(today=TODAY))
-    return decide(res), {r["key"] for r in res if r["status"] == "fail"}
+    return decide(res), {r["key"] for r in res if r["status"] == "fail" and r["severity"] != "info"}  # info rules only warn
 
 
 # ---- Hijri dates ------------------------------------------------------------------------

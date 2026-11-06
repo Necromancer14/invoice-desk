@@ -3,7 +3,8 @@ name = "invoice-desk"
 version = "0.1.0"
 description = "Saudi e-invoice intake agent: rules-as-data, Claude extraction, human review, evaluation"
 requires-python = ">=3.11"
-dependencies = ["fastapi>=0.110", "uvicorn>=0.29", "python-multipart>=0.0.9", "pypdf>=4", "pypdfium2>=4", "httpx>=0.27"]
+dependencies = ["fastapi>=0.110", "uvicorn>=0.29", "python-multipart>=0.0.9", "pypdf>=4", "pypdfium2>=4", "httpx>=0.27",
+                "qrcode[pil]>=7.4"]
 
 [project.optional-dependencies]
 claude = ["anthropic>=0.40"]

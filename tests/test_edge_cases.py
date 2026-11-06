@@ -16,7 +16,7 @@ RULES = [dict(r, enabled=True) for r in DEFAULT_RULES]
 
 def outcome(**over):
     res = run_rules(RULES, dict(BASE, **over), Ctx(today=TODAY))
-    return decide(res), {r["key"] for r in res if r["status"] == "fail"}
+    return decide(res), {r["key"] for r in res if r["status"] == "fail" and r["severity"] != "info"}  # info rules only warn
 
 
 def test_baseline_is_approved():

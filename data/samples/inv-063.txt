@@ -1,0 +1,18 @@
+TAX INVOICE
+Invoice No: AQC-2026-0163
+Issue Date: 2026-08-06
+Due Date: 2026-09-06
+Seller: Al Qasr Cleaning Co.
+Seller VAT No: 376910299427483
+Buyer: Bayan Construction
+Currency: SAR
+
+Description   Qty   Unit price   Total
+1. Printing and delivery   2   356.34   712.68
+2. Medical consumables   9   140.68   1,266.12
+3. Export freight (zero-rated)   1   1,589.49   1,589.49
+
+Subtotal: 3,568.29 SAR
+VAT (15%): 296.82 SAR
+Total (including VAT): 3,865.11 SAR
+QR: ARRBbCBRYXNyIENsZWFuaW5nIENvLgIPMzc2OTEwMjk5NDI3NDgzAxQyMDI2LTA4LTA2VDA5OjMwOjAwWgQHMzg2NS4xMQUGMjk2Ljgy

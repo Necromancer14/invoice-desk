@@ -11,7 +11,8 @@ from datetime import date, datetime, timedelta, timezone
 
 from .db import DB, dumps, loads
 from .default_rules import DEFAULT_RULES
-from .extractors import Extraction, NeedsVision, RuleBasedExtractor, guess_type
+from .extractors import IMAGE_TYPES, Extraction, NeedsVision, RuleBasedExtractor, guess_type
+from .qrscan import find_in_file
 from .providers import ProviderError, build_extractor
 from .rules import RULE_TYPES, Ctx, decide, run_rules, validate_rule
 from .schema import FIELDS, NUMERIC, SCALARS, empty_fields
@@ -351,6 +352,17 @@ class Desk:
                 except NeedsVision as nv:
                     ext = Extraction(empty_fields(), 0.0, {}, [f"Could not read automatically: {nv}"], "rule-based")
             ext.notes = list(ext.notes or []) + notes
+            if not ext.fields.get("qr_payload") and (row["content_type"] in IMAGE_TYPES or row["content_type"] == "application/pdf"):
+                tq = time.time()
+                try:
+                    found = find_in_file(row["blob"], row["content_type"])
+                except Exception as exc:  # noqa: BLE001 - an unreadable image only means no QR was read
+                    found = None
+                    self._step(trace, "qr", tq, f"could not look for a QR code: {type(exc).__name__}", ok=False)
+                else:
+                    self._step(trace, "qr", tq, "QR code read from the image" if found else "no readable QR code found", ok=bool(found))
+                if found:
+                    ext.fields["qr_payload"] = found
             fields = {k: ext.fields.get(k) for k in FIELDS}
             t1 = time.time()
             results = run_rules(self.rules(), fields, self._ctx(rid, ext.confidence))

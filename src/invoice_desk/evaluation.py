@@ -239,19 +239,18 @@ def evaluate_ai(llm: dict, rules: list[dict] | None = None, *, sample_size: int 
 
     report()
     for it in sample:
-        if last is not None and clock() - last < gap:
-            sleep(gap - (clock() - last))
-        last = clock()
         blob = (root / it["file"]).read_bytes()
         ctype = guess_type(it["file"], None)
-        if ctype == "application/xml":  # read directly, as in normal use: no AI call, no quota spent
+        if ctype == "application/xml":  # read directly, as in normal use: no AI call, no quota spent, no waiting
             from .ubl import UblExtractor
-            extraction = UblExtractor().extract(blob, ctype, it["file"])
-            replay.next = extraction
+            replay.next = UblExtractor().extract(blob, ctype, it["file"])
             rid = desk.submit(it["file"], blob, ctype, "evaluation", mode="ai", llm={"provider": provider}, source="evaluation")
             rows.append(_score(it, desk.get_run(rid)))
             report()
             continue
+        if last is not None and clock() - last < gap:
+            sleep(gap - (clock() - last))
+        last = clock()
         try:
             extraction = ext.extract(blob, ctype, it["file"])
         except NeedsVision as exc:  # a text-only model and an image: no call was wasted, it goes to review as in real use

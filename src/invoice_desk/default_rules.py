@@ -26,6 +26,8 @@ DEFAULT_RULES = [
          params={"field": "total", "min": 0, "max": None}, message="Negative total: check whether this is a credit note"),
     dict(key="qr-agrees", name="QR code agrees with printed values", type="qr_match", severity="review",
          params={"required": False}, message=""),
+    dict(key="qr-present", name="QR code present", type="qr_present", severity="info",
+         params={"simplified_only": False}, message="Warning: no QR code was found"),
     dict(key="duplicate", name="Not a duplicate", type="duplicate", severity="reject",
          params={}, message=""),
     dict(key="confidence", name="Extraction confidence is high enough", type="min_confidence", severity="review",

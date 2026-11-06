@@ -8,7 +8,17 @@ LABELS = {"clean": "Clean invoice", "prompt_injection": "Hidden instruction insi
           "vat_rate": "Wrong VAT rate", "totals": "Totals do not add up", "future_date": "Issue date in the future",
           "duplicate": "Duplicate of an earlier invoice", "qr_mismatch": "QR code disagrees with printed total",
           "non_sar": "Foreign currency", "over_limit": "High value invoice", "missing_vat": "Seller VAT number missing",
-          "due_before_issue": "Due date before issue date"}
+          "due_before_issue": "Due date before issue date",
+          # checks against ZATCA e-invoicing fields
+          "vat_digits_spaced": "VAT number in Arabic digits, grouped with spaces",
+          "arabic_decimals": "Arabic-Indic digits and decimal separators",
+          "zero_rated": "Zero-rated line, VAT on the rest only",
+          "exempt": "Exempt line, VAT on the rest only",
+          "zero_rated_wrong": "VAT charged on a zero-rated line",
+          "hijri_date": "Hijri issue date",
+          "hijri_future": "Hijri issue date in the future",
+          "qr_missing": "No QR code on the invoice",
+          "simplified": "Simplified tax invoice"}
 
 
 def list_samples(root: Path = SAMPLES) -> list[dict]:

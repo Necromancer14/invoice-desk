@@ -12,7 +12,7 @@ from __future__ import annotations
 import ast
 import re
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Callable
 
 from . import qr
@@ -172,8 +172,12 @@ def r_qr_match(p, f, ctx):
     if not q:
         return "fail", "QR payload is not valid TLV base64"
     problems = []
-    if vat_key(q.get("seller_vat")) != vat_key(f.get("seller_vat")):
+    # compare only what is printed: a field the reader could not find is the required-fields rule's business
+    if f.get("seller_vat") and vat_key(q.get("seller_vat")) != vat_key(f.get("seller_vat")):
         problems.append(f"QR VAT {q.get('seller_vat')} vs printed {f.get('seller_vat')}")
+    stamped, printed = _qr_day(q.get("timestamp")), parse_date(f.get("issue_date"))
+    if stamped and printed and stamped != printed:
+        problems.append(f"QR date {stamped} vs printed issue date {printed}")
     for key, name in (("total", "total"), ("vat_amount", "vat_amount")):
         a, b = to_number(q.get(key)), _f(f, name)
         if a is not None and b is not None and not _close(a, b, 0.01):
@@ -184,6 +188,27 @@ def r_qr_match(p, f, ctx):
     if sn and qn and has_ar(sn) == has_ar(qn) and qn not in sn and sn not in qn:
         problems.append("QR seller name differs from printed name")
     return ("fail", "; ".join(problems)) if problems else ("pass", "QR agrees with printed values")
+
+
+def _qr_day(stamp: str | None) -> str | None:
+    """The calendar day of a QR timestamp in Saudi time (UTC+3), e.g. "2026-10-01T22:30:00Z" is 2026-10-02."""
+    if not stamp:
+        return None
+    try:
+        t = datetime.fromisoformat(stamp.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return parse_date(stamp)
+    if t.tzinfo is not None:
+        t = t.astimezone(timezone(timedelta(hours=3)))
+    return t.date().isoformat()
+
+
+def r_qr_present(p, f, ctx):
+    if p.get("simplified_only") and f.get("invoice_type") != "simplified":
+        return "pass", "not a simplified tax invoice"
+    if f.get("qr_payload"):
+        return "pass", "QR code found"
+    return "fail", "no QR code found (on a photo taken at an angle a QR code may be present but unreadable)"
 
 
 def r_duplicate(p, f, ctx):
@@ -327,8 +352,10 @@ RULE_TYPES: dict[str, dict] = {
                          params=[dict(name="field", kind="field", default="total"),
                                  dict(name="min", kind="number", default=None, optional=True, help="leave empty for no lower limit"),
                                  dict(name="max", kind="number", default=50000, optional=True, help="leave empty for no upper limit")]),
-    "qr_match": dict(fn=r_qr_match, label="QR code agrees", description="The QR payload must match the printed VAT number, total and VAT.",
+    "qr_match": dict(fn=r_qr_match, label="QR code agrees", description="The QR code's seller, VAT number, date, total and VAT must match the printed invoice.",
                      params=[dict(name="required", kind="bool", default=False)]),
+    "qr_present": dict(fn=r_qr_present, label="QR code present", description="The invoice should carry a QR code. With the option on, only simplified tax invoices are checked.",
+                       params=[dict(name="simplified_only", kind="bool", default=False)]),
     "duplicate": dict(fn=r_duplicate, label="Duplicate invoice", description="The same seller VAT number and invoice number must not be received twice.", params=[]),
     "min_confidence": dict(fn=r_min_confidence, label="Extraction confidence", description="Overall confidence of the extraction must reach a threshold.",
                            params=[dict(name="threshold", kind="number", default=0.85)]),

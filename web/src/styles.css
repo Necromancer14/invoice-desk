@@ -145,6 +145,8 @@ td.n, th.n { text-align: end; font-variant-numeric: tabular-nums; }
 .trace::before { content: ""; position: absolute; inset-inline-start: 6px; top: 10px; bottom: 10px; width: 2px; background: var(--line-strong); }
 .trace > div { position: relative; padding: 6px 0; } .trace > div::before { content: ""; position: absolute; inset-inline-start: -20px; top: 12px; width: 13px; height: 13px; border-radius: 50%; background: var(--green-2); box-shadow: 0 0 0 4px var(--accent-soft); }
 .trace > div.bad::before { background: #e0a020; box-shadow: 0 0 0 4px var(--amber-soft); }
+.qr-list { display: grid; gap: 4px; margin: 0; font-size: 14px; } .qr-list > div { display: grid; grid-template-columns: minmax(120px, 30%) 1fr; gap: 10px; }
+.qr-list dt { color: var(--muted); } .qr-list dd { margin: 0; overflow-wrap: anywhere; }
 kbd { font: 12px var(--font); padding: 1px 7px; border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: 7px; background: var(--field); }
 .dropzone { border: 2px dashed var(--line-strong); border-radius: var(--r-lg); padding: 40px 16px; text-align: center; cursor: pointer; background: var(--row); transition: background .15s, border-color .15s; }
 .dropzone.over, .dropzone:hover { border-color: var(--accent); background: var(--accent-soft); }

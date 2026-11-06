@@ -1,0 +1,19 @@
+TAX INVOICE
+Invoice No: GHC-2026-0168
+Issue Date: 13/03/1449 هـ
+Due Date: 14/04/1449 هـ
+Seller: Gulf Horizon Consulting
+Seller VAT No: 325006057695133
+Buyer: Bayan Construction
+Currency: SAR
+
+Description   Qty   Unit price   Total
+1. Medical consumables   12   59.45   713.40
+2. Cleaning service   4   462.77   1,851.08
+3. Medical consumables   12   272.80   3,273.60
+4. Training session   7   2,481.41   17,369.87
+
+Subtotal: 23,207.95 SAR
+VAT (15%): 3,481.19 SAR
+Total (including VAT): 26,689.14 SAR
+QR: ARdHdWxmIEhvcml6b24gQ29uc3VsdGluZwIPMzI1MDA2MDU3Njk1MTMzAxQyMDI3LTA4LTE1VDA5OjMwOjAwWgQIMjY2ODkuMTQFBzM0ODEuMTk=
