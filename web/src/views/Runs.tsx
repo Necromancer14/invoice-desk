@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { api, download } from "../api";
 import type { RunDetail, RunSummary, Status } from "../types";
-import { Empty, Err, Head, Modal, StatusPill, can, money, tk, useApp, useLoad, when } from "../common";
+import { Empty, Err, Head, Modal, SourceFilter, type Source, StatusPill, can, money, tk, useApp, useLoad, when } from "../common";
 import { Document, Evidence, RunHeader } from "./RunDetail";
 
 const FILTERS: { label: string; value: string }[] = [
@@ -10,13 +10,14 @@ const FILTERS: { label: string; value: string }[] = [
 ];
 
 export default function Runs({ openId }: { openId?: number }) {
-  const { t, role, toast, refreshCounts } = useApp();
+  const { t, toast } = useApp();
   const [status, setStatus] = useState("");
+  const [source, setSource] = useState<Source>("upload");
   const [q, setQ] = useState("");
   const [open, setOpen] = useState<number | null>(openId ?? null);
   const { data, error, reload } = useLoad(
-    () => api<{ total: number; items: RunSummary[] }>(`/runs?limit=100${status ? `&status=${status}` : ""}${q ? `&q=${encodeURIComponent(q)}` : ""}`),
-    [status, q], (d) => d.items.some((r) => r.status === "queued" || r.status === "processing"));
+    () => api<{ total: number; items: RunSummary[] }>(`/runs?limit=100&source=${source}${status ? `&status=${status}` : ""}${q ? `&q=${encodeURIComponent(q)}` : ""}`),
+    [status, q, source], (d) => d.items.some((r) => r.status === "queued" || r.status === "processing"));
   return (
     <>
       <Head title={t("Runs")} sub={t("Every invoice the system has handled, newest first. Open one to see what was read, which checks it passed and who decided.")}>
@@ -26,8 +27,8 @@ export default function Runs({ openId }: { openId?: number }) {
         <div className="seg" role="group" aria-label={t("Filter by status")}>
           {FILTERS.map((f) => <button key={f.label} aria-pressed={status === f.value} onClick={() => setStatus(f.value)}>{t(f.label)}</button>)}
         </div>
+        <SourceFilter value={source} onChange={setSource} />
         <input type="search" placeholder={t("Search")} aria-label={t("Search runs")} value={q} onChange={(e) => setQ(e.target.value)} style={{ maxWidth: 260 }} />
-        {can(role, "admin") && <button className="btn small right" onClick={async () => { if (confirm(t("Clear all runs and audit entries and restore the default rules?"))) { await api("/admin/reset", { body: {} }); toast(t("Demo reset")); refreshCounts(); reload(); } }}>{t("Reset demo data")}</button>}
       </div>
       <Err msg={error} />
       <div className="panel flush">

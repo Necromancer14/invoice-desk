@@ -275,8 +275,37 @@ def vendors_and_risk(page: Page) -> None:
     check("Link to vendor matches the seller", "اسم مرتبط" in page.locator(".vm").first.inner_text())
 
 
+def demo_start(page: Page) -> None:
+    """An empty database greets a first visitor in Arabic; the sample set gives a mix, not a wall of red; the source
+    filter and the demo note are there; Settings resets the demo after a confirm step."""
+    sign_in(page, lang="ar")
+    api(page, "POST", "/admin/reset", {})
+    page.reload()
+    expect(page.locator(".welcome")).to_be_visible()
+    check("Demo note is shown", page.locator(".demo-note").count() == 1)
+    check("Welcome card reads right-to-left", page.locator(".welcome").evaluate("e => getComputedStyle(e).direction") == "rtl")
+    page.get_by_role("button", name="تحميل فواتير نموذجية").click()
+    expect(page.locator(".strip")).to_be_visible(timeout=20000)
+    page.wait_for_function("document.querySelectorAll('.hbar.bad').length > 0", timeout=20000)
+    s = api(page, "GET", "/stats", None)["body"]
+    b = s["by_status"]
+    check("Sample set is a mix", (b["approved"], b["needs_review"], b["rejected"]) == (11, 6, 3), b)
+    check("Top rejection reasons are listed", page.locator(".hbar.bad").count() >= 2)
+    page.locator(".page-head .seg button").nth(1).click()
+    expect(page.locator(".empty, .panel .muted").first).to_be_visible()
+    check("Evaluation source starts empty", "لا توجد عمليات تقييم" in page.locator("main").inner_text())
+    page.evaluate("location.hash = '#/settings'")
+    page.get_by_role("button", name="إعادة ضبط البيانات التجريبية").click()
+    expect(page.locator(".modal")).to_be_visible()
+    page.locator(".modal .btn.danger").click()
+    expect(page.locator(".modal")).to_have_count(0)
+    check("Reset clears the runs", api(page, "GET", "/stats", None)["body"]["total"] == 0)
+    page.evaluate("location.hash = '#/dashboard'")
+    expect(page.locator(".welcome")).to_be_visible()
+
+
 CHECKS = [mixed_direction, review_badge, waking_screen, rule_with_open_limit, error_messages, damaged_file, provider_failure, xml_is_indented,
-          vendors_and_risk]
+          vendors_and_risk, demo_start]
 
 if __name__ == "__main__":
     with sync_playwright() as pw:

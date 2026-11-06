@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { api, session } from "../api";
 import type { Provider, Settings as S } from "../types";
-import { Err, Head, can, useApp, useLoad } from "../common";
+import { Err, Head, Modal, can, useApp, useLoad } from "../common";
 
 export default function Settings({ theme, setTheme, lang, setLang }: { theme: string; setTheme: (t: string) => void; lang: string; setLang: (l: "en" | "ar") => void }) {
-  const { t, role, toast } = useApp();
+  const { t, role, toast, refreshCounts } = useApp();
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const { data, error, reload } = useLoad(() => api<S>("/settings"), []);
   const { data: providers } = useLoad(() => api<Provider[]>("/llm/providers"), []);
   const [form, setForm] = useState<S | null>(null);
@@ -30,6 +32,11 @@ export default function Settings({ theme, setTheme, lang, setLang }: { theme: st
     saveAi(); setTesting(true); setTestMsg(null);
     try { const r = await api<{ ok: boolean; message: string; latency_ms: number }>("/llm/test", { method: "POST", ai: true }); setTestMsg({ ok: r.ok, text: `${t(r.message)} (${t("{ms} ms", { ms: r.latency_ms })})` }); }
     catch (e) { setTestMsg({ ok: false, text: t((e as Error).message) }); } finally { setTesting(false); }
+  }
+  async function resetDemo() {
+    setResetting(true);
+    try { await api("/admin/reset", { body: {} }); toast(t("Demo reset")); refreshCounts(); setConfirmReset(false); }
+    catch (e) { toast((e as Error).message, "err"); } finally { setResetting(false); }
   }
   async function save() {
     setErr(null);
@@ -93,8 +100,22 @@ export default function Settings({ theme, setTheme, lang, setLang }: { theme: st
           <div className="row wrap"><span>{t("Theme")}</span><div className="seg"><button aria-pressed={theme === "light"} onClick={() => setTheme("light")}>{t("Light")}</button><button aria-pressed={theme === "dark"} onClick={() => setTheme("dark")}>{t("Dark")}</button></div></div>
           <div className="row wrap"><span>{t("Language")}</span><div className="seg"><button aria-pressed={lang === "en"} onClick={() => setLang("en")}>English</button><button aria-pressed={lang === "ar"} onClick={() => setLang("ar")}>العربية</button></div></div>
           <p className="muted small">{t("Arabic switches the layout to right-to-left and translates the whole portal. Invoice contents, rule names you type and server error messages are shown as written.")}</p>
+          {admin && <>
+            <h2 style={{ marginTop: 10 }}>{t("Demo data")}</h2>
+            <p className="muted small">{t("Clears every invoice and the audit log, restores the default rules and reloads the sample vendors and purchase orders.")}</p>
+            <div><button className="btn danger" onClick={() => setConfirmReset(true)}>{t("Reset demo data")}</button></div>
+          </>}
         </div>
       </div>
+      {confirmReset && (
+        <Modal title={t("Reset demo data?")} onClose={() => setConfirmReset(false)}>
+          <p>{t("Every invoice and every audit entry will be deleted, and the rules go back to the defaults. This cannot be undone.")}</p>
+          <div className="row">
+            <button className="btn danger" disabled={resetting} onClick={resetDemo}>{t("Yes, reset")}</button>
+            <button className="btn" onClick={() => setConfirmReset(false)}>{t("Cancel")}</button>
+          </div>
+        </Modal>
+      )}
     </>
   );
 }

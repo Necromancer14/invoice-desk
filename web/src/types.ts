@@ -45,6 +45,7 @@ export interface Stats {
   total: number; by_status: Record<Status, number>; review_queue: number; auto_approve_rate: number | null; human_corrected: number;
   avg_extract_ms: number | null; avg_time_to_review_s: number | null; tokens_in: number; tokens_out: number; cost: number | null;
   ai_runs: number; top_failing: { rule: string; count: number }[]; series: { day: string; count: number }[]; rules_version: number;
+  top_rejections: { reason: string; count: number }[]; source: "upload" | "evaluation" | "all"; uploads: number;
 }
 export interface Rule {
   key: string; name: string; type: string; params: Record<string, unknown>; severity: Severity; enabled: boolean; message: string;

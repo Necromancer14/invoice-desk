@@ -215,7 +215,10 @@ export default function App() {
             </div>
           </div>
         </aside>
-        <main className="main" id="main">{view}</main>
+        <main className="main" id="main">
+          {health.demo && <p className="demo-note" role="note">{t("Demo with sample data. Resets on restart. Do not upload real invoices.")}</p>}
+          {view}
+        </main>
       </div>
       {toastMsg && <div className={`toast notice ${toastMsg.kind === "err" ? "err" : "ok"}`} role="status">{t(toastMsg.msg)}</div>}
     </AppCtx.Provider>

@@ -144,3 +144,17 @@ export function Head({ title, sub, children }: { title: string; sub?: string; ch
   return <div className="page-head"><div className="grow"><h1>{title}</h1>{sub && <p>{sub}</p>}</div>{children}</div>;
 }
 export { makeT, tk };
+
+/** Where a run came from: uploads (files and samples sent through intake) or the Evaluation page. */
+export type Source = "upload" | "evaluation" | "all";
+export const SOURCES: { value: Source; label: string }[] = [
+  { value: "upload", label: tk("Uploads") }, { value: "evaluation", label: tk("Evaluation") }, { value: "all", label: tk("All") },
+];
+export function SourceFilter({ value, onChange }: { value: Source; onChange: (s: Source) => void }) {
+  const { t } = useApp();
+  return (
+    <div className="seg" role="group" aria-label={t("Source")}>
+      {SOURCES.map((x) => <button key={x.value} aria-pressed={value === x.value} onClick={() => onChange(x.value)}>{t(x.label)}</button>)}
+    </div>
+  );
+}

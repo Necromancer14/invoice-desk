@@ -67,7 +67,9 @@ export const SERVER_TEXT = [
 
   // processing outcomes and notes (desk.py)
   tk("This PDF could not be opened. It may be damaged or not really a PDF."),
-  tk("The AI call failed, so the built-in reader was used instead"), tk("No currency is printed, so SAR is assumed"),
+  tk("The AI call failed, so the built-in reader was used instead"),
+  // dashboard rejection reasons that are not rule names (desk.py stats)
+  tk("Rejected by a reviewer"), tk("Could not be processed"), tk("No currency is printed, so SAR is assumed"),
 
   // processing trace steps
   tk("ingest"), tk("extract"), tk("qr"), tk("validate"), tk("route"), tk("human review"), tk("error"),
