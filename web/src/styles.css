@@ -359,13 +359,16 @@ th[aria-sort] { color: var(--ink); }
 /* ---------- vendors, evaluation, demo ---------- */
 label.btn:focus-within { outline: 2px solid var(--focus); outline-offset: 2px; }
 .notice .outcome { font-size: var(--t-lg); }
-.eval-opts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.eval-opts { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: end; }
 /* demo note: one quiet line with an amber mark, so it is seen without shouting */
 .demo-note { display: flex; align-items: center; gap: var(--s2); margin: 0 0 var(--s4); padding: 6px 12px; border-radius: var(--r-md); font-size: var(--t-sm); color: var(--ink-2); background: var(--warn-bg); }
 .demo-note::before { content: ""; flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--warn-solid); }
 /* welcome card: first visit on an empty database */
 .page-note { margin: calc(-1 * var(--s4)) 0 var(--s4); max-width: 72ch; font-size: var(--t-sm); color: var(--muted); }
-.mb { margin-bottom: var(--s4); } .full { flex-basis: 100%; }
+.mb { margin-bottom: var(--s4); } .mt3 { margin-top: var(--s3); } .mt5 { margin-top: var(--s5); }
+.col.gap-1 { gap: var(--s1); } .col.gap-4 { gap: var(--s4); }
+.plain-list { margin: 0; padding-inline-start: 18px; }
+.bad-figure { color: var(--bad); } .full { flex-basis: 100%; }
 .toolbar-search.first { margin-inline-start: 0; }
 .csv-note { margin: calc(-1 * var(--s1)) 0 var(--s3); font-size: var(--t-sm); color: var(--muted); }
 .sec-head { margin-top: var(--s6); }
