@@ -51,6 +51,15 @@ class Review(BaseModel):
     edits: dict = {}
 
 
+class VendorIn(BaseModel):
+    name_en: str = ""
+    name_ar: str = ""
+    vat: str = ""
+    iban: str = ""
+    currency: str = "SAR"
+    status: str = "approved"
+
+
 class RuleIn(BaseModel):
     key: str = ""
     name: str
@@ -82,7 +91,7 @@ def _int(body: dict, key: str, default: int, lo: int, hi: int) -> int:
 
 def create_app(desk: Desk | None = None, auth: Auth | None = None, rate_limit: int = 40, eval_transport=None) -> FastAPI:
     """eval_transport: an httpx transport for the AI evaluation's provider calls (tests use a fake one)."""
-    desk = desk or Desk(os.environ.get("INVOICE_DESK_DB", ":memory:"))
+    desk = desk or Desk(os.environ.get("INVOICE_DESK_DB", ":memory:"), seed_vendors=True)
     auth = auth or Auth()
     limiter = RateLimiter(rate_limit)
     app = FastAPI(title="invoice-desk", version=__version__,
@@ -171,6 +180,54 @@ def create_app(desk: Desk | None = None, auth: Auth | None = None, rate_limit: i
     def reprocess(rid: int, request: Request, user=Depends(need("reviewer"))):
         desk.reprocess(rid, user["sub"], llm_from(request))
         return dict(ok=True)
+
+    # ------------------------------------------------------- vendors and purchase orders
+    async def _csv_text(file: UploadFile) -> str:
+        blob = await file.read(1024 * 1024 + 1)
+        if len(blob) > 1024 * 1024:
+            raise HTTPException(413, "a CSV file can be at most 1 MB")
+        try:
+            return blob.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            raise HTTPException(400, "the CSV must be saved as UTF-8") from None
+
+    @app.get("/api/vendors")
+    def vendors(user=Depends(need("viewer"))):
+        return desk.list_vendors()
+
+    @app.post("/api/vendors")
+    def vendor_add(body: VendorIn, user=Depends(need("admin"))):
+        return desk.save_vendor(body.model_dump(), user["sub"])
+
+    @app.put("/api/vendors/{vid}")
+    def vendor_edit(vid: int, body: VendorIn, user=Depends(need("admin"))):
+        return desk.save_vendor(body.model_dump(), user["sub"], vid)
+
+    @app.delete("/api/vendors/{vid}")
+    def vendor_delete(vid: int, user=Depends(need("admin"))):
+        desk.delete_vendor(vid, user["sub"])
+        return dict(ok=True)
+
+    @app.post("/api/vendors/import")
+    async def vendor_import(file: UploadFile = File(...), user=Depends(need("admin"))):
+        return desk.import_vendors(await _csv_text(file), user["sub"])
+
+    @app.get("/api/purchase-orders")
+    def pos(user=Depends(need("viewer"))):
+        return desk.list_pos()
+
+    @app.post("/api/purchase-orders/import")
+    async def po_import(file: UploadFile = File(...), user=Depends(need("admin"))):
+        return desk.import_pos(await _csv_text(file), user["sub"])
+
+    @app.delete("/api/purchase-orders/{pid}")
+    def po_delete(pid: int, user=Depends(need("admin"))):
+        desk.delete_po(pid, user["sub"])
+        return dict(ok=True)
+
+    @app.post("/api/runs/{rid}/link-vendor")
+    def link_vendor(rid: int, body: dict, user=Depends(need("reviewer"))):
+        return desk.link_vendor(rid, _int(body, "vendor_id", 0, 1, 10**9), user["sub"])
 
     @app.get("/api/review/next")
     def review_next(user=Depends(need("viewer"))):

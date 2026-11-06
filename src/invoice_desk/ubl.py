@@ -75,6 +75,9 @@ def read(blob: bytes) -> dict:
     totals = root.findall("cac:TaxTotal/cbc:TaxAmount", NS)
     pick = next((t for t in totals if t.get("currencyID", "").upper() == (f["currency"] or "")), totals[0] if totals else None)
     f["vat_amount"] = to_number(pick.text) if pick is not None else None
+    iban = _text(root, "cac:PaymentMeans/cac:PayeeFinancialAccount/cbc:ID")
+    f["iban"] = re.sub(r"\s", "", iban).upper() if iban else None
+    f["po_number"] = _text(root, "cac:OrderReference/cbc:ID")
     for ref in root.findall("cac:AdditionalDocumentReference", NS):
         if (_text(ref, "cbc:ID") or "").upper() == "QR":
             f["qr_payload"] = re.sub(r"\s", "", _text(ref, "cac:Attachment/cbc:EmbeddedDocumentBinaryObject") or "") or None
@@ -126,9 +129,11 @@ def write(f: dict, uuid: str = "00000000-0000-0000-0000-000000000000", issue_tim
     return (f'<?xml version="1.0" encoding="UTF-8"?>\n<Invoice xmlns="{NS["inv"]}" xmlns:cac="{NS["cac"]}" xmlns:cbc="{NS["cbc"]}">'
             f"<cbc:ProfileID>reporting:1.0</cbc:ProfileID>{el('cbc:ID', f.get('invoice_number'))}{el('cbc:UUID', uuid)}"
             f"{el('cbc:IssueDate', f.get('issue_date'))}{el('cbc:IssueTime', issue_time)}{el('cbc:DueDate', f.get('due_date'))}"
-            f"{el('cbc:InvoiceTypeCode', '388', name=type_name)}{el('cbc:DocumentCurrencyCode', cur)}{el('cbc:TaxCurrencyCode', 'SAR')}{qr}"
+            f"{el('cbc:InvoiceTypeCode', '388', name=type_name)}{el('cbc:DocumentCurrencyCode', cur)}{el('cbc:TaxCurrencyCode', 'SAR')}"
+            f"{'<cac:OrderReference>' + el('cbc:ID', f['po_number']) + '</cac:OrderReference>' if f.get('po_number') else ''}{qr}"
             f"{party('AccountingSupplierParty', f.get('seller_name'), f.get('seller_vat'))}"
             f"{party('AccountingCustomerParty', f.get('buyer_name'), f.get('buyer_vat'))}"
+            f"{'<cac:PaymentMeans><cbc:PaymentMeansCode>30</cbc:PaymentMeansCode><cac:PayeeFinancialAccount>' + el('cbc:ID', f['iban']) + '</cac:PayeeFinancialAccount></cac:PaymentMeans>' if f.get('iban') else ''}"
             f"<cac:TaxTotal>{el('cbc:TaxAmount', amt(f['vat_amount']), currencyID=cur)}</cac:TaxTotal>"
             f"<cac:LegalMonetaryTotal>{el('cbc:LineExtensionAmount', amt(f['subtotal']), currencyID=cur)}"
             f"{el('cbc:TaxExclusiveAmount', amt(f['subtotal']), currencyID=cur)}{el('cbc:TaxInclusiveAmount', amt(f['total']), currencyID=cur)}"

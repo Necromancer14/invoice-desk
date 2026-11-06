@@ -84,7 +84,7 @@ def summarize_rows(rows: list[dict]) -> dict:
 
 
 def _desk(data: dict, rules: list[dict] | None, extractor_factory=None) -> Desk:
-    desk = Desk(":memory:", today=date.fromisoformat(data["as_of"]), sync=True, extractor_factory=extractor_factory)
+    desk = Desk(":memory:", today=date.fromisoformat(data["as_of"]), sync=True, extractor_factory=extractor_factory, seed_vendors=True)
     desk.settings()
     if rules is not None:
         desk._save_rules(rules)

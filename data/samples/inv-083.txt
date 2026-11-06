@@ -1,0 +1,19 @@
+TAX INVOICE
+Invoice No: GHC-2026-0183
+Issue Date: 2026-10-08
+Due Date: 2026-11-08
+Seller: Gulf Horizon Consulting
+Seller VAT No: 325006057695133
+Buyer: Nakheel Hospitality
+Buyer VAT No: 343421587783043
+IBAN: SA09 0536 8539 5642 1452 7756
+PO Number: PO-2026-0183
+Currency: SAR
+
+Description   Qty   Unit price   Total
+1. Catering package   7   820.94   5,746.58
+
+Subtotal: 5,746.58 SAR
+VAT (15%): 861.99 SAR
+Total (including VAT): 6,608.57 SAR
+QR: ARdHdWxmIEhvcml6b24gQ29uc3VsdGluZwIPMzI1MDA2MDU3Njk1MTMzAxQyMDI2LTEwLTA4VDA5OjMwOjAwWgQHNjYwOC41NwUGODYxLjk5

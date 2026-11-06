@@ -63,6 +63,8 @@ def _overall(fields: dict, fc: dict) -> float:
 _AR_VAT = r"(?:ضريبة\s*القيمة\s*المضافة|الضريبة)"
 LABELS = {
     "invoice_number": r"(?:invoice\s*(?:no|number|num|#)\.?|رقم\s*الفاتورة)",
+    "iban": r"(?:iban|رقم\s*(?:الآيبان|الايبان|الحساب\s*الدولي)|الآيبان|الايبان|آيبان|ايبان)",
+    "po_number": r"(?:p\.?\s*o\.?\s*(?:no|number|#)\.?|purchase\s*order(?:\s*(?:no|number|#))?\.?|رقم\s*أمر\s*الشراء|أمر\s*الشراء)",
     "issue_date": r"(?:issue\s*date|invoice\s*date|date\s*of\s*issue|تاريخ\s*(?:الإصدار|الاصدار|الفاتورة))",
     "due_date": r"(?:due\s*date|payment\s*due|تاريخ\s*الاستحقاق)",
     "seller_name": r"(?:seller|supplier|vendor|البائع|المورد|اسم\s*البائع)(?:\s*name)?",
@@ -74,7 +76,7 @@ LABELS = {
     "vat_amount": r"(?:total\s*vat|vat\s*amount|vat(?:\s*\(\s*\d+(?:\.\d+)?\s*%\s*\))?|" + _AR_VAT + r"(?:\s*\(?\s*\d+\s*%\s*\)?)?|مجموع\s*الضريبة|قيمة\s*الضريبة)",
     "total": r"(?:total\s*\(?\s*incl\w*\.?\s*(?:of\s*)?vat\s*\)?|total\s*(?:amount|due)(?:\s*payable)?|grand\s*total|amount\s*due|الإجمالي\s*شامل\s*" + _AR_VAT + r"|الإجمالي\s*المستحق|إجمالي\s*الفاتورة|المبلغ\s*المستحق|total(?!\s*\(?\s*(?:excl|before|vat)))",
 }
-_ORDER = ["seller_vat", "buyer_vat", "invoice_number", "issue_date", "due_date", "seller_name", "buyer_name",
+_ORDER = ["iban", "po_number", "seller_vat", "buyer_vat", "invoice_number", "issue_date", "due_date", "seller_name", "buyer_name",
           "currency", "subtotal", "vat_amount", "total"]
 _COMPILED = {k: re.compile(r"^\W*" + LABELS[k] + r"\s*[:：]\s*(.+?)\s*$", re.I | re.U) for k in LABELS}
 _LINE = re.compile(r"^\s*(?:\d+[.)]\s+)?(\D\S*(?:\s+\S+)*?)\s+(\d[\d.,]*)\s+(\d[\d.,]*)\s+(\d[\d.,]*)\s*$")
@@ -149,9 +151,11 @@ class RuleBasedExtractor:
                     raw[key] = m.group(1)
                     used.add(n)
                     break
-        for key in ("invoice_number", "seller_name", "buyer_name"):
+        for key in ("invoice_number", "seller_name", "buyer_name", "po_number"):
             if key in raw:
                 out[key] = raw[key].strip()
+        if "iban" in raw:
+            out["iban"] = re.sub(r"[\s\-.]", "", raw["iban"]).upper() or None
         for key in ("issue_date", "due_date"):
             if key in raw:
                 out[key] = parse_date(raw[key])
@@ -218,6 +222,9 @@ def normalise(data: dict) -> tuple[dict, dict, list]:
         fields[k] = to_number(data.get(k))
     cur = data.get("currency")
     fields["currency"] = (_currency(str(cur)) or str(cur).upper()) if cur else None
+    for k in ("iban", "po_number"):
+        v = re.sub(r"\s", "", normalize(str(data.get(k) or ""))) if k == "iban" else str(data.get(k) or "").strip()
+        fields[k] = (v.upper() if k == "iban" else v) or None
     kind = str(data.get("invoice_type") or "").strip().lower()
     fields["invoice_type"] = kind if kind in ("standard", "simplified") else None
     for it in data.get("line_items") or []:

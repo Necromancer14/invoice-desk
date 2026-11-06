@@ -1,0 +1,22 @@
+TAX INVOICE
+Invoice No: NOS-2026-0182
+Issue Date: 2026-10-18
+Due Date: 2026-11-18
+Seller: NAJD OFFICE SUPPLIES LLC
+Seller VAT No: 322916926427953
+Buyer: Nakheel Hospitality
+Buyer VAT No: 386685722971023
+IBAN: SA59 2046 1887 1490 6911 1748
+PO Number: PO-2026-0182
+Currency: SAR
+
+Description   Qty   Unit price   Total
+1. Software license   1   2,121.17   2,121.17
+2. Vehicle rental   7   705.79   4,940.53
+3. Maintenance contract   7   3,557.44   24,902.08
+4. Consulting services   1   1,526.11   1,526.11
+
+Subtotal: 33,489.89 SAR
+VAT (15%): 5,023.48 SAR
+Total (including VAT): 38,513.37 SAR
+QR: ARhOQUpEIE9GRklDRSBTVVBQTElFUyBMTEMCDzMyMjkxNjkyNjQyNzk1MwMUMjAyNi0xMC0xOFQwOTozMDowMFoECDM4NTEzLjM3BQc1MDIzLjQ4

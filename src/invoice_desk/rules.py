@@ -27,6 +27,8 @@ class Ctx:
     today: date = field(default_factory=date.today)
     confidence: float = 1.0
     is_duplicate: Callable[[str, str], bool] = lambda vat, number: False
+    vendors: object = None                                  # a vendors.VendorBook, or None when there is no vendor master
+    po_for: Callable[[str], dict | None] = lambda number: None
 
 
 def _f(fields: dict, name: str):
@@ -211,6 +213,77 @@ def r_qr_present(p, f, ctx):
     return "fail", "no QR code found (on a photo taken at an angle a QR code may be present but unreadable)"
 
 
+def _vendor_match(p, f, ctx):
+    """None when the vendor rules cannot apply: no vendor master yet, or no seller name or VAT number to go on."""
+    if not ctx.vendors or not (f.get("seller_name") or f.get("seller_vat")):
+        return None
+    return ctx.vendors.match(f, float(p.get("min_score", 0.85)))
+
+
+def r_vendor_known(p, f, ctx):
+    if not ctx.vendors:
+        return "skip", "no vendors in the vendor master yet"
+    m = _vendor_match(p, f, ctx)
+    if m is None:
+        return "skip", "seller name and VAT number missing"
+    return ("pass", m["why"]) if m["vendor"] else ("fail", m["why"])
+
+
+def r_vendor_blocked(p, f, ctx):
+    m = _vendor_match(p, f, ctx)
+    if not m or not m["vendor"]:
+        return "skip", "vendor not identified"
+    v = m["vendor"]
+    if v.get("status") == "blocked":
+        return "fail", f"{v.get('name_en') or v.get('name_ar')} is blocked in the vendor master"
+    return "pass", "vendor is approved"
+
+
+def r_vendor_vat(p, f, ctx):
+    m = _vendor_match(p, f, ctx)
+    if not m or not m["vendor"]:
+        return "skip", "vendor not identified"
+    v, vat = m["vendor"], f.get("seller_vat")
+    if not vat or not v.get("vat"):
+        return "skip", "no VAT number to compare"
+    if vat_key(vat) != vat_key(v["vat"]):
+        return "fail", f"the invoice says {vat_key(vat)}, the vendor master says {v['vat']}"
+    return "pass", "VAT number matches the vendor master"
+
+
+def r_vendor_iban(p, f, ctx):
+    from .vendors import iban_key, iban_problem
+    iban = f.get("iban")
+    if not iban:
+        return "skip", "no IBAN on the invoice"
+    problem = iban_problem(iban)
+    if problem:
+        return "fail", f"High risk: the IBAN on the invoice is not valid ({problem})"
+    m = _vendor_match(p, f, ctx)
+    if not m or not m["vendor"] or not m["vendor"].get("iban"):
+        return "skip", "no IBAN in the vendor master to compare"
+    if iban_key(iban) != iban_key(m["vendor"]["iban"]):
+        return "fail", (f"High risk: the invoice asks for payment to {iban_key(iban)}, but the vendor master has "
+                        f"{m['vendor']['iban']}. A changed bank account is a common fraud pattern: confirm it with the "
+                        "vendor using contact details you already hold, not ones on this invoice.")
+    return "pass", "IBAN matches the vendor master"
+
+
+def r_po_amount(p, f, ctx):
+    from .vendors import po_match
+    number = (f.get("po_number") or "").strip()
+    if not number:
+        return "skip", "no PO number on the invoice"
+    po = ctx.po_for(number)
+    if not po:
+        return "skip", f"PO {number} is not among the purchase orders"
+    m = _vendor_match(p, f, ctx)
+    res = po_match(f, po, m["vendor"] if m else None, float(p.get("tolerance", 0.01)), p.get("field", "total"))
+    if res["status"] == "over":
+        return "fail", res["detail"]
+    return ("pass" if res["status"] in ("matched", "closed") else "skip"), res["detail"]
+
+
 def r_duplicate(p, f, ctx):
     vat, num = f.get("seller_vat"), f.get("invoice_number")
     if not vat or not num:
@@ -359,6 +432,17 @@ RULE_TYPES: dict[str, dict] = {
     "duplicate": dict(fn=r_duplicate, label="Duplicate invoice", description="The same seller VAT number and invoice number must not be received twice.", params=[]),
     "min_confidence": dict(fn=r_min_confidence, label="Extraction confidence", description="Overall confidence of the extraction must reach a threshold.",
                            params=[dict(name="threshold", kind="number", default=0.85)]),
+    "vendor_known": dict(fn=r_vendor_known, label="Known vendor", description="The seller must be in the vendor master, by name (English, Arabic or a linked name) or VAT number.",
+                         params=[dict(name="min_score", kind="number", default=0.85, help="0 to 1; how close a name must be")]),
+    "vendor_blocked": dict(fn=r_vendor_blocked, label="Vendor not blocked", description="The matched vendor must not be blocked in the vendor master.",
+                           params=[dict(name="min_score", kind="number", default=0.85, help="0 to 1; how close a name must be")]),
+    "vendor_vat": dict(fn=r_vendor_vat, label="VAT number matches vendor master", description="The seller VAT number must be the one held for the matched vendor.",
+                       params=[dict(name="min_score", kind="number", default=0.85, help="0 to 1; how close a name must be")]),
+    "vendor_iban": dict(fn=r_vendor_iban, label="IBAN matches vendor master", risk="high",
+                        description="The IBAN on the invoice must be valid and the one held for the matched vendor. A failure is marked high risk.",
+                        params=[dict(name="min_score", kind="number", default=0.85, help="0 to 1; how close a name must be")]),
+    "po_amount": dict(fn=r_po_amount, label="Within the purchase order", description="The invoice amount must not be above its purchase order's amount, allowing a tolerance.",
+                      params=[dict(name="field", kind="field", default="total"), dict(name="tolerance", kind="number", default=0.01, help="share of the PO amount, 0.01 is 1%")]),
     "expression": dict(fn=r_expression, label="Custom expression", description="Write your own condition. It must be true for the invoice to pass.",
                        params=[dict(name="expr", kind="text", default="total <= 100000 and item_count > 0")]),
 }
@@ -412,6 +496,8 @@ def run_rules(rules: list[dict], fields: dict, ctx: Ctx) -> list[dict]:
         if status == "fail" and r.get("message"):
             detail = f"{r['message']} ({detail})"
         out.append(dict(key=r["key"], name=r["name"], severity=r["severity"], status=status, detail=detail))
+        if status == "fail" and RULE_TYPES[r["type"]].get("risk"):
+            out[-1]["risk"] = RULE_TYPES[r["type"]]["risk"]
     return out
 
 

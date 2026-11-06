@@ -111,7 +111,7 @@ def test_pick_is_deterministic_and_covers_everything():
     assert {i["format"] for i in p} == {i["format"] for i in ITEMS}
     assert {i["lang"] for i in p} == {i["lang"] for i in ITEMS}
     assert sum(i["scenario"] == "prompt_injection" for i in p) == 1 and any(i["scenario"] == "duplicate" for i in p)
-    # 21 kinds of sample do not all fit in 20 alongside the rest; at 30 every kind is in
+    # the kinds of sample do not all fit in 20 alongside the rest; at 30 every kind is in
     assert len({i["scenario"] for i in p}) >= 17
     assert {i["scenario"] for i in stratified_pick(ITEMS, 30, seed=1)} == {i["scenario"] for i in ITEMS}
 
@@ -122,7 +122,8 @@ def test_pick_is_proportional():
         p = stratified_pick(ITEMS, n, seed=1)
         fmt, full = Counter(i["format"] for i in p), Counter(i["format"] for i in ITEMS)
         for f in full:
-            assert abs(fmt[f] - n * full[f] / len(ITEMS)) <= 2, (n, f, fmt)  # covering every check first pulls it a little
+            # covering every kind of check first (most are text files) pulls it a little, more at 20 than at 40
+            assert abs(fmt[f] - n * full[f] / len(ITEMS)) <= (3 if n < 40 else 2), (n, f, fmt)
         if n >= 40:
             clean = sum(i["scenario"] == "clean" for i in p)
             share = sum(i["scenario"] == "clean" for i in ITEMS) / len(ITEMS)

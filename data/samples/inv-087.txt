@@ -1,0 +1,18 @@
+TAX INVOICE
+Invoice No: NOS-2026-0187
+Issue Date: 2026-09-23
+Due Date: 2026-10-23
+Seller: Najd Office Supplies Co.
+Seller VAT No: 340720549974203
+Buyer: Mawrid Foods
+IBAN: SA59 2046 1887 1490 6911 1748
+PO Number: PO-2026-0187
+Currency: SAR
+
+Description   Qty   Unit price   Total
+1. Training session   7   2,051.79   14,362.53
+
+Subtotal: 14,362.53 SAR
+VAT (15%): 2,154.38 SAR
+Total (including VAT): 16,516.91 SAR
+QR: ARhOYWpkIE9mZmljZSBTdXBwbGllcyBDby4CDzM0MDcyMDU0OTk3NDIwMwMUMjAyNi0wOS0yM1QwOTozMDowMFoECDE2NTE2LjkxBQcyMTU0LjM4

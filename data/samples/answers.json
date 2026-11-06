@@ -3697,6 +3697,519 @@
     "seller_name": "الواحة للتقنية",
     "buyer_name": "عيادات الأمل"
    }
+  },
+  {
+   "id": "inv-079",
+   "file": "inv-079.txt",
+   "format": "txt",
+   "lang": "en",
+   "scenario": "vendor_ok",
+   "expected_status": "approved",
+   "vision_only": false,
+   "truth": {
+    "invoice_number": "DRP-2026-0179",
+    "issue_date": "2026-08-28",
+    "due_date": "2026-09-28",
+    "seller_name": "Desert Rose Printing",
+    "seller_vat": "345946419931163",
+    "buyer_name": "Bayan Construction",
+    "buyer_vat": "319239270158153",
+    "currency": "SAR",
+    "subtotal": 31219.48,
+    "vat_amount": 4682.92,
+    "total": 35902.4,
+    "qr_payload": "ARREZXNlcnQgUm9zZSBQcmludGluZwIPMzQ1OTQ2NDE5OTMxMTYzAxQyMDI2LTA4LTI4VDA5OjMwOjAwWgQIMzU5MDIuNDAFBzQ2ODIuOTI=",
+    "line_items": [
+     {
+      "description": "Maintenance contract",
+      "description_ar": "عقد صيانة",
+      "quantity": 7,
+      "unit_price": 3217.46,
+      "line_total": 22522.22
+     },
+     {
+      "description": "Vehicle rental",
+      "description_ar": "تأجير مركبات",
+      "quantity": 11,
+      "unit_price": 790.66,
+      "line_total": 8697.26
+     }
+    ],
+    "iban": "SA9410955906622009750747",
+    "invoice_type": "standard",
+    "po_number": "PO-2026-0179"
+   },
+   "alt_names": {
+    "seller_name": "وردة الصحراء للطباعة",
+    "buyer_name": "بيان للمقاولات"
+   }
+  },
+  {
+   "id": "inv-080",
+   "file": "inv-080.txt",
+   "format": "txt",
+   "lang": "ar",
+   "scenario": "vendor_ok",
+   "expected_status": "approved",
+   "vision_only": false,
+   "truth": {
+    "invoice_number": "JME-2026-0180",
+    "issue_date": "2026-09-01",
+    "due_date": "2026-10-01",
+    "seller_name": "Jabal Medical Equipment",
+    "seller_vat": "303219475264013",
+    "buyer_name": "Bayan Construction",
+    "buyer_vat": "359080094186753",
+    "currency": "SAR",
+    "subtotal": 25591.74,
+    "vat_amount": 3838.76,
+    "total": 29430.5,
+    "qr_payload": "ASLYrNio2YQg2YTZhNmF2LnYr9in2Kog2KfZhNi32KjZitipAg8zMDMyMTk0NzUyNjQwMTMDFDIwMjYtMDktMDFUMDk6MzA6MDBaBAgyOTQzMC41MAUHMzgzOC43Ng==",
+    "line_items": [
+     {
+      "description": "Maintenance contract",
+      "description_ar": "عقد صيانة",
+      "quantity": 6,
+      "unit_price": 4265.29,
+      "line_total": 25591.74
+     }
+    ],
+    "iban": "SA0445966054827265960708",
+    "invoice_type": "standard",
+    "po_number": "PO-2026-0180"
+   },
+   "alt_names": {
+    "seller_name": "جبل للمعدات الطبية",
+    "buyer_name": "بيان للمقاولات"
+   }
+  },
+  {
+   "id": "inv-081",
+   "file": "inv-081.xml",
+   "format": "xml",
+   "lang": "en",
+   "scenario": "vendor_ok",
+   "expected_status": "approved",
+   "vision_only": false,
+   "truth": {
+    "invoice_number": "AWT-2026-0181",
+    "issue_date": "2026-08-21",
+    "due_date": "2026-09-21",
+    "seller_name": "Al Waha Technology",
+    "seller_vat": "328617486089703",
+    "buyer_name": "Harbor Retail Group",
+    "buyer_vat": null,
+    "currency": "SAR",
+    "subtotal": 11921.61,
+    "vat_amount": 1788.24,
+    "total": 13709.85,
+    "qr_payload": "ARJBbCBXYWhhIFRlY2hub2xvZ3kCDzMyODYxNzQ4NjA4OTcwMwMUMjAyNi0wOC0yMVQwOTozMDowMFoECDEzNzA5Ljg1BQcxNzg4LjI0",
+    "line_items": [
+     {
+      "description": "Catering package",
+      "description_ar": "باقة تموين",
+      "quantity": 11,
+      "unit_price": 222.39,
+      "line_total": 2446.29
+     },
+     {
+      "description": "Catering package",
+      "description_ar": "باقة تموين",
+      "quantity": 8,
+      "unit_price": 769.11,
+      "line_total": 6152.88
+     },
+     {
+      "description": "Catering package",
+      "description_ar": "باقة تموين",
+      "quantity": 2,
+      "unit_price": 758.01,
+      "line_total": 1516.02
+     },
+     {
+      "description": "Medical consumables",
+      "description_ar": "مستهلكات طبية",
+      "quantity": 11,
+      "unit_price": 164.22,
+      "line_total": 1806.42
+     }
+    ],
+    "iban": "SA2160634713415932832393",
+    "invoice_type": "standard",
+    "po_number": "PO-2026-0181"
+   },
+   "alt_names": {
+    "seller_name": "الواحة للتقنية",
+    "buyer_name": "مجموعة الميناء للتجزئة"
+   }
+  },
+  {
+   "id": "inv-082",
+   "file": "inv-082.txt",
+   "format": "txt",
+   "lang": "en",
+   "scenario": "vendor_fuzzy",
+   "expected_status": "approved",
+   "vision_only": false,
+   "truth": {
+    "invoice_number": "NOS-2026-0182",
+    "issue_date": "2026-10-18",
+    "due_date": "2026-11-18",
+    "seller_name": "NAJD OFFICE SUPPLIES LLC",
+    "seller_vat": "322916926427953",
+    "buyer_name": "Nakheel Hospitality",
+    "buyer_vat": "386685722971023",
+    "currency": "SAR",
+    "subtotal": 33489.89,
+    "vat_amount": 5023.48,
+    "total": 38513.37,
+    "qr_payload": "ARhOQUpEIE9GRklDRSBTVVBQTElFUyBMTEMCDzMyMjkxNjkyNjQyNzk1MwMUMjAyNi0xMC0xOFQwOTozMDowMFoECDM4NTEzLjM3BQc1MDIzLjQ4",
+    "line_items": [
+     {
+      "description": "Software license",
+      "description_ar": "ترخيص برمجيات",
+      "quantity": 1,
+      "unit_price": 2121.17,
+      "line_total": 2121.17
+     },
+     {
+      "description": "Vehicle rental",
+      "description_ar": "تأجير مركبات",
+      "quantity": 7,
+      "unit_price": 705.79,
+      "line_total": 4940.53
+     },
+     {
+      "description": "Maintenance contract",
+      "description_ar": "عقد صيانة",
+      "quantity": 7,
+      "unit_price": 3557.44,
+      "line_total": 24902.08
+     },
+     {
+      "description": "Consulting services",
+      "description_ar": "خدمات استشارية",
+      "quantity": 1,
+      "unit_price": 1526.11,
+      "line_total": 1526.11
+     }
+    ],
+    "iban": "SA5920461887149069111748",
+    "invoice_type": "standard",
+    "po_number": "PO-2026-0182"
+   },
+   "alt_names": {
+    "seller_name": "شركة نجد للمستلزمات المكتبية",
+    "buyer_name": "نخيل للضيافة"
+   }
+  },
+  {
+   "id": "inv-083",
+   "file": "inv-083.txt",
+   "format": "txt",
+   "lang": "en",
+   "scenario": "iban_changed",
+   "expected_status": "needs_review",
+   "vision_only": false,
+   "truth": {
+    "invoice_number": "GHC-2026-0183",
+    "issue_date": "2026-10-08",
+    "due_date": "2026-11-08",
+    "seller_name": "Gulf Horizon Consulting",
+    "seller_vat": "325006057695133",
+    "buyer_name": "Nakheel Hospitality",
+    "buyer_vat": "343421587783043",
+    "currency": "SAR",
+    "subtotal": 5746.58,
+    "vat_amount": 861.99,
+    "total": 6608.57,
+    "qr_payload": "ARdHdWxmIEhvcml6b24gQ29uc3VsdGluZwIPMzI1MDA2MDU3Njk1MTMzAxQyMDI2LTEwLTA4VDA5OjMwOjAwWgQHNjYwOC41NwUGODYxLjk5",
+    "line_items": [
+     {
+      "description": "Catering package",
+      "description_ar": "باقة تموين",
+      "quantity": 7,
+      "unit_price": 820.94,
+      "line_total": 5746.58
+     }
+    ],
+    "iban": "SA0905368539564214527756",
+    "invoice_type": "standard",
+    "po_number": "PO-2026-0183"
+   },
+   "alt_names": {
+    "seller_name": "أفق الخليج للاستشارات",
+    "buyer_name": "نخيل للضيافة"
+   }
+  },
+  {
+   "id": "inv-084",
+   "file": "inv-084.xml",
+   "format": "xml",
+   "lang": "en",
+   "scenario": "iban_changed",
+   "expected_status": "needs_review",
+   "vision_only": false,
+   "truth": {
+    "invoice_number": "GHC-2026-0184",
+    "issue_date": "2026-09-11",
+    "due_date": "2026-10-11",
+    "seller_name": "Gulf Horizon Consulting",
+    "seller_vat": "325006057695133",
+    "buyer_name": "Nakheel Hospitality",
+    "buyer_vat": null,
+    "currency": "SAR",
+    "subtotal": 620.24,
+    "vat_amount": 93.04,
+    "total": 713.28,
+    "qr_payload": "ARdHdWxmIEhvcml6b24gQ29uc3VsdGluZwIPMzI1MDA2MDU3Njk1MTMzAxQyMDI2LTA5LTExVDA5OjMwOjAwWgQGNzEzLjI4BQU5My4wNA==",
+    "line_items": [
+     {
+      "description": "Cleaning service",
+      "description_ar": "خدمة نظافة",
+      "quantity": 4,
+      "unit_price": 155.06,
+      "line_total": 620.24
+     }
+    ],
+    "iban": "SA1505236208800380025375",
+    "invoice_type": "standard",
+    "po_number": "PO-2026-0184"
+   },
+   "alt_names": {
+    "seller_name": "أفق الخليج للاستشارات",
+    "buyer_name": "نخيل للضيافة"
+   }
+  },
+  {
+   "id": "inv-085",
+   "file": "inv-085.txt",
+   "format": "txt",
+   "lang": "ar",
+   "scenario": "blocked_vendor",
+   "expected_status": "rejected",
+   "vision_only": false,
+   "truth": {
+    "invoice_number": "AQC-2026-0185",
+    "issue_date": "2026-10-23",
+    "due_date": "2026-11-23",
+    "seller_name": "Falcon Star Trading",
+    "seller_vat": "396702943318413",
+    "buyer_name": "Al Amal Clinics",
+    "buyer_vat": "304011090786333",
+    "currency": "SAR",
+    "subtotal": 777.68,
+    "vat_amount": 116.65,
+    "total": 894.33,
+    "qr_payload": "ASLZhtis2YXYqSDYp9mE2LXZgtixINmE2YTYqtis2KfYsdipAg8zOTY3MDI5NDMzMTg0MTMDFDIwMjYtMTAtMjNUMDk6MzA6MDBaBAY4OTQuMzMFBjExNi42NQ==",
+    "line_items": [
+     {
+      "description": "Printing and delivery",
+      "description_ar": "طباعة وتوصيل",
+      "quantity": 4,
+      "unit_price": 194.42,
+      "line_total": 777.68
+     }
+    ],
+    "iban": "SA6415531937827745689150",
+    "invoice_type": "standard",
+    "po_number": null
+   },
+   "alt_names": {
+    "seller_name": "نجمة الصقر للتجارة",
+    "buyer_name": "عيادات الأمل"
+   }
+  },
+  {
+   "id": "inv-086",
+   "file": "inv-086.txt",
+   "format": "txt",
+   "lang": "en",
+   "scenario": "unknown_vendor",
+   "expected_status": "needs_review",
+   "vision_only": false,
+   "truth": {
+    "invoice_number": "HCS-2026-0186",
+    "issue_date": "2026-10-21",
+    "due_date": "2026-11-21",
+    "seller_name": "Oasis Prime Supplies",
+    "seller_vat": "311865708408473",
+    "buyer_name": "Nakheel Hospitality",
+    "buyer_vat": null,
+    "currency": "SAR",
+    "subtotal": 4700.93,
+    "vat_amount": 705.14,
+    "total": 5406.07,
+    "qr_payload": "ARRPYXNpcyBQcmltZSBTdXBwbGllcwIPMzExODY1NzA4NDA4NDczAxQyMDI2LTEwLTIxVDA5OjMwOjAwWgQHNTQwNi4wNwUGNzA1LjE0",
+    "line_items": [
+     {
+      "description": "Printing and delivery",
+      "description_ar": "طباعة وتوصيل",
+      "quantity": 1,
+      "unit_price": 330.53,
+      "line_total": 330.53
+     },
+     {
+      "description": "Printing and delivery",
+      "description_ar": "طباعة وتوصيل",
+      "quantity": 1,
+      "unit_price": 112.52,
+      "line_total": 112.52
+     },
+     {
+      "description": "Office furniture",
+      "description_ar": "أثاث مكتبي",
+      "quantity": 1,
+      "unit_price": 2989.46,
+      "line_total": 2989.46
+     },
+     {
+      "description": "Maintenance contract",
+      "description_ar": "عقد صيانة",
+      "quantity": 1,
+      "unit_price": 1268.42,
+      "line_total": 1268.42
+     }
+    ],
+    "iban": "SA1330110674723695933100",
+    "invoice_type": "standard",
+    "po_number": null
+   },
+   "alt_names": {
+    "seller_name": "واحة برايم للتوريدات",
+    "buyer_name": "نخيل للضيافة"
+   }
+  },
+  {
+   "id": "inv-087",
+   "file": "inv-087.txt",
+   "format": "txt",
+   "lang": "en",
+   "scenario": "vendor_vat_mismatch",
+   "expected_status": "needs_review",
+   "vision_only": false,
+   "truth": {
+    "invoice_number": "NOS-2026-0187",
+    "issue_date": "2026-09-23",
+    "due_date": "2026-10-23",
+    "seller_name": "Najd Office Supplies Co.",
+    "seller_vat": "340720549974203",
+    "buyer_name": "Mawrid Foods",
+    "buyer_vat": null,
+    "currency": "SAR",
+    "subtotal": 14362.53,
+    "vat_amount": 2154.38,
+    "total": 16516.91,
+    "qr_payload": "ARhOYWpkIE9mZmljZSBTdXBwbGllcyBDby4CDzM0MDcyMDU0OTk3NDIwMwMUMjAyNi0wOS0yM1QwOTozMDowMFoECDE2NTE2LjkxBQcyMTU0LjM4",
+    "line_items": [
+     {
+      "description": "Training session",
+      "description_ar": "جلسة تدريبية",
+      "quantity": 7,
+      "unit_price": 2051.79,
+      "line_total": 14362.53
+     }
+    ],
+    "iban": "SA5920461887149069111748",
+    "invoice_type": "standard",
+    "po_number": "PO-2026-0187"
+   },
+   "alt_names": {
+    "seller_name": "شركة نجد للمستلزمات المكتبية",
+    "buyer_name": "موارد للأغذية"
+   }
+  },
+  {
+   "id": "inv-088",
+   "file": "inv-088.txt",
+   "format": "txt",
+   "lang": "en",
+   "scenario": "po_over",
+   "expected_status": "needs_review",
+   "vision_only": false,
+   "truth": {
+    "invoice_number": "MTI-2026-0188",
+    "issue_date": "2026-08-26",
+    "due_date": "2026-09-26",
+    "seller_name": "Madar Training Institute",
+    "seller_vat": "303895844204933",
+    "buyer_name": "Al Amal Clinics",
+    "buyer_vat": "327804229187833",
+    "currency": "SAR",
+    "subtotal": 5546.15,
+    "vat_amount": 831.92,
+    "total": 6378.07,
+    "qr_payload": "ARhNYWRhciBUcmFpbmluZyBJbnN0aXR1dGUCDzMwMzg5NTg0NDIwNDkzMwMUMjAyNi0wOC0yNlQwOTozMDowMFoEBzYzNzguMDcFBjgzMS45Mg==",
+    "line_items": [
+     {
+      "description": "Catering package",
+      "description_ar": "باقة تموين",
+      "quantity": 1,
+      "unit_price": 786.56,
+      "line_total": 786.56
+     },
+     {
+      "description": "Office furniture",
+      "description_ar": "أثاث مكتبي",
+      "quantity": 1,
+      "unit_price": 2935.71,
+      "line_total": 2935.71
+     },
+     {
+      "description": "Consulting services",
+      "description_ar": "خدمات استشارية",
+      "quantity": 1,
+      "unit_price": 1823.88,
+      "line_total": 1823.88
+     }
+    ],
+    "iban": "SA6480474292000053668564",
+    "invoice_type": "standard",
+    "po_number": "PO-2026-0188"
+   },
+   "alt_names": {
+    "seller_name": "مدار للتدريب",
+    "buyer_name": "عيادات الأمل"
+   }
+  },
+  {
+   "id": "inv-089",
+   "file": "inv-089.txt",
+   "format": "txt",
+   "lang": "ar",
+   "scenario": "po_over",
+   "expected_status": "needs_review",
+   "vision_only": false,
+   "truth": {
+    "invoice_number": "RSL-2026-0189",
+    "issue_date": "2026-10-02",
+    "due_date": "2026-11-02",
+    "seller_name": "Red Sea Logistics",
+    "seller_vat": "322044507179273",
+    "buyer_name": "Harbor Retail Group",
+    "buyer_vat": "343854989460033",
+    "currency": "SAR",
+    "subtotal": 794.18,
+    "vat_amount": 119.13,
+    "total": 913.31,
+    "qr_payload": "ATnYp9mE2KjYrdixINin2YTYo9it2YXYsSDZhNmE2K7Yr9mF2KfYqiDYp9mE2YTZiNis2LPYqtmK2KkCDzMyMjA0NDUwNzE3OTI3MwMUMjAyNi0xMC0wMlQwOTozMDowMFoEBjkxMy4zMQUGMTE5LjEz",
+    "line_items": [
+     {
+      "description": "Printing and delivery",
+      "description_ar": "طباعة وتوصيل",
+      "quantity": 2,
+      "unit_price": 397.09,
+      "line_total": 794.18
+     }
+    ],
+    "iban": "SA1415215513005504100034",
+    "invoice_type": "standard",
+    "po_number": "PO-2026-0189"
+   },
+   "alt_names": {
+    "seller_name": "البحر الأحمر للخدمات اللوجستية",
+    "buyer_name": "مجموعة الميناء للتجزئة"
+   }
   }
  ]
 }

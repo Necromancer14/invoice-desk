@@ -141,7 +141,7 @@ def test_review_queue_lists_waiting_runs_oldest_first(client):
     q = client.get("/api/review/queue", headers=r).json()
     assert [x["id"] for x in q] == waiting
     first = q[0]
-    assert set(first) == {"id", "filename", "created_at", "seller", "invoice_number", "total", "currency", "failed_checks"}
+    assert set(first) == {"id", "filename", "created_at", "seller", "invoice_number", "total", "currency", "failed_checks", "high_risk"}
     assert first["filename"] == "w0.txt" and first["seller"] == "Acme Trading" and first["invoice_number"] is None
     assert first["total"] == 1150.0 and first["currency"] == "SAR" and first["failed_checks"] == 2  # required fields + low confidence
 

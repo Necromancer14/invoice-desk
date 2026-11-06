@@ -30,6 +30,17 @@ DEFAULT_RULES = [
          params={"simplified_only": False}, message="Warning: no QR code was found"),
     dict(key="duplicate", name="Not a duplicate", type="duplicate", severity="reject",
          params={}, message=""),
+    # vendor master and purchase orders: each skips while the vendor master is empty
+    dict(key="vendor-known", name="Vendor is in the vendor master", type="vendor_known", severity="review",
+         params={"min_score": 0.85}, message="Unknown vendor"),
+    dict(key="vendor-blocked", name="Vendor is not blocked", type="vendor_blocked", severity="reject",
+         params={"min_score": 0.85}, message="Blocked vendor"),
+    dict(key="vendor-vat", name="Seller VAT number matches the vendor master", type="vendor_vat", severity="review",
+         params={"min_score": 0.85}, message=""),
+    dict(key="vendor-iban", name="IBAN matches the vendor master", type="vendor_iban", severity="review",
+         params={"min_score": 0.85}, message=""),
+    dict(key="po-amount", name="Invoice is within the purchase order", type="po_amount", severity="review",
+         params={"field": "total", "tolerance": 0.01}, message="Above the PO amount"),
     dict(key="confidence", name="Extraction confidence is high enough", type="min_confidence", severity="review",
          params={"threshold": 0.85}, message=""),
 ]

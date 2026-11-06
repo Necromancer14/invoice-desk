@@ -2,7 +2,9 @@
 
 The first 60 invoices are the original set. The ones after them check against ZATCA e-invoicing fields (Hijri dates,
 zero-rated and exempt lines, Arabic digits, QR codes in PDFs and images, UBL XML). They use their own random seed, so
-adding them leaves the original 60 as they were.
+adding them leaves the original 60 as they were. The vendor set after those (vendor master and purchase orders:
+known, blocked and unknown vendors, a changed IBAN, a VAT number that differs, an invoice above its PO) has a third
+seed. The generator also writes vendors.csv and purchase_orders.csv, which the app and the evaluation load.
 
 Everything here is invented: companies, VAT numbers and amounts. Run from the repo root:
     python tools/generate_data.py
@@ -26,6 +28,7 @@ import qrcode  # noqa: E402
 from invoice_desk import hijri, qr, ubl  # noqa: E402
 from invoice_desk.default_rules import DEFAULT_RULES  # noqa: E402
 from invoice_desk.rules import Ctx, decide, run_rules  # noqa: E402
+from invoice_desk.vendors import VendorBook, saudi_iban  # noqa: E402
 
 AS_OF = date(2026, 11, 5)
 OUT = ROOT / "data" / "samples"
@@ -69,12 +72,46 @@ ZATCA_PLAN = [
     ("xml", "en", "clean"), ("xml", "en", "simplified"), ("xml", "en", "bad_vat"), ("xml", "en", "vat_rate"),
     ("xml", "en", "qr_mismatch"), ("xml", "en", "missing_vat"),
 ]
+# vendor master and purchase orders
+VENDOR_PLAN = [("txt", "en", "vendor_ok"), ("txt", "ar", "vendor_ok"), ("xml", "en", "vendor_ok"), ("txt", "en", "vendor_fuzzy"),
+               ("txt", "en", "iban_changed"), ("xml", "en", "iban_changed"), ("txt", "ar", "blocked_vendor"),
+               ("txt", "en", "unknown_vendor"), ("txt", "en", "vendor_vat_mismatch"), ("txt", "en", "po_over"), ("txt", "ar", "po_over")]
+BLOCKED = ("Falcon Star Trading", "نجمة الصقر للتجارة")
+UNKNOWN = ("Oasis Prime Supplies", "واحة برايم للتوريدات")
+VENDORS: list[dict] = []          # filled by write_vendor_master
+POS: dict[str, dict] = {}         # PO number -> purchase order, filled as the vendor set is made
 EXTRA_LINES = {"Z": ("Export freight", "شحن تصدير", (400, 2500)), "E": ("Financial services fee", "رسوم خدمات مالية", (100, 900))}
 MARKER = {"en": {"Z": " (zero-rated)", "E": " (exempt)"}, "ar": {"Z": " (خاضع للنسبة الصفرية)", "E": " (معفاة)"}}
 
 
 def vat_for(i: int, rng: random.Random) -> str:
     return "3" + "".join(str(rng.randint(0, 9)) for _ in range(13)) + "3"
+
+
+def write_vendor_master(sellers_vat):
+    """Every seller in the samples as an approved vendor with an IBAN, plus one blocked vendor. Own seed."""
+    rng = random.Random(20261107)
+    rows = [(en, ar, sellers_vat[i], "approved") for i, (en, ar) in enumerate(SELLERS)]
+    rows.append((*BLOCKED, vat_for(0, rng), "blocked"))
+    VENDORS.clear()
+    for n, (en, ar, vat, status) in enumerate(rows, 1):
+        iban = saudi_iban(rng.choice(["10", "15", "20", "45", "55", "60", "65", "80"]), f"{rng.randint(0, 10**18 - 1):018d}")
+        VENDORS.append(dict(id=n, name_en=en, name_ar=ar, vat=vat, iban=iban, currency="SAR", status=status))
+    lines = ["name_en,name_ar,vat_number,iban,currency,status"] + [
+        f'"{v["name_en"]}","{v["name_ar"]}",{v["vat"]},{v["iban"]},{v["currency"]},{v["status"]}' for v in VENDORS]
+    (OUT / "vendors.csv").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def write_purchase_orders():
+    lines = ["po_number,vendor,amount,currency,status"] + [
+        f'{p["po_number"]},"{p["vendor_name"]}",{p["amount"]:.2f},{p["currency"]},{p["status"]}' for p in POS.values()]
+    (OUT / "purchase_orders.csv").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def ctx_for(seen_ok) -> Ctx:
+    dups = {(s["truth"]["seller_vat"], s["truth"]["invoice_number"]) for s in seen_ok}
+    return Ctx(today=AS_OF, confidence=1.0, is_duplicate=lambda vat, num, d=dups: (vat, num) in d,
+               vendors=VendorBook(VENDORS), po_for=lambda n: POS.get((n or "").strip().upper()))
 
 
 def build_truth(rng, scenario, fmt, seller_idx, seq, sellers_vat, dup_source=None):
@@ -174,6 +211,10 @@ def render_txt(t, lang, scenario, rng):
         lines.append(f"المشتري: {t['_ar']['buyer_name']}")
         if t["buyer_vat"]:
             lines.append(f"الرقم الضريبي للمشتري: {num(t['buyer_vat'])}")
+        if t.get("iban"):
+            lines.append(f"رقم الآيبان: {t['iban']}")
+        if t.get("po_number"):
+            lines.append(f"رقم أمر الشراء: {t['po_number']}")
         lines += [f"العملة: {cur_ar}", "", "البيان  الكمية  سعر الوحدة  الإجمالي", rows, "",
                   f"المجموع الفرعي: {num(money(t['subtotal']))} {cur_ar}", f"ضريبة القيمة المضافة (15%): {num(money(t['vat_amount']))} {cur_ar}",
                   f"الإجمالي شامل الضريبة: {num(money(t['total']))} {cur_ar}"]
@@ -198,6 +239,10 @@ def render_txt(t, lang, scenario, rng):
     lines.append(f"{L['buyer']}: {buyer_name}")
     if t["buyer_vat"]:
         lines.append(f"{L['bvat']}: {t['buyer_vat']}")
+    if t.get("iban"):
+        lines.append(f"IBAN: {' '.join(t['iban'][i:i + 4] for i in range(0, len(t['iban']), 4))}")
+    if t.get("po_number"):
+        lines.append(f"PO Number: {t['po_number']}")
     lines += [f"Currency: {cur}", "", "Description   Qty   Unit price   Total", rows, "",
               f"{L['sub']}: {money(t['subtotal'])} {cur}", f"{L['vat']}: {money(t['vat_amount'])} {cur}",
               f"{L['tot']}: {money(t['total'])} {cur}"]
@@ -298,8 +343,7 @@ def add_zatca_set(page, sellers_vat, answers, seen_ok):
     for fmt, lang, scenario in ZATCA_PLAN:
         n = len(answers) + 1
         truth = zatca_truth(rng, fmt, lang, scenario, 100 + n, sellers_vat)
-        dups = {(s["truth"]["seller_vat"], s["truth"]["invoice_number"]) for s in seen_ok}
-        ctx = Ctx(today=AS_OF, confidence=1.0, is_duplicate=lambda vat, num, d=dups: (vat, num) in d)
+        ctx = ctx_for(seen_ok)
         clean_truth = {k: v for k, v in truth.items() if not k.startswith("_")}
         expected = decide(run_rules(DEFAULT_RULES, clean_truth, ctx))
         sid = f"inv-{n:03d}"
@@ -321,6 +365,62 @@ def add_zatca_set(page, sellers_vat, answers, seen_ok):
             seen_ok.append(dict(scenario=scenario, truth=clean_truth, full=truth))
 
 
+def vendor_truth(rng, fmt, lang, scenario, seq, sellers_vat):
+    idx = rng.randrange(len(SELLERS))
+    t = build_truth(rng, "clean", fmt, idx, seq, sellers_vat)
+    if t["total"] > 40000:  # clear of the high-value rule, so each sample shows only its own check
+        for i in t["line_items"]:
+            i["quantity"], i["line_total"] = 1, i["unit_price"]
+        t["subtotal"] = round(sum(i["line_total"] for i in t["line_items"]), 2)
+        t["vat_amount"] = round(t["subtotal"] * 0.15, 2)
+        t["total"] = round(t["subtotal"] + t["vat_amount"], 2)
+    vendor = VENDORS[idx]
+    t["iban"], t["invoice_type"] = vendor["iban"], "standard"
+    t["po_number"] = f"PO-2026-{seq:04d}"
+    po_amount = round(t["total"] * rng.uniform(1.0, 1.25), 2)
+    if scenario == "vendor_fuzzy":  # the same company written differently; it matches after normalising
+        t["seller_name"] = vendor["name_en"].upper().replace(" CO.", "") + " LLC"
+    elif scenario == "iban_changed":
+        t["iban"] = saudi_iban("05", f"{rng.randint(0, 10**18 - 1):018d}")
+    elif scenario == "blocked_vendor":
+        b = VENDORS[-1]
+        t["seller_name"], t["_ar"]["seller_name"], t["seller_vat"], t["iban"], t["po_number"] = b["name_en"], b["name_ar"], b["vat"], b["iban"], None
+    elif scenario == "unknown_vendor":
+        t["seller_name"], t["_ar"]["seller_name"] = UNKNOWN
+        t["seller_vat"], t["iban"], t["po_number"] = vat_for(0, rng), saudi_iban("30", f"{rng.randint(0, 10**18 - 1):018d}"), None
+    elif scenario == "vendor_vat_mismatch":
+        t["seller_vat"] = vat_for(0, rng)
+    elif scenario == "po_over":
+        po_amount = round(t["total"] * rng.uniform(0.7, 0.9), 2)
+    if t["po_number"]:
+        POS[t["po_number"]] = dict(po_number=t["po_number"], vendor_id=vendor["id"], vendor_name=vendor["name_en"], amount=po_amount,
+                                   currency="SAR", status="open")
+    t["qr_payload"] = qr_for(t, lang) if t["seller_vat"] else None
+    return t
+
+
+def add_vendor_set(sellers_vat, answers, seen_ok):
+    """Vendor master and PO samples, numbered after the earlier sets, with their own random seed."""
+    rng = random.Random(20261108)
+    for fmt, lang, scenario in VENDOR_PLAN:
+        n = len(answers) + 1
+        truth = vendor_truth(rng, fmt, lang, scenario, 100 + n, sellers_vat)
+        clean_truth = {k: v for k, v in truth.items() if not k.startswith("_")}
+        results = run_rules(DEFAULT_RULES, clean_truth, ctx_for(seen_ok))
+        expected = decide(results)
+        sid = f"inv-{n:03d}"
+        fname = f"{sid}.{fmt}"
+        if fmt == "txt":
+            (OUT / fname).write_text(render_txt(truth, lang, scenario, rng), encoding="utf-8")
+        else:
+            (OUT / fname).write_text(ubl.write(clean_truth, uuid=f"00000000-0000-4000-8000-{n:012d}"), encoding="utf-8")
+        answers.append(dict(id=sid, file=fname, format=fmt, lang=lang, scenario=scenario, expected_status=expected,
+                            vision_only=False, truth=clean_truth, alt_names=dict(truth["_ar"])))
+        print(sid, scenario, expected, [r["key"] for r in results if r["status"] == "fail" and r["severity"] != "info"])
+        if expected == "approved":
+            seen_ok.append(dict(scenario=scenario, truth=clean_truth, full=truth))
+
+
 def main():
     from playwright.sync_api import sync_playwright
 
@@ -329,6 +429,8 @@ def main():
     for f in OUT.glob("*"):
         f.unlink()
     sellers_vat = [vat_for(i, rng) for i in range(len(SELLERS))]
+    write_vendor_master(sellers_vat)
+    POS.clear()
     plan = list(PLAN)
     rng.shuffle(plan)
     # a duplicate needs an earlier clean invoice to copy, so move the first clean one to the front
@@ -345,8 +447,7 @@ def main():
             truth = build_truth(rng, scenario, fmt, rng.randrange(len(SELLERS)), 100 + n, sellers_vat, dup_source)
             if fmt in ("pdf", "png"):
                 truth["qr_payload"] = qr_for(truth, lang)
-            dups = {(s["truth"]["seller_vat"], s["truth"]["invoice_number"]) for s in seen_ok}
-            ctx = Ctx(today=AS_OF, confidence=1.0, is_duplicate=lambda vat, num, d=dups: (vat, num) in d)
+            ctx = ctx_for(seen_ok)
             clean_truth = {k: v for k, v in truth.items() if not k.startswith("_")}
             expected = decide(run_rules(DEFAULT_RULES, clean_truth, ctx))
             sid = f"inv-{n:03d}"
@@ -366,7 +467,9 @@ def main():
             if expected == "approved":
                 seen_ok.append(dict(scenario=scenario, truth=clean_truth, full=truth))
         add_zatca_set(page, sellers_vat, answers, seen_ok)
+        add_vendor_set(sellers_vat, answers, seen_ok)
         browser.close()
+    write_purchase_orders()
     (OUT / "answers.json").write_text(json.dumps({"as_of": AS_OF.isoformat(), "invoices": answers}, indent=1, ensure_ascii=False), encoding="utf-8")
     from collections import Counter
     print(len(answers), "invoices", dict(Counter(a["expected_status"] for a in answers)), dict(Counter(a["format"] for a in answers)))

@@ -5,6 +5,7 @@ import csv
 import io
 import re
 import time
+from pathlib import Path
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
@@ -18,6 +19,9 @@ from .rules import RULE_TYPES, Ctx, decide, run_rules, validate_rule
 from .schema import FIELDS, NUMERIC, SCALARS, empty_fields
 from .textnorm import number_key, parse_date, to_number, vat_key
 from .ubl import UblExtractor, XmlError, check_safe, looks_like_xml
+from .vendors import VendorBook, clean_po, clean_vendor, name_key, po_match, read_csv
+
+SAMPLES_DIR = Path(__file__).resolve().parents[2] / "data" / "samples"
 
 MAX_BYTES = 5 * 1024 * 1024
 XML = "application/xml"
@@ -77,14 +81,19 @@ class DeskError(Exception):
 
 class Desk:
     def __init__(self, db_path: str = ":memory:", today: date | None = None, sync: bool = False, workers: int = 2,
-                 extractor_factory=None):
+                 extractor_factory=None, seed_vendors: bool = False):
+        """seed_vendors: fill a new database (and every reset) with the demo vendors and purchase orders from
+        data/samples. The app and the evaluation do; tests start with an empty vendor master."""
         self.db = DB(db_path)
         self.today = today
         self.sync = sync
         self.pool = None if sync else ThreadPoolExecutor(max_workers=workers)
         self.extractor_factory = extractor_factory or self._default_factory
-        if not self.db.one("SELECT key FROM rules LIMIT 1"):
+        self.seed_vendors = seed_vendors
+        if not self.db.one("SELECT key FROM rules LIMIT 1"):  # a new database: an existing one keeps its rules and vendors
             self._seed_rules()
+            if seed_vendors:
+                self._seed_vendor_data()
 
     # ---------------------------------------------------------------- helpers
     def _today(self) -> date:
@@ -252,7 +261,141 @@ class Desk:
         return check
 
     def _ctx(self, run_id: int | None, confidence: float) -> Ctx:
-        return Ctx(today=self._today(), confidence=confidence, is_duplicate=self._dup_checker(run_id))
+        return Ctx(today=self._today(), confidence=confidence, is_duplicate=self._dup_checker(run_id),
+                   vendors=self.vendor_book(), po_for=self.po_by_number)
+
+    # ------------------------------------------------------- vendors and purchase orders
+    def vendor_book(self) -> VendorBook:
+        return VendorBook(self.db.all("SELECT * FROM vendors"), self.db.all("SELECT vendor_id, alias FROM vendor_aliases"))
+
+    def list_vendors(self) -> list[dict]:
+        rows = self.db.all("SELECT * FROM vendors ORDER BY COALESCE(name_en, name_ar)")
+        links = {r["vendor_id"]: r["n"] for r in self.db.all("SELECT vendor_id, COUNT(*) n FROM vendor_aliases GROUP BY vendor_id")}
+        return [dict(r, linked_names=links.get(r["id"], 0)) for r in rows]
+
+    def save_vendor(self, data: dict, actor: str, vendor_id: int | None = None) -> dict:
+        v, errors = clean_vendor(data)
+        if errors:
+            raise DeskError("; ".join(errors))
+        if v["vat"]:
+            same = self.db.one("SELECT id FROM vendors WHERE vat=? AND id IS NOT ?", (v["vat"], vendor_id))
+            if same:
+                raise DeskError(f"another vendor already has VAT number {v['vat']}")
+        t = now()
+        if vendor_id is None:
+            cur = self.db.run("INSERT INTO vendors(name_en,name_ar,vat,iban,currency,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)",
+                              (v["name_en"], v["name_ar"], v["vat"], v["iban"], v["currency"], v["status"], t, t))
+            vendor_id = cur.lastrowid
+            self.audit(actor, "vendor.create", str(vendor_id), v["name_en"] or v["name_ar"])
+        else:
+            old = self.db.one("SELECT * FROM vendors WHERE id=?", (vendor_id,))
+            if not old:
+                raise DeskError("vendor not found", 404)
+            self.db.run("UPDATE vendors SET name_en=?,name_ar=?,vat=?,iban=?,currency=?,status=?,updated_at=? WHERE id=?",
+                        (v["name_en"], v["name_ar"], v["vat"], v["iban"], v["currency"], v["status"], t, vendor_id))
+            changed = [k for k in ("name_en", "name_ar", "vat", "iban", "currency", "status") if old[k] != v[k]]
+            self.audit(actor, "vendor.update", str(vendor_id), ", ".join(changed) or "no change")
+        return self.db.one("SELECT * FROM vendors WHERE id=?", (vendor_id,))
+
+    def delete_vendor(self, vendor_id: int, actor: str) -> None:
+        old = self.db.one("SELECT * FROM vendors WHERE id=?", (vendor_id,))
+        if not old:
+            raise DeskError("vendor not found", 404)
+        self.db.run("DELETE FROM vendor_aliases WHERE vendor_id=?", (vendor_id,))
+        self.db.run("UPDATE purchase_orders SET vendor_id=NULL WHERE vendor_id=?", (vendor_id,))
+        self.db.run("DELETE FROM vendors WHERE id=?", (vendor_id,))
+        self.audit(actor, "vendor.delete", str(vendor_id), old["name_en"] or old["name_ar"])
+
+    def import_vendors(self, text: str, actor: str) -> dict:
+        """Add or update vendors from CSV (name_en, name_ar, vat_number, iban, currency, status). A row with the VAT
+        number of an existing vendor updates it; otherwise one with the same English name does; otherwise it is added."""
+        added = updated = 0
+        errors = []
+        for n, row in enumerate(read_csv(text), 2):
+            v, problems = clean_vendor(row)
+            if problems:
+                errors.append(dict(row=n, message="; ".join(problems)))
+                continue
+            old = (self.db.one("SELECT id FROM vendors WHERE vat=?", (v["vat"],)) if v["vat"] else None) or \
+                (self.db.one("SELECT id FROM vendors WHERE name_en=?", (v["name_en"],)) if v["name_en"] else None)
+            try:
+                self.save_vendor(v, actor, old["id"] if old else None)
+            except DeskError as exc:
+                errors.append(dict(row=n, message=str(exc)))
+                continue
+            updated += bool(old)
+            added += not old
+        self.audit(actor, "vendor.import", "", f"{added} added, {updated} updated, {len(errors)} rows with errors")
+        return dict(added=added, updated=updated, errors=errors[:50], error_count=len(errors))
+
+    def list_pos(self) -> list[dict]:
+        return self.db.all("SELECT * FROM purchase_orders ORDER BY po_number")
+
+    def po_by_number(self, number: str) -> dict | None:
+        return self.db.one("SELECT * FROM purchase_orders WHERE po_number=? COLLATE NOCASE", ((number or "").strip(),))
+
+    def import_pos(self, text: str, actor: str) -> dict:
+        """Add or update purchase orders from CSV (po_number, vendor, amount, currency, status), keyed by PO number.
+        The vendor column is matched to the vendor master by name or VAT number, the same way invoices are."""
+        book = self.vendor_book()
+        added = updated = 0
+        errors = []
+        for n, row in enumerate(read_csv(text), 2):
+            po, problems = clean_po(row)
+            if problems:
+                errors.append(dict(row=n, message="; ".join(problems)))
+                continue
+            who = po["vendor_name"] or ""
+            m = book.match({"seller_name": who, "seller_vat": who if re.fullmatch(r"\s*3\d{13}3\s*", who) else None}) if book and who else None
+            vendor = m["vendor"] if m else None
+            old = self.po_by_number(po["po_number"])
+            if old:
+                self.db.run("UPDATE purchase_orders SET vendor_id=?,vendor_name=?,amount=?,currency=?,status=? WHERE id=?",
+                            (vendor["id"] if vendor else None, po["vendor_name"], po["amount"], po["currency"], po["status"], old["id"]))
+                updated += 1
+            else:
+                self.db.run("INSERT INTO purchase_orders(po_number,vendor_id,vendor_name,amount,currency,status,created_at) VALUES(?,?,?,?,?,?,?)",
+                            (po["po_number"], vendor["id"] if vendor else None, po["vendor_name"], po["amount"], po["currency"], po["status"], now()))
+                added += 1
+        self.audit(actor, "po.import", "", f"{added} added, {updated} updated, {len(errors)} rows with errors")
+        return dict(added=added, updated=updated, errors=errors[:50], error_count=len(errors))
+
+    def delete_po(self, po_id: int, actor: str) -> None:
+        old = self.db.one("SELECT * FROM purchase_orders WHERE id=?", (po_id,))
+        if not old:
+            raise DeskError("purchase order not found", 404)
+        self.db.run("DELETE FROM purchase_orders WHERE id=?", (po_id,))
+        self.audit(actor, "po.delete", str(po_id), old["po_number"])
+
+    def link_vendor(self, rid: int, vendor_id: int, actor: str) -> dict:
+        """Remember the run's seller name as a name of this vendor, then check the run again with that knowledge."""
+        r = self.db.one("SELECT * FROM runs WHERE id=?", (rid,))
+        if not r:
+            raise DeskError("run not found", 404)
+        vendor = self.db.one("SELECT * FROM vendors WHERE id=?", (vendor_id,))
+        if not vendor:
+            raise DeskError("vendor not found", 404)
+        fields = self._current_fields(r) or {}
+        name = (fields.get("seller_name") or "").strip()
+        key = name_key(name)
+        if not key:
+            raise DeskError("this invoice has no seller name to link")
+        self.db.run("INSERT INTO vendor_aliases(vendor_id,alias,key,created_by,created_at) VALUES(?,?,?,?,?) "
+                    "ON CONFLICT(key) DO UPDATE SET vendor_id=excluded.vendor_id, alias=excluded.alias, created_by=excluded.created_by",
+                    (vendor_id, name[:150], key, actor, now()))
+        self.audit(actor, "vendor.link", str(rid), f'"{name}" is {vendor["name_en"] or vendor["name_ar"]}')
+        if r["status"] == "needs_review":  # the decision stays with the reviewer; only the checks are refreshed
+            conf = (loads(r["extraction"], {}) or {}).get("confidence", 1.0)
+            results = run_rules(self.rules(), fields, self._ctx(rid, 1.0 if r["edited"] else conf))
+            self.db.run("UPDATE runs SET results=?, updated_at=? WHERE id=?", (dumps(results), now(), rid))
+        return self.get_run(rid)
+
+    def _seed_vendor_data(self) -> None:
+        """The demo vendors and purchase orders that the sample invoices refer to."""
+        for name, fn in (("vendors.csv", self.import_vendors), ("purchase_orders.csv", self.import_pos)):
+            path = SAMPLES_DIR / name
+            if path.exists():
+                fn(path.read_text(encoding="utf-8"), "system")
 
     def simulate(self, candidate: list[dict] | None = None, limit: int = 300, rule: dict | None = None) -> dict:
         """Dry run: what would change if these rules had been in force for past runs? Nothing is written."""
@@ -413,7 +556,21 @@ class Desk:
         r = self.db.one("SELECT * FROM runs WHERE id=?", (rid,))
         if not r:
             raise DeskError("run not found", 404)
-        return self._run_view(r, True)
+        out = self._run_view(r, True)
+        fields = out.get("fields") or {}
+        book = self.vendor_book()
+        if book and (fields.get("seller_name") or fields.get("seller_vat")):
+            vm = book.match(fields)
+            out["vendor_match"] = dict(vm, vendor={k: vm["vendor"][k] for k in ("id", "name_en", "name_ar", "vat", "iban", "currency", "status")}
+                                       if vm["vendor"] else None)
+        else:
+            out["vendor_match"] = None
+        po_rule = next((x for x in self.rules() if x["type"] == "po_amount" and x["enabled"]), None)
+        params = (po_rule or {}).get("params") or {}
+        number = (fields.get("po_number") or "").strip()
+        out["po_match"] = po_match(fields, self.po_by_number(number) if number else None,
+                                   (out["vendor_match"] or {}).get("vendor"), float(params.get("tolerance", 0.01)), params.get("field", "total"))
+        return out
 
     def get_blob(self, rid: int) -> tuple[bytes, str, str]:
         r = self.db.one("SELECT blob,content_type,filename FROM runs WHERE id=?", (rid,))
@@ -449,7 +606,8 @@ class Desk:
             results = loads(r["results"], [])
             out.append(dict(id=r["id"], filename=r["filename"], created_at=r["created_at"], seller=f.get("seller_name"),
                             invoice_number=f.get("invoice_number"), total=f.get("total"), currency=f.get("currency"),
-                            failed_checks=sum(1 for x in results if x["status"] == "fail" and x["severity"] == "review")))
+                            failed_checks=sum(1 for x in results if x["status"] == "fail" and x["severity"] == "review"),
+                            high_risk=any(x["status"] == "fail" and x.get("risk") == "high" for x in results)))
         return out
 
     # ----------------------------------------------------------------- review
@@ -588,6 +746,10 @@ class Desk:
             self.db.conn.commit()
         if not keep_rules:
             self._seed_rules()
+        if self.seed_vendors:  # the demo's vendor master and POs go back to how they started
+            for table in ("vendor_aliases", "purchase_orders", "vendors"):
+                self.db.run(f"DELETE FROM {table}")
+            self._seed_vendor_data()
         self.audit(actor, "demo.reset")
 
     def wait_idle(self, timeout: float = 30) -> None:
