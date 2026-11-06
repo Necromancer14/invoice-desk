@@ -1,6 +1,7 @@
 """Normalising text, numbers and dates from English and Arabic invoices."""
 from __future__ import annotations
 
+import math
 import re
 from datetime import date
 
@@ -14,12 +15,27 @@ def normalize(text: str) -> str:
     return text.replace("٫", ".").replace("٬", ",").replace("،", ",")
 
 
+def vat_key(value) -> str:
+    """A VAT number as digits only: Arabic-Indic digits converted, spaces and separators dropped."""
+    return re.sub(r"[\s\-.]", "", normalize(str(value or "")))
+
+
+def number_key(value) -> str:
+    """An invoice number for comparing: digits normalised, spaces collapsed, case ignored."""
+    return re.sub(r"\s+", " ", normalize(str(value or ""))).strip().casefold()
+
+
 def to_number(value) -> float | None:
+    """A number from text such as "SAR 1,150.00", "١٬١٥٠٫٠٠" or "(100.00)" (accounting negative).
+    Infinite and not-a-number values count as missing."""
     if value is None or isinstance(value, bool):
         return None
     if isinstance(value, (int, float)):
-        return float(value)
-    t = re.sub(r"[^\d.,\-]", "", normalize(str(value)))
+        return float(value) if math.isfinite(value) else None
+    text = normalize(str(value)).strip()
+    # the whole amount in brackets, a currency code around it allowed: "(100.00)", "SAR (1,150.00)", not "150.00 (15%)"
+    negative = bool(re.fullmatch(r"[^\d()]*\(\s*[\d.,\s]*\d[\d.,\s]*\)[^\d()]*", text))
+    t = re.sub(r"[^\d.,\-]", "", text)
     t = t.strip(".,")
     if not re.search(r"\d", t):
         return None
@@ -28,9 +44,12 @@ def to_number(value) -> float | None:
     elif "," in t:
         t = t.replace(",", "") if re.fullmatch(r"-?\d{1,3}(,\d{3})+", t) else t.replace(",", ".")
     try:
-        return float(t)
+        n = float(t)
     except ValueError:
         return None
+    if not math.isfinite(n):
+        return None
+    return -abs(n) if negative else n
 
 
 _ISO = re.compile(r"(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})")

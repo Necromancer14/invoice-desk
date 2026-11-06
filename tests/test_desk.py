@@ -1,5 +1,6 @@
 import pytest
 
+from invoice_desk.default_rules import DEFAULT_RULES
 from invoice_desk.desk import Desk, DeskError
 from invoice_desk.extractors import Extraction
 from invoice_desk.schema import empty_fields
@@ -137,7 +138,7 @@ def test_simulate_shows_impact_without_changing_anything(desk, good):
     before = desk.rules_version()
     sim = desk.simulate(rule=dict(name="Tiny limit", type="amount_limit", severity="reject", params={"field": "total", "max": 100}))
     assert sim["changed_count"] == 1 and sim["changed"][0]["before"] == "approved" and sim["changed"][0]["after"] == "rejected"
-    assert desk.rules_version() == before and len(desk.rules()) == 13
+    assert desk.rules_version() == before and len(desk.rules()) == len(DEFAULT_RULES)
 
 
 def test_auto_approve_switch(desk, good):
@@ -158,4 +159,4 @@ def test_stats_export_reset(desk, good):
     assert s["total"] == 2 and s["by_status"]["approved"] == 1 and s["review_queue"] == 1 and s["auto_approve_rate"] == 0.5
     assert "ACM-2026-0001" in desk.export_csv() and desk.export_csv().count("\n") == 2
     desk.reset("a")
-    assert desk.stats()["total"] == 0 and len(desk.rules()) == 13
+    assert desk.stats()["total"] == 0 and len(desk.rules()) == len(DEFAULT_RULES)

@@ -130,7 +130,25 @@ def waking_screen(page: Page) -> None:
     check("Try again reaches sign-in once the server is up", page.locator(".roles").is_visible())
 
 
-CHECKS = [mixed_direction, review_badge, waking_screen]
+def rule_with_open_limit(page: Page) -> None:
+    """The new 'Total is not negative' rule has no upper limit: the editor shows that as an empty box and saves it."""
+    sign_in(page)
+    api(page, "POST", "/admin/reset", {})
+    page.evaluate("location.hash = '#/rules'")
+    card = page.locator(".rulecard", has_text="Total is not negative")
+    expect(card).to_be_visible()
+    card.get_by_role("button", name="Edit").click()
+    boxes = page.locator(".modal input[type=number]")
+    values = [boxes.nth(i).input_value() for i in range(boxes.count())]
+    check("min shows 0 and max shows empty, not 'null'", values == ["0", ""], str(values))
+    page.get_by_role("button", name="Save rule").click()
+    expect(page.locator(".modal")).to_have_count(0)
+    saved = api(page, "GET", "/rules")["body"]["rules"]
+    rule = next(r for r in saved if r["key"] == "total-not-negative")
+    check("saving keeps the open upper limit", rule["params"].get("max") is None and rule["params"].get("min") == 0, str(rule["params"]))
+
+
+CHECKS = [mixed_direction, review_badge, waking_screen, rule_with_open_limit]
 
 if __name__ == "__main__":
     with sync_playwright() as pw:

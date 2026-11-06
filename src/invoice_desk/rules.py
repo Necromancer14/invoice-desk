@@ -17,7 +17,7 @@ from typing import Callable
 
 from . import qr
 from .schema import FIELDS, NUMERIC, SCALARS, missing
-from .textnorm import parse_date, to_number
+from .textnorm import parse_date, to_number, vat_key
 
 SEVERITIES = ("reject", "review", "info")
 
@@ -56,9 +56,10 @@ def r_regex(p, f, ctx):
 def r_vat_number(p, f, ctx):
     name = p.get("field", "seller_vat")
     v = f.get(name)
-    if v in (None, ""):
+    if v is None or not str(v).strip():
         return ("pass", "not provided") if p.get("optional") else ("skip", f"{name} is empty")
-    ok = re.fullmatch(r"3\d{13}3", str(v)) is not None
+    # printed VAT numbers can be grouped ("300 000 000 000 003") or in Arabic-Indic digits; the number is the same
+    ok = re.fullmatch(r"3[0-9]{13}3", vat_key(v)) is not None
     return ("pass", "valid format") if ok else ("fail", f"{name} '{v}' must be 15 digits starting and ending with 3")
 
 
@@ -123,10 +124,10 @@ def r_date_order(p, f, ctx):
 
 def r_currency(p, f, ctx):
     allowed = [str(x).upper() for x in p.get("allowed", ["SAR"])]
-    v = f.get("currency")
+    v = str(f.get("currency") or "").strip()
     if not v:
         return "skip", "currency missing"
-    return ("pass", str(v)) if str(v).upper() in allowed else ("fail", f"currency {v} not in {', '.join(allowed)}")
+    return ("pass", v) if v.upper() in allowed else ("fail", f"currency {v} not in {', '.join(allowed)}")
 
 
 def r_amount_limit(p, f, ctx):
@@ -134,8 +135,12 @@ def r_amount_limit(p, f, ctx):
     v = _f(f, name)
     if v is None:
         return "skip", f"{name} missing"
-    mx = float(p.get("max", 50000))
-    return ("pass", f"{v:.2f} within limit") if v <= mx else ("fail", f"{name} {v:.2f} exceeds {mx:,.0f}")
+    mx, mn = p.get("max", 50000), p.get("min")
+    if mn not in (None, "") and v < float(mn):
+        return "fail", f"{name} {v:.2f} is below {float(mn):,.0f}"
+    if mx not in (None, "") and v > float(mx):
+        return "fail", f"{name} {v:.2f} exceeds {float(mx):,.0f}"
+    return "pass", f"{v:.2f} within limit"
 
 
 def r_qr_match(p, f, ctx):
@@ -146,7 +151,7 @@ def r_qr_match(p, f, ctx):
     if not q:
         return "fail", "QR payload is not valid TLV base64"
     problems = []
-    if q.get("seller_vat") != str(f.get("seller_vat") or ""):
+    if vat_key(q.get("seller_vat")) != vat_key(f.get("seller_vat")):
         problems.append(f"QR VAT {q.get('seller_vat')} vs printed {f.get('seller_vat')}")
     for key, name in (("total", "total"), ("vat_amount", "vat_amount")):
         a, b = to_number(q.get(key)), _f(f, name)
@@ -297,8 +302,10 @@ RULE_TYPES: dict[str, dict] = {
                        params=[dict(name="first", kind="field", default="issue_date"), dict(name="second", kind="field", default="due_date")]),
     "currency": dict(fn=r_currency, label="Allowed currencies", description="Currency must be one of the listed codes.",
                      params=[dict(name="allowed", kind="list", default=["SAR"])]),
-    "amount_limit": dict(fn=r_amount_limit, label="Amount limit", description="A numeric field must not exceed a maximum.",
-                         params=[dict(name="field", kind="field", default="total"), dict(name="max", kind="number", default=50000)]),
+    "amount_limit": dict(fn=r_amount_limit, label="Amount limit", description="A numeric field must stay at or above a minimum and at or below a maximum.",
+                         params=[dict(name="field", kind="field", default="total"),
+                                 dict(name="min", kind="number", default=None, optional=True, help="leave empty for no lower limit"),
+                                 dict(name="max", kind="number", default=50000, optional=True, help="leave empty for no upper limit")]),
     "qr_match": dict(fn=r_qr_match, label="QR code agrees", description="The QR payload must match the printed VAT number, total and VAT.",
                      params=[dict(name="required", kind="bool", default=False)]),
     "duplicate": dict(fn=r_duplicate, label="Duplicate invoice", description="The same seller VAT number and invoice number must not be received twice.", params=[]),
@@ -323,8 +330,11 @@ def validate_rule(rule: dict) -> None:
         if spec["kind"] == "field" and p.get(spec["name"], spec["default"]) not in FIELDS:
             raise ValueError(f"{spec['name']} must be one of: {', '.join(FIELDS)}")
         if spec["kind"] == "number":
+            value = p.get(spec["name"], spec["default"])
+            if spec.get("optional") and value in (None, ""):
+                continue
             try:
-                float(p.get(spec["name"], spec["default"]))
+                float(value)
             except (TypeError, ValueError):
                 raise ValueError(f"{spec['name']} must be a number") from None
         if spec["kind"] == "list" and not isinstance(p.get(spec["name"], spec["default"]), list):

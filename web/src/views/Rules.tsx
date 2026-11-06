@@ -134,7 +134,7 @@ function Editor({ types, rule, admin, onClose, onSaved }: { types: RuleTypes; ru
           ) : (
             <label className="f">{t(paramLabel(p.name))}{p.help && <span className="hint"> · {t(p.help)}</span>}
               {p.kind === "field" ? <select disabled={dis} value={String(val(p))} onChange={(e) => setParam(p, e.target.value)}>{types.fields.map((f) => <option key={f} value={f}>{fieldName(f)}</option>)}</select>
-                : p.kind === "number" ? <input type="number" dir="ltr" step="any" disabled={dis} value={String(val(p))} onChange={(e) => setParam(p, e.target.value === "" ? "" : Number(e.target.value))} />
+                : p.kind === "number" ? <input type="number" dir="ltr" step="any" disabled={dis} value={val(p) == null ? "" : String(val(p))} onChange={(e) => setParam(p, e.target.value === "" ? null : Number(e.target.value))} />
                 : p.kind === "list" ? <input type="text" dir="ltr" disabled={dis} value={(val(p) as string[]).join(", ")} onChange={(e) => setParam(p, e.target.value.split(",").map((s) => s.trim()).filter(Boolean))} />
                 : r.type === "expression" ? <textarea dir="ltr" disabled={dis} value={String(val(p))} onChange={(e) => setParam(p, e.target.value)} />
                 : <input type="text" dir="ltr" disabled={dis} value={String(val(p))} onChange={(e) => setParam(p, e.target.value)} />}

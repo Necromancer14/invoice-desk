@@ -273,7 +273,6 @@
   "Allowed currencies": "العملات المسموح بها",
   "Currency must be one of the listed codes.": "يجب أن تكون العملة أحد الرموز المدرجة.",
   "Amount limit": "حد المبلغ",
-  "A numeric field must not exceed a maximum.": "يجب ألا يتجاوز الحقل الرقمي حدًا أقصى.",
   "QR code agrees": "تطابق رمز الاستجابة السريعة",
   "The QR payload must match the printed VAT number, total and VAT.": "يجب أن تطابق بيانات رمز الاستجابة السريعة الرقمَ الضريبي والمبلغ الإجمالي ومبلغ الضريبة المطبوعة.",
   "Duplicate invoice": "فاتورة مكررة",
@@ -396,5 +395,10 @@
   "Waiting for {n} seconds": {"zero": "بدأ الانتظار", "one": "الانتظار منذ ثانية واحدة", "two": "الانتظار منذ ثانيتين", "few": "الانتظار منذ {n} ثوانٍ", "many": "الانتظار منذ {n} ثانية", "other": "الانتظار منذ {n} ثانية"},
   "The demo did not wake up": "لم يبدأ العرض التجريبي",
   "The server has not answered for 90 seconds. It may be down, or your connection may be offline.": "لم يستجب الخادم منذ 90 ثانية. قد يكون متوقفًا، أو قد يكون اتصالك بالإنترنت مقطوعًا.",
-  "Try again": "إعادة المحاولة"
+  "Try again": "إعادة المحاولة",
+  "A numeric field must stay at or above a minimum and at or below a maximum.": "يجب أن يبقى الحقل الرقمي بين حد أدنى وحد أقصى.",
+  "leave empty for no lower limit": "اتركه فارغًا إن لم يكن هناك حد أدنى",
+  "leave empty for no upper limit": "اتركه فارغًا إن لم يكن هناك حد أقصى",
+  "min": "أدنى قيمة",
+  "Total is not negative": "المبلغ الإجمالي ليس سالبًا"
 }

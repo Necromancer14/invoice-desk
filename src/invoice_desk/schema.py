@@ -1,6 +1,8 @@
 """The fields the desk extracts from an invoice, in one place."""
 from __future__ import annotations
 
+import math
+
 SCALARS = ["invoice_number", "issue_date", "due_date", "seller_name", "seller_vat", "buyer_name",
            "buyer_vat", "currency", "subtotal", "vat_amount", "total", "qr_payload"]
 NUMERIC = {"subtotal", "vat_amount", "total"}
@@ -56,4 +58,7 @@ def empty_fields() -> dict:
 
 
 def missing(fields: dict, names=REQUIRED) -> list[str]:
-    return [n for n in names if fields.get(n) in (None, "")]
+    """Fields with no value. Text made only of spaces, and an infinite or not-a-number amount, count as no value."""
+    def empty(v):
+        return v is None or (isinstance(v, str) and not v.strip()) or (isinstance(v, float) and not math.isfinite(v))
+    return [n for n in names if empty(fields.get(n))]

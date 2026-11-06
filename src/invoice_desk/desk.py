@@ -15,7 +15,7 @@ from .extractors import Extraction, NeedsVision, RuleBasedExtractor, guess_type
 from .providers import ProviderError, build_extractor
 from .rules import RULE_TYPES, Ctx, decide, run_rules, validate_rule
 from .schema import FIELDS, NUMERIC, SCALARS, empty_fields
-from .textnorm import parse_date, to_number
+from .textnorm import number_key, parse_date, to_number, vat_key
 
 MAX_BYTES = 5 * 1024 * 1024
 ALLOWED_TYPES = {"text/plain", "application/pdf", "image/png", "image/jpeg", "image/webp", "image/gif"}
@@ -188,13 +188,15 @@ class Desk:
 
     def _dup_checker(self, run_id: int | None):
         def check(vat: str, number: str) -> bool:
-            if not vat or not number:
+            # compared after normalising: Arabic-Indic digits, spaces, letter case
+            want = (vat_key(vat), number_key(number))
+            if not all(want):
                 return False
             rows = self.db.all("SELECT fields, final_fields FROM runs WHERE (? IS NULL OR id < ?) AND status NOT IN "
                                "('rejected','rejected_human','failed','queued')", (run_id, run_id))
             for r in rows:
                 f = loads(r["final_fields"]) or loads(r["fields"], {}) or {}
-                if str(f.get("seller_vat")) == vat and str(f.get("invoice_number")) == number:
+                if (vat_key(f.get("seller_vat")), number_key(f.get("invoice_number"))) == want:
                     return True
             return False
         return check

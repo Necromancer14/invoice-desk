@@ -18,19 +18,20 @@ export const SERVER_TEXT = [
   tk("Date is valid"), tk("A real date, optionally not in the future and not too old."),
   tk("Date order"), tk("The first date must not be after the second."),
   tk("Allowed currencies"), tk("Currency must be one of the listed codes."),
-  tk("Amount limit"), tk("A numeric field must not exceed a maximum."),
+  tk("Amount limit"), tk("A numeric field must stay at or above a minimum and at or below a maximum."),
+  tk("leave empty for no lower limit"), tk("leave empty for no upper limit"),
   tk("QR code agrees"), tk("The QR payload must match the printed VAT number, total and VAT."),
   tk("Duplicate invoice"), tk("The same seller VAT number and invoice number must not be received twice."),
   tk("Extraction confidence"), tk("Overall confidence of the extraction must reach a threshold."),
   tk("Custom expression"), tk("Write your own condition. It must be true for the invoice to pass."),
   tk("fields"), tk("field"), tk("pattern"), tk("optional"), tk("rate"), tk("tolerance"), tk("not future"), tk("max age days"),
-  tk("first"), tk("second"), tk("allowed"), tk("max"), tk("required"), tk("threshold"), tk("expr"),
+  tk("first"), tk("second"), tk("allowed"), tk("min"), tk("max"), tk("required"), tk("threshold"), tk("expr"),
 
   // the default rule set's names (an admin can rename them; renamed rules show as typed)
   tk("Required fields present"), tk("Seller VAT number format"), tk("Buyer VAT number format"), tk("VAT is 15% of subtotal"),
   tk("Line quantity times price"), tk("Issue date is real and not in the future"), tk("Due date is not before issue date"),
   tk("Currency is SAR"), tk("Total above 50,000 needs a second look"), tk("QR code agrees with printed values"),
-  tk("Not a duplicate"), tk("Extraction confidence is high enough"),
+  tk("Not a duplicate"), tk("Extraction confidence is high enough"), tk("Total is not negative"),
 
   // AI providers
   tk("Ollama (on this computer)"),
