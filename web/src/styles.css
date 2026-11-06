@@ -271,6 +271,9 @@ th[aria-sort] { color: var(--ink); }
 .run-side .panel { padding: var(--s4) var(--s5); }
 .why h2 { margin-bottom: var(--s1); }
 .lines { margin-top: var(--s4); border: 1px solid var(--line); border-radius: var(--r-md); }
+.lines th, .lines td { padding: 6px 8px; font-size: var(--t-sm); }
+.lines td.n { white-space: nowrap; }
+.lines:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 @container (max-width: 460px) { .fieldgrid { grid-template-columns: 1fr; } }
 /* the decision stays in view while the reviewer scrolls through fields and evidence */
 .decide { position: sticky; bottom: var(--s3); z-index: 3; display: flex; flex-direction: column; gap: var(--s2); padding: var(--s3) var(--s4); background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--r-lg); box-shadow: var(--sh-2); }
