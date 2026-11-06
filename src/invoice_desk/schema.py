@@ -35,6 +35,8 @@ INVOICE_SCHEMA = {
                     "quantity": {"type": ["number", "null"]},
                     "unit_price": {"type": ["number", "null"]},
                     "line_total": {"type": ["number", "null"]},
+                    "vat_category": {"type": ["string", "null"],
+                                     "description": "S standard rate, Z zero-rated, E exempt, O out of scope. Null if not shown."},
                 },
                 "required": ["description"],
             },

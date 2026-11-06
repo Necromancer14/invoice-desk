@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, fileBlobUrl } from "../api";
 import type { Fields, RunDetail as Run } from "../types";
-import { CheckMark, Err, FIELD_LABEL, StatusPill, can, money, num, pct, useApp, when } from "../common";
+import { CheckMark, Err, FIELD_LABEL, StatusPill, can, money, num, pct, tk, useApp, when } from "../common";
 
 /** ltr: codes, dates and amounts, typed and shown left-to-right even in Arabic. Labels come from FIELD_LABEL. */
 const EDIT_FIELDS: { key: keyof Fields; type?: "number" | "date"; wide?: boolean; ltr?: boolean }[] = [
@@ -11,6 +11,9 @@ const EDIT_FIELDS: { key: keyof Fields; type?: "number" | "date"; wide?: boolean
   { key: "currency", ltr: true }, { key: "subtotal", type: "number", ltr: true }, { key: "vat_amount", type: "number", ltr: true },
   { key: "total", type: "number", ltr: true },
 ];
+
+/** UBL tax category of a line. Lines without one are standard-rated. */
+const VAT_CATEGORY = { S: tk("Standard rate"), Z: tk("Zero-rated"), E: tk("Exempt"), O: tk("Out of scope") };
 
 export function Document({ run }: { run: Run }) {
   const { t } = useApp();
@@ -122,8 +125,8 @@ export function ReviewForm({ run, onDone }: { run: Run; onDone: (r: Run) => void
         })}
       </div>
       {base.line_items && base.line_items.length > 0 && (
-        <div className="tw"><table><thead><tr><th>{t("Item")}</th><th className="n">{t("Qty")}</th><th className="n">{t("Unit price")}</th><th className="n">{t("Line total")}</th></tr></thead>
-          <tbody>{base.line_items.map((l, i) => <tr key={i}><td>{l.description}</td><td className="n">{l.quantity == null ? "–" : num(l.quantity, Number.isInteger(l.quantity) ? 0 : 2)}</td><td className="n">{money(l.unit_price)}</td><td className="n">{money(l.line_total)}</td></tr>)}</tbody></table></div>
+        <div className="tw"><table><thead><tr><th>{t("Item")}</th><th className="n">{t("Qty")}</th><th className="n">{t("Unit price")}</th><th className="n">{t("Line total")}</th><th>{t("VAT")}</th></tr></thead>
+          <tbody>{base.line_items.map((l, i) => <tr key={i}><td>{l.description}</td><td className="n">{l.quantity == null ? "–" : num(l.quantity, Number.isInteger(l.quantity) ? 0 : 2)}</td><td className="n">{money(l.unit_price)}</td><td className="n">{money(l.line_total)}</td><td className="small">{t(VAT_CATEGORY[l.vat_category || "S"])}</td></tr>)}</tbody></table></div>
       )}
       <label className="f">{t("Note")} {" "}<span className="hint">{t("(required when rejecting)")}</span>
         <textarea id="reject-note" dir="auto" value={note} onChange={(e) => setNote(e.target.value)} disabled={!canAct} />

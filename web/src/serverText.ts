@@ -12,7 +12,7 @@ export const SERVER_TEXT = [
   tk("Required fields"), tk("Every listed field must have a value."), tk("Field names"),
   tk("Field matches a pattern"), tk("A field must fully match a regular expression."),
   tk("VAT number format"), tk("15 digits, starting and ending with 3."),
-  tk("VAT rate"), tk("VAT amount must equal the rate times the subtotal."),
+  tk("VAT rate"), tk("VAT amount must equal the rate times the taxable amount. Zero-rated and exempt lines carry no VAT."),
   tk("Totals add up"), tk("Line items sum to the subtotal and subtotal plus VAT equals the total."),
   tk("Line arithmetic"), tk("Quantity times unit price equals each line total."),
   tk("Date is valid"), tk("A real date, optionally not in the future and not too old."),
@@ -55,7 +55,7 @@ export const SERVER_TEXT = [
 
   // processing outcomes and notes (desk.py)
   tk("This PDF could not be opened. It may be damaged or not really a PDF."),
-  tk("The AI call failed, so the built-in reader was used instead"),
+  tk("The AI call failed, so the built-in reader was used instead"), tk("No currency is printed, so SAR is assumed"),
 
   // processing trace steps
   tk("ingest"), tk("extract"), tk("validate"), tk("route"), tk("human review"), tk("error"),

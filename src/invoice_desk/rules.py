@@ -63,11 +63,32 @@ def r_vat_number(p, f, ctx):
     return ("pass", "valid format") if ok else ("fail", f"{name} '{v}' must be 15 digits starting and ending with 3")
 
 
+# UBL tax category codes for lines that carry no VAT: zero-rated, exempt, out of scope
+NO_VAT_CATEGORIES = {"Z", "E", "O"}
+
+
+def line_category(item: dict) -> str:
+    """S (standard rate) unless the line says it is zero-rated (Z), exempt (E) or out of scope (O)."""
+    c = str(item.get("vat_category") or "S").strip().upper()[:1]
+    return c if c in NO_VAT_CATEGORIES else "S"
+
+
 def r_vat_rate(p, f, ctx):
     sub, vat = _f(f, "subtotal"), _f(f, "vat_amount")
+    rate, tol = float(p.get("rate", 0.15)), float(p.get("tolerance", 0.05))
+    items = f.get("line_items") or []
+    if vat is not None and any(line_category(i) in NO_VAT_CATEGORIES for i in items):
+        # zero-rated and exempt lines carry no VAT: only the standard-rated lines are taxable
+        amounts = [to_number(i.get("line_total")) for i in items if line_category(i) == "S"]
+        if None in amounts:
+            return "skip", "a standard-rated line has no amount"
+        taxable = sum(amounts)
+        exp = taxable * rate
+        if _close(vat, exp, tol):
+            return "pass", f"VAT {vat:.2f} is {rate * 100:g}% of the standard-rated {taxable:.2f}; zero-rated and exempt lines carry none"
+        return "fail", f"VAT is {vat:.2f} but {rate * 100:g}% of the standard-rated {taxable:.2f} is {exp:.2f} (zero-rated and exempt lines carry no VAT)"
     if sub is None or vat is None:
         return "skip", "subtotal or VAT amount missing"
-    rate, tol = float(p.get("rate", 0.15)), float(p.get("tolerance", 0.05))
     exp = sub * rate
     if _close(vat, exp, tol):
         return "pass", f"VAT {vat:.2f} is {rate * 100:g}% of {sub:.2f}"
@@ -290,7 +311,7 @@ RULE_TYPES: dict[str, dict] = {
                   params=[dict(name="field", kind="field", default="invoice_number"), dict(name="pattern", kind="text", default=r"[A-Z0-9\-/]{3,30}")]),
     "vat_number": dict(fn=r_vat_number, label="VAT number format", description="15 digits, starting and ending with 3.",
                        params=[dict(name="field", kind="field", default="seller_vat"), dict(name="optional", kind="bool", default=False)]),
-    "vat_rate": dict(fn=r_vat_rate, label="VAT rate", description="VAT amount must equal the rate times the subtotal.",
+    "vat_rate": dict(fn=r_vat_rate, label="VAT rate", description="VAT amount must equal the rate times the taxable amount. Zero-rated and exempt lines carry no VAT.",
                      params=[dict(name="rate", kind="number", default=0.15), dict(name="tolerance", kind="number", default=0.05)]),
     "totals": dict(fn=r_totals, label="Totals add up", description="Line items sum to the subtotal and subtotal plus VAT equals the total.",
                    params=[dict(name="tolerance", kind="number", default=0.05)]),

@@ -77,6 +77,21 @@ _ORDER = ["seller_vat", "buyer_vat", "invoice_number", "issue_date", "due_date",
           "currency", "subtotal", "vat_amount", "total"]
 _COMPILED = {k: re.compile(r"^\W*" + LABELS[k] + r"\s*[:：]\s*(.+?)\s*$", re.I | re.U) for k in LABELS}
 _LINE = re.compile(r"^\s*(?:\d+[.)]\s+)?(\D\S*(?:\s+\S+)*?)\s+(\d[\d.,]*)\s+(\d[\d.,]*)\s+(\d[\d.,]*)\s*$")
+# a line marked as zero-rated, exempt or out of scope, in English or Arabic, e.g. "Export freight (zero-rated)"
+_LINE_CATEGORY = [
+    (re.compile(r"\s*[(\[]\s*(?:zero[\s-]*rated|0\s*%\s*vat|vat\s*0\s*%|خاضع(?:ة)?\s*للنسبة\s*الصفرية|نسبة\s*صفرية)\s*[)\]]", re.I), "Z"),
+    (re.compile(r"\s*[(\[]\s*(?:(?:vat[\s-]*)?exempt|(?:معفاة|معفى|معفي)(?:\s*من\s*الضريبة)?)\s*[)\]]", re.I), "E"),
+    (re.compile(r"\s*[(\[]\s*(?:out\s*of\s*scope|خارج\s*نطاق\s*الضريبة)\s*[)\]]", re.I), "O"),
+]
+
+
+def _line_category(description: str) -> tuple[str, str | None]:
+    for pattern, code in _LINE_CATEGORY:
+        if pattern.search(description):
+            return pattern.sub("", description).strip(), code
+    return description, None
+
+
 _QR = re.compile(r"(?:qr[^:\n]*:|رمز\s*الاستجابة[^:\n]*:)\s*([A-Za-z0-9+/=]{20,})", re.I)
 _CURRENCY = [(r"SAR|SR|ر\.?\s?س|ريال", "SAR"), (r"USD|US\$|\$", "USD"), (r"EUR|€", "EUR"), (r"AED|درهم", "AED")]
 
@@ -153,9 +168,16 @@ class RuleBasedExtractor:
                 continue
             m = _LINE.match(line)
             if m:
-                out["line_items"].append(dict(description=m.group(1).strip(), quantity=to_number(m.group(2)),
-                                              unit_price=to_number(m.group(3)), line_total=to_number(m.group(4))))
-        notes = [f"could not find {k}" for k in REQUIRED if out.get(k) in (None, "")]
+                desc, category = _line_category(m.group(1).strip())
+                item = dict(description=desc, quantity=to_number(m.group(2)), unit_price=to_number(m.group(3)), line_total=to_number(m.group(4)))
+                if category:
+                    item["vat_category"] = category
+                out["line_items"].append(item)
+        notes = []
+        if not out["currency"] and any(out.get(k) is not None for k in ("subtotal", "vat_amount", "total")):
+            out["currency"] = "SAR"
+            notes.append("No currency is printed, so SAR is assumed")
+        notes += [f"could not find {k}" for k in REQUIRED if out.get(k) in (None, "")]
         return out, notes
 
 
@@ -192,8 +214,11 @@ def normalise(data: dict) -> tuple[dict, dict, list]:
     fields["currency"] = (_currency(str(cur)) or str(cur).upper()) if cur else None
     for it in data.get("line_items") or []:
         if isinstance(it, dict):
-            fields["line_items"].append(dict(description=str(it.get("description", "")), quantity=to_number(it.get("quantity")),
-                                             unit_price=to_number(it.get("unit_price")), line_total=to_number(it.get("line_total"))))
+            item = dict(description=str(it.get("description", "")), quantity=to_number(it.get("quantity")),
+                        unit_price=to_number(it.get("unit_price")), line_total=to_number(it.get("line_total")))
+            if str(it.get("vat_category") or "").strip()[:1].upper() in ("S", "Z", "E", "O"):
+                item["vat_category"] = str(it["vat_category"]).strip()[:1].upper()
+            fields["line_items"].append(item)
     fc = {k: float(v) for k, v in (data.get("field_confidence") or {}).items() if isinstance(v, (int, float))}
     notes = [str(n) for n in (data.get("notes") or [])]
     return fields, fc, notes

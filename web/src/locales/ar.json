@@ -260,7 +260,6 @@
   "VAT number format": "صيغة الرقم الضريبي",
   "15 digits, starting and ending with 3.": "15 رقمًا، يبدأ بالرقم 3 وينتهي به.",
   "VAT rate": "نسبة ضريبة القيمة المضافة",
-  "VAT amount must equal the rate times the subtotal.": "يجب أن يساوي مبلغ الضريبة النسبةَ مضروبةً في المجموع قبل الضريبة.",
   "Totals add up": "تطابق المجاميع",
   "Line items sum to the subtotal and subtotal plus VAT equals the total.": "مجموع البنود يساوي المجموع قبل الضريبة، والمجموع قبل الضريبة مضافًا إليه الضريبة يساوي المبلغ الإجمالي.",
   "Line arithmetic": "حساب البنود",
@@ -410,5 +409,12 @@
   "Demo sign in is switched off.": "الدخول التجريبي متوقف.",
   "Sign in failed.": "تعذّر تسجيل الدخول.",
   "This PDF could not be opened. It may be damaged or not really a PDF.": "تعذّر فتح ملف PDF هذا. قد يكون تالفًا أو ليس ملف PDF فعلًا.",
-  "The AI call failed, so the built-in reader was used instead": "فشل طلب الذكاء الاصطناعي، فاستُخدم القارئ المدمج بدلًا منه"
+  "The AI call failed, so the built-in reader was used instead": "فشل طلب الذكاء الاصطناعي، فاستُخدم القارئ المدمج بدلًا منه",
+  "VAT amount must equal the rate times the taxable amount. Zero-rated and exempt lines carry no VAT.": "يجب أن يساوي مبلغ الضريبة النسبةَ مضروبةً في المبلغ الخاضع للضريبة. لا تحمل البنود الخاضعة للنسبة الصفرية أو المعفاة أي ضريبة.",
+  "No currency is printed, so SAR is assumed": "لم تُطبع العملة، لذا افتُرض أنها الريال السعودي",
+  "VAT": "الضريبة",
+  "Standard rate": "النسبة الأساسية",
+  "Zero-rated": "نسبة صفرية",
+  "Exempt": "معفى",
+  "Out of scope": "خارج النطاق"
 }
