@@ -145,6 +145,28 @@ def dashboard_layout(page: Page) -> None:
     check("dashboard: scale has a whole-number halfway mark", top == "4" and mid == "2", f"{top} / {mid}")
 
 
+def runs_sorting(page: Page) -> None:
+    """Runs: headings sort the rows, say which way with aria-sort, and keep names in their own direction."""
+    sign_in(page)
+    load_samples(page, ["inv-003.txt", "inv-013.txt", "inv-016.pdf", "inv-089.txt"])
+    page.evaluate("location.hash = '#/runs'; location.reload()")
+    page.wait_for_selector("tbody tr")
+    totals = lambda: page.evaluate("""() => [...document.querySelectorAll('tbody tr td:nth-child(5)')].map(td =>
+        parseFloat(td.textContent.replace(/[^0-9.]/g, '')) || 0)""")  # noqa: E731
+    head = page.locator("th", has=page.get_by_role("button", name="Total"))
+    head.get_by_role("button").click()
+    first = totals()
+    check("runs: Total sorts largest first", first == sorted(first, reverse=True), str(first))
+    check("runs: the sorted heading says so", head.get_attribute("aria-sort") == "descending")
+    head.get_by_role("button").click()
+    check("runs: a second press sorts smallest first", totals() == sorted(first), str(totals()))
+    check("runs: the other headings are not marked sorted", page.locator("th[aria-sort]").count() == 1)
+    page.get_by_role("button", name="Seller").click()
+    dirs = page.evaluate("""() => [...document.querySelectorAll('tbody tr td:nth-child(4) .cell-text')].map(e => [e.textContent, getComputedStyle(e).direction])""")
+    arabic_rtl = [d for n, d in dirs if any("؀" <= ch <= "ۿ" for ch in n)]
+    check("runs: Arabic seller names stay right-to-left after sorting", bool(arabic_rtl) and all(d == "rtl" for d in arabic_rtl), str(dirs))
+
+
 def waking_screen(page: Page) -> None:
     """While /api/health does not answer, a 'waking up' screen shows in the chosen language, then sign-in follows."""
     page.goto(BASE)
@@ -357,7 +379,7 @@ def demo_start(page: Page) -> None:
 
 
 CHECKS = [mixed_direction, review_badge, waking_screen, rule_with_open_limit, error_messages, damaged_file, provider_failure, xml_is_indented,
-          vendors_and_risk, demo_start, review_layout, dashboard_layout]
+          vendors_and_risk, demo_start, review_layout, dashboard_layout, runs_sorting]
 
 if __name__ == "__main__":
     with sync_playwright() as pw:

@@ -162,6 +162,17 @@ tbody tr:last-child td { border-bottom: 0; }
 tbody tr.click { cursor: pointer; } tbody tr.click:hover td { background: var(--surface-2); }
 tbody tr.click:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 td.n, th.n { text-align: end; font-variant-numeric: tabular-nums; }
+td.amt { font-weight: 500; } .nowrap { white-space: nowrap; }
+/* sortable headings: the whole heading is the button; aria-sort on the th says which way */
+th:has(> .th-sort) { padding: 0; }
+.th-sort { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 6px; width: 100%; padding: 8px 12px; cursor: pointer; }
+th.n .th-sort { justify-content: flex-end; }
+.th-sort:hover { color: var(--ink); background: var(--surface-3); }
+.th-sort:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+th[aria-sort] { color: var(--ink); }
+.caret { flex: none; opacity: .45; } .caret.on { opacity: 1; }
+.toolbar { display: flex; align-items: center; gap: var(--s2) var(--s3); flex-wrap: wrap; margin-bottom: var(--s3); }
+.toolbar-search { max-width: 260px; margin-inline-start: auto; }
 .ellip { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* A name or file name in a table cell or list row. It keeps its own direction (dir="auto" or "ltr"), so an Arabic name
    in the English table, or an English one in the Arabic table, reads correctly and its ellipsis lands at its own end.
