@@ -47,7 +47,7 @@ export default function Settings({ theme, setTheme, lang, setLang }: { theme: st
       <Head title={t("Settings")} />
       <Err msg={error || err} />
       <div className="grid g2">
-        <div className="col" style={{ gap: 18 }}>
+        <div className="col gap-4">
           <div className="panel col">
             <h2>{t("AI model for reading invoices")}</h2>
             <p className="muted small">{t("Optional. The built-in reader is free and needs nothing. Pick a model if you want images, scans and unusual layouts read. Your key stays in this browser tab, is sent only to this server for the request, and is never saved or logged. Closing the tab forgets it.")}</p>
@@ -87,7 +87,7 @@ export default function Settings({ theme, setTheme, lang, setLang }: { theme: st
             {form && <>
               <label className="f">{t("Default reading mode")}<select disabled={!admin} value={form.default_mode} onChange={(e) => setForm({ ...form, default_mode: e.target.value as S["default_mode"] })}><option value="rules">{t("Built-in rules")}</option><option value="ai">{t("AI model")}</option></select></label>
               <label className="check"><input type="checkbox" disabled={!admin} checked={form.auto_approve === "true"} onChange={(e) => setForm({ ...form, auto_approve: e.target.checked ? "true" : "false" })} />{t("Approve clean invoices automatically (turn off to send everything to review)")}</label>
-              <div className="grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
+              <div className="grid two">
                 <label className="f">{t("Input price per million tokens (USD)")}<input type="text" disabled={!admin} value={form.price_in_per_mtok} onChange={(e) => setForm({ ...form, price_in_per_mtok: e.target.value })} placeholder={t("from your provider")} /></label>
                 <label className="f">{t("Output price per million tokens (USD)")}<input type="text" disabled={!admin} value={form.price_out_per_mtok} onChange={(e) => setForm({ ...form, price_out_per_mtok: e.target.value })} /></label>
               </div>
@@ -95,16 +95,18 @@ export default function Settings({ theme, setTheme, lang, setLang }: { theme: st
             </>}
           </div>
         </div>
-        <div className="panel col" style={{ alignSelf: "start" }}>
+        <div className="col gap-4">
+        <div className="panel col">
           <h2>{t("Appearance")}</h2>
-          <div className="row wrap"><span>{t("Theme")}</span><div className="seg"><button aria-pressed={theme === "light"} onClick={() => setTheme("light")}>{t("Light")}</button><button aria-pressed={theme === "dark"} onClick={() => setTheme("dark")}>{t("Dark")}</button></div></div>
-          <div className="row wrap"><span>{t("Language")}</span><div className="seg"><button aria-pressed={lang === "en"} onClick={() => setLang("en")}>English</button><button aria-pressed={lang === "ar"} onClick={() => setLang("ar")}>العربية</button></div></div>
+          <div className="setting-row"><span>{t("Theme")}</span><div className="seg"><button aria-pressed={theme === "light"} onClick={() => setTheme("light")}>{t("Light")}</button><button aria-pressed={theme === "dark"} onClick={() => setTheme("dark")}>{t("Dark")}</button></div></div>
+          <div className="setting-row"><span>{t("Language")}</span><div className="seg"><button aria-pressed={lang === "en"} onClick={() => setLang("en")}>English</button><button aria-pressed={lang === "ar"} onClick={() => setLang("ar")}>العربية</button></div></div>
           <p className="muted small">{t("Arabic switches the layout to right-to-left and translates the whole portal. Invoice contents, rule names you type and server error messages are shown as written.")}</p>
-          {admin && <>
-            <h2 style={{ marginTop: 10 }}>{t("Demo data")}</h2>
-            <p className="muted small">{t("Clears every invoice and the audit log, restores the default rules and reloads the sample vendors and purchase orders.")}</p>
-            <div><button className="btn danger" onClick={() => setConfirmReset(true)}>{t("Reset demo data")}</button></div>
-          </>}
+        </div>
+        {admin && <div className="panel col danger-zone">
+          <h2>{t("Demo data")}</h2>
+          <p className="muted small">{t("Clears every invoice and the audit log, restores the default rules and reloads the sample vendors and purchase orders.")}</p>
+          <div><button className="btn danger" onClick={() => setConfirmReset(true)}>{t("Reset demo data")}</button></div>
+        </div>}
         </div>
       </div>
       {confirmReset && (

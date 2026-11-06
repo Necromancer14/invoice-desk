@@ -368,7 +368,10 @@ label.btn:focus-within { outline: 2px solid var(--focus); outline-offset: 2px; }
 .mb { margin-bottom: var(--s4); } .mt3 { margin-top: var(--s3); } .mt5 { margin-top: var(--s5); }
 .col.gap-1 { gap: var(--s1); } .col.gap-4 { gap: var(--s4); }
 .plain-list { margin: 0; padding-inline-start: 18px; }
-.bad-figure { color: var(--bad); } .full { flex-basis: 100%; }
+.bad-figure { color: var(--bad); }
+.grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: end; }
+.setting-row { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; padding: var(--s1) 0; }
+.danger-zone { border-color: color-mix(in srgb, var(--bad) 30%, var(--line)); } .full { flex-basis: 100%; }
 .toolbar-search.first { margin-inline-start: 0; }
 .csv-note { margin: calc(-1 * var(--s1)) 0 var(--s3); font-size: var(--t-sm); color: var(--muted); }
 .sec-head { margin-top: var(--s6); }
