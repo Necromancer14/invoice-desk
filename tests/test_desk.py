@@ -61,7 +61,7 @@ def test_upload_validation(desk):
 
 
 def test_image_without_an_ai_model_lands_in_review(desk):
-    rid = desk.submit("scan.png", b"\x89PNG", "image/png", "t")
+    rid = desk.submit("scan.png", b"\x89PNG\r\n\x1a\n" + b"\x00" * 16, "image/png", "t")
     run = desk.get_run(rid)
     assert run["status"] == "needs_review" and "Could not read" in run["extraction"]["notes"][0]
 

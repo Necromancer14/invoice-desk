@@ -16,7 +16,7 @@ from pydantic import BaseModel
 from . import __version__
 from .auth import Auth, AuthError, allows
 from .db import dumps, loads
-from .desk import Desk, DeskError
+from .desk import MAX_BYTES, Desk, DeskError
 from .evaluation import ai_history, evaluate, evaluate_ai, evaluated_ids, save_ai_rows
 from .providers import ProviderError, build_extractor, public_providers
 from .rules import HELP_FUNCS, RULE_TYPES
@@ -140,6 +140,9 @@ def create_app(desk: Desk | None = None, auth: Auth | None = None, rate_limit: i
         limiter.check(request.client.host if request.client else "local")
         if len(files) > 20:
             raise HTTPException(400, "at most 20 files per upload")
+        for f in files:  # refuse before reading anything into memory, when the size is already known
+            if f.size is not None and f.size > MAX_BYTES:
+                raise HTTPException(413, f"{f.filename}: file is larger than 5 MB")
         ids = []
         for f in files:
             blob = await f.read()
@@ -148,7 +151,7 @@ def create_app(desk: Desk | None = None, auth: Auth | None = None, rate_limit: i
 
     @app.get("/api/runs")
     def runs(status: str | None = None, q: str | None = None, limit: int = 50, offset: int = 0, user=Depends(need("viewer"))):
-        return desk.list_runs(status, q, limit, offset)
+        return desk.list_runs(status, (q or "")[:200] or None, max(1, min(limit, 200)), max(0, offset))
 
     @app.get("/api/runs/{rid}")
     def run(rid: int, user=Depends(need("viewer"))):
@@ -198,7 +201,10 @@ def create_app(desk: Desk | None = None, auth: Auth | None = None, rate_limit: i
 
     @app.put("/api/rules/reorder")
     def rule_reorder(body: dict, user=Depends(need("admin"))):
-        return dict(version=desk.reorder_rules(body.get("keys", []), user["sub"]))
+        keys = body.get("keys", [])
+        if not isinstance(keys, list) or not all(isinstance(k, str) for k in keys):
+            raise HTTPException(400, "keys must be a list of rule keys")
+        return dict(version=desk.reorder_rules(keys, user["sub"]))
 
     @app.delete("/api/rules/{key}")
     def rule_delete(key: str, user=Depends(need("admin"))):
@@ -218,7 +224,7 @@ def create_app(desk: Desk | None = None, auth: Auth | None = None, rate_limit: i
 
     @app.post("/api/rules/rollback")
     def rollback(body: dict, user=Depends(need("admin"))):
-        return dict(version=desk.rollback(int(body.get("version", 0)), user["sub"]))
+        return dict(version=desk.rollback(_int(body, "version", 0, 1, 10**9), user["sub"]))
 
     # --------------------------------------------------- settings, audit, misc
     @app.get("/api/settings")
@@ -231,7 +237,7 @@ def create_app(desk: Desk | None = None, auth: Auth | None = None, rate_limit: i
 
     @app.get("/api/audit")
     def audit(limit: int = 200, actor: str | None = None, action: str | None = None, user=Depends(need("viewer"))):
-        return desk.audit_log(limit, actor, action)
+        return desk.audit_log(max(1, min(limit, 500)), actor, action)
 
     @app.get("/api/export.csv")
     def export(user=Depends(need("viewer"))):
@@ -251,7 +257,10 @@ def create_app(desk: Desk | None = None, auth: Auth | None = None, rate_limit: i
                        user=Depends(need("reviewer"))):
         llm = llm_from(request)
         limiter.check(request.client.host if request.client else "local")
-        files = body.get("files", [])[:60]
+        files = body.get("files", [])
+        if not isinstance(files, list) or not all(isinstance(x, str) for x in files):
+            raise HTTPException(400, "files must be a list of sample file names")
+        files = files[:60]
         known = {s["file"]: s for s in list_samples()}
         ids = []
         for name in files:

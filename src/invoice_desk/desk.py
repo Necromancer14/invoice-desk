@@ -20,8 +20,42 @@ from .textnorm import number_key, parse_date, to_number, vat_key
 MAX_BYTES = 5 * 1024 * 1024
 ALLOWED_TYPES = {"text/plain", "application/pdf", "image/png", "image/jpeg", "image/webp", "image/gif"}
 FINAL = {"approved", "rejected", "approved_human", "rejected_human", "failed"}
+# How long free text may be. Long enough for real use, short enough that nobody can fill the database through a form.
+MAX_RULE_NAME, MAX_RULE_MESSAGE, MAX_VERSION_NOTE, MAX_REVIEW_NOTE = 120, 300, 500, 2000
+PDF_UNREADABLE = "This PDF could not be opened. It may be damaged or not really a PDF."
 DEFAULT_SETTINGS = {"default_mode": "rules", "price_in_per_mtok": "",
                     "price_out_per_mtok": "", "auto_approve": "true"}
+
+
+def clean_filename(name: str | None) -> str:
+    """The last part of an uploaded file's name, without control characters, at most 120 characters."""
+    name = re.sub(r"[\x00-\x1f\x7f]", "", str(name or "")).replace("\\", "/").split("/")[-1].strip()
+    return name[:120] or "invoice.txt"
+
+
+_MAGIC = {"application/pdf": (b"%PDF",), "image/png": (b"\x89PNG\r\n\x1a\n",), "image/jpeg": (b"\xff\xd8\xff",),
+          "image/gif": (b"GIF87a", b"GIF89a")}
+_KIND = {"application/pdf": "a PDF", "image/png": "a PNG image", "image/jpeg": "a JPEG image", "image/gif": "a GIF image",
+         "image/webp": "a WebP image", "text/plain": "a text file"}
+
+
+def content_matches(ctype: str, blob: bytes) -> bool:
+    """Do the first bytes fit the type the file claims? Stops, say, a program renamed to .txt or .png."""
+    head = blob[:1024]
+    if ctype in _MAGIC:
+        return any(head.lstrip().startswith(m) if ctype == "application/pdf" else head.startswith(m) for m in _MAGIC[ctype])
+    if ctype == "image/webp":
+        return head[:4] == b"RIFF" and head[8:12] == b"WEBP"
+    if ctype == "text/plain":
+        return b"\x00" not in blob[:8192]
+    return False
+
+
+def friendly_error(exc: Exception) -> str:
+    """What a person sees when processing fails. The technical detail stays in the trace."""
+    if type(exc).__module__.split(".")[0] == "pypdf":
+        return PDF_UNREADABLE
+    return f"{type(exc).__name__}: {exc}"[:300]
 
 
 def now() -> str:
@@ -129,6 +163,12 @@ class Desk:
         r = dict(key=(rule.get("key") or "").strip(), name=(rule.get("name") or "").strip(), type=rule.get("type"),
                  params=rule.get("params") or {}, severity=rule.get("severity"), enabled=bool(rule.get("enabled", True)),
                  message=(rule.get("message") or "").strip())
+        if len(r["name"]) > MAX_RULE_NAME:
+            raise DeskError(f"a rule name can be at most {MAX_RULE_NAME} characters")
+        if len(r["message"]) > MAX_RULE_MESSAGE:
+            raise DeskError(f"the message can be at most {MAX_RULE_MESSAGE} characters")
+        if not isinstance(r["params"], dict):
+            raise DeskError("params must be an object")
         try:
             validate_rule(r)
         except ValueError as exc:
@@ -137,6 +177,9 @@ class Desk:
 
     def upsert_rule(self, rule: dict, actor: str, note: str = "") -> dict:
         r = self._clean_rule(rule)
+        note = (note or "").strip()
+        if len(note) > MAX_VERSION_NOTE:
+            raise DeskError(f"the note can be at most {MAX_VERSION_NOTE} characters")
         current = self.rules()
         keys = {x["key"] for x in current}
         if not r["key"]:
@@ -234,7 +277,7 @@ class Desk:
     # ----------------------------------------------------------------- intake
     def submit(self, filename: str, blob: bytes, content_type: str | None, actor: str, mode: str | None = None,
                llm: dict | None = None, source: str = "upload") -> int:
-        filename = (filename or "invoice.txt")[:120]
+        filename = clean_filename(filename)
         ctype = guess_type(filename, content_type)
         if ctype not in ALLOWED_TYPES:
             raise DeskError(f"unsupported file type {ctype}", 415)
@@ -242,6 +285,8 @@ class Desk:
             raise DeskError("empty file")
         if len(blob) > MAX_BYTES:
             raise DeskError("file is larger than 5 MB", 413)
+        if not content_matches(ctype, blob):
+            raise DeskError(f"{filename} does not look like {_KIND.get(ctype, ctype)}", 415)
         mode = mode or self.settings()["default_mode"]
         if mode not in ("rules", "ai"):
             raise DeskError("mode must be rules or ai")
@@ -313,9 +358,9 @@ class Desk:
                          now() if decision != "needs_review" else None, rid))
             self.audit("system", "run.decision", str(rid), decision)
         except Exception as exc:
-            self._step(trace, "error", time.time(), f"{type(exc).__name__}: {exc}", ok=False)
+            self._step(trace, "error", time.time(), f"{type(exc).__name__}: {exc}"[:300], ok=False)
             self.db.run("UPDATE runs SET status='failed', error=?, trace=?, updated_at=?, decided_at=? WHERE id=?",
-                        (f"{type(exc).__name__}: {exc}"[:300], dumps(trace), now(), now(), rid))
+                        (friendly_error(exc), dumps(trace), now(), now(), rid))
             self.audit("system", "run.failed", str(rid), str(exc)[:200])
 
     # ------------------------------------------------------------------ reads
@@ -394,6 +439,8 @@ class Desk:
             raise DeskError("decision must be approve or reject")
         if decision == "reject" and not (note or "").strip():
             raise DeskError("add a note explaining the rejection")
+        if len(note or "") > MAX_REVIEW_NOTE:
+            raise DeskError(f"the note can be at most {MAX_REVIEW_NOTE} characters")
         fields = loads(r["fields"], empty_fields())
         final = dict(fields)
         changed = []

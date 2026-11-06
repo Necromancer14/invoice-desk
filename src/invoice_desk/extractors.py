@@ -48,7 +48,7 @@ def guess_type(filename: str, declared: str | None) -> str:
         return declared.split(";")[0].strip().lower()
     ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
     return {"pdf": "application/pdf", "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg",
-            "webp": "image/webp", "gif": "image/gif", "txt": "text/plain"}.get(ext, "text/plain")
+            "webp": "image/webp", "gif": "image/gif", "txt": "text/plain"}.get(ext, "application/octet-stream")
 
 
 def _overall(fields: dict, fc: dict) -> float:
