@@ -24,7 +24,7 @@ export function Document({ run }: { run: Run }) {
     setUrl(null); setText(null);
     fileBlobUrl(`/runs/${run.id}/file`).then(async (u) => {
       revoked = u;
-      if (run.content_type === "text/plain") setText(await (await fetch(u)).text());
+      if (run.content_type === "text/plain" || run.content_type === "application/xml") setText(await (await fetch(u)).text());
       else setUrl(u);
     }).catch(() => setText(t("Could not load the original file.")));
     return () => { if (revoked) URL.revokeObjectURL(revoked); };

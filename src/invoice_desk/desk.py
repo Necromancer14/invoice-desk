@@ -16,9 +16,11 @@ from .providers import ProviderError, build_extractor
 from .rules import RULE_TYPES, Ctx, decide, run_rules, validate_rule
 from .schema import FIELDS, NUMERIC, SCALARS, empty_fields
 from .textnorm import number_key, parse_date, to_number, vat_key
+from .ubl import UblExtractor, XmlError, check_safe, looks_like_xml
 
 MAX_BYTES = 5 * 1024 * 1024
-ALLOWED_TYPES = {"text/plain", "application/pdf", "image/png", "image/jpeg", "image/webp", "image/gif"}
+XML = "application/xml"
+ALLOWED_TYPES = {"text/plain", "application/pdf", "image/png", "image/jpeg", "image/webp", "image/gif", XML}
 FINAL = {"approved", "rejected", "approved_human", "rejected_human", "failed"}
 # How long free text may be. Long enough for real use, short enough that nobody can fill the database through a form.
 MAX_RULE_NAME, MAX_RULE_MESSAGE, MAX_VERSION_NOTE, MAX_REVIEW_NOTE = 120, 300, 500, 2000
@@ -36,7 +38,7 @@ def clean_filename(name: str | None) -> str:
 _MAGIC = {"application/pdf": (b"%PDF",), "image/png": (b"\x89PNG\r\n\x1a\n",), "image/jpeg": (b"\xff\xd8\xff",),
           "image/gif": (b"GIF87a", b"GIF89a")}
 _KIND = {"application/pdf": "a PDF", "image/png": "a PNG image", "image/jpeg": "a JPEG image", "image/gif": "a GIF image",
-         "image/webp": "a WebP image", "text/plain": "a text file"}
+         "image/webp": "a WebP image", "text/plain": "a text file", "application/xml": "an XML file"}
 
 
 def content_matches(ctype: str, blob: bytes) -> bool:
@@ -48,6 +50,8 @@ def content_matches(ctype: str, blob: bytes) -> bool:
         return head[:4] == b"RIFF" and head[8:12] == b"WEBP"
     if ctype == "text/plain":
         return b"\x00" not in blob[:8192]
+    if ctype == XML:
+        return looks_like_xml(blob) and b"\x00" not in blob[:8192]
     return False
 
 
@@ -55,6 +59,8 @@ def friendly_error(exc: Exception) -> str:
     """What a person sees when processing fails. The technical detail stays in the trace."""
     if type(exc).__module__.split(".")[0] == "pypdf":
         return PDF_UNREADABLE
+    if isinstance(exc, XmlError):
+        return f"This XML file could not be read: {exc}."
     return f"{type(exc).__name__}: {exc}"[:300]
 
 
@@ -287,6 +293,11 @@ class Desk:
             raise DeskError("file is larger than 5 MB", 413)
         if not content_matches(ctype, blob):
             raise DeskError(f"{filename} does not look like {_KIND.get(ctype, ctype)}", 415)
+        if ctype == XML:
+            try:
+                check_safe(blob)
+            except XmlError as exc:
+                raise DeskError(f"{filename}: {exc}", 415) from None
         mode = mode or self.settings()["default_mode"]
         if mode not in ("rules", "ai"):
             raise DeskError("mode must be rules or ai")
@@ -321,13 +332,14 @@ class Desk:
             ext = None
             notes: list = []
             try:
-                extractor = self.extractor_factory(row["mode"], llm)
+                # UBL XML is read directly whatever the reading mode: the fields are already structured
+                extractor = UblExtractor() if row["content_type"] == XML else self.extractor_factory(row["mode"], llm)
                 ext = extractor.extract(row["blob"], row["content_type"], row["filename"])
                 self._step(trace, "extract", t0, f"{ext.extractor} · confidence {ext.confidence}")
             except NeedsVision as exc:
                 ext = Extraction(empty_fields(), 0.0, {}, [f"Could not read automatically: {exc}. Switch to an AI model or key it in."], "rule-based")
                 self._step(trace, "extract", t0, str(exc), ok=False)
-            except DeskError:
+            except (DeskError, XmlError):
                 raise
             except Exception as exc:
                 if row["mode"] != "ai":

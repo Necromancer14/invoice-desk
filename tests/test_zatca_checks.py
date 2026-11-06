@@ -117,3 +117,82 @@ def test_arabic_digits_and_separators_throughout():
     fields, _ = RuleBasedExtractor().parse(text)
     assert (fields["invoice_number"], fields["issue_date"], fields["seller_vat"]) == ("INV-7", "2026-10-01", "300000000000003")
     assert (fields["subtotal"], fields["vat_amount"], fields["total"], fields["currency"]) == (1000.0, 150.0, 1150.0, "SAR")
+
+
+# ---- UBL 2.1 XML ---------------------------------------------------------------------------
+from fastapi.testclient import TestClient  # noqa: E402
+
+from invoice_desk import qr, ubl  # noqa: E402
+from invoice_desk.api import create_app  # noqa: E402
+from invoice_desk.desk import Desk  # noqa: E402
+
+UBL_FIELDS = dict(BASE, invoice_type="simplified", buyer_vat="311111111111113", subtotal=1500.0, vat_amount=150.0, total=1650.0,
+                  line_items=[dict(description="Consulting", quantity=2, unit_price=500.0, line_total=1000.0),
+                              dict(description="Export freight", quantity=1, unit_price=500.0, line_total=500.0, vat_category="Z")],
+                  qr_payload=qr.encode("Acme", "300000000000003", "2026-10-01T09:30:00Z", 1650.0, 150.0))
+
+
+def test_ubl_round_trip_reads_every_field():
+    f = ubl.read(ubl.write(UBL_FIELDS).encode())
+    for k in ("invoice_number", "issue_date", "due_date", "seller_name", "seller_vat", "buyer_vat", "currency",
+              "subtotal", "vat_amount", "total", "qr_payload", "invoice_type"):
+        assert f[k] == UBL_FIELDS[k], k
+    assert [i.get("vat_category") for i in f["line_items"]] == ["S", "Z"]
+
+
+def test_ubl_invoice_passes_the_same_rules():
+    f = ubl.read(ubl.write(UBL_FIELDS).encode())
+    res = run_rules(RULES, f, Ctx(today=TODAY))
+    assert decide(res) == "approved", [r for r in res if r["status"] == "fail"]
+
+
+def test_ubl_with_wrong_vat_is_caught():
+    f = ubl.read(ubl.write(dict(UBL_FIELDS, vat_amount=225.0, total=1725.0, qr_payload=None)).encode())
+    assert decide(run_rules(RULES, f, Ctx(today=TODAY))) == "rejected"
+
+
+@pytest.mark.parametrize("xml", [
+    b'<?xml version="1.0"?><!DOCTYPE x [<!ENTITY e SYSTEM "file:///etc/passwd">]><Invoice>&e;</Invoice>',
+    b'<?xml version="1.0"?><!DOCTYPE lol [<!ENTITY a "aaaa"><!ENTITY b "&a;&a;&a;">]><Invoice>&b;</Invoice>',
+    b'<!doctype Invoice SYSTEM "http://example.com/x.dtd"><Invoice/>',
+])
+def test_unsafe_xml_is_refused(xml):
+    with pytest.raises(ubl.XmlError, match="DOCTYPE or ENTITY"):
+        ubl.read(xml)
+
+
+@pytest.mark.parametrize("xml, why", [(b"<Invoice><unclosed></Invoice>", "could not be read"), (b"<Order xmlns='x'/>", "not a UBL 2.1 Invoice")])
+def test_malformed_or_other_xml_is_explained(xml, why):
+    with pytest.raises(ubl.XmlError, match=why):
+        ubl.read(xml)
+
+
+@pytest.fixture
+def client(auth):
+    c = TestClient(create_app(Desk(":memory:", today=TODAY, sync=True), auth, rate_limit=1000))
+    return c, {"Authorization": "Bearer " + c.post("/api/auth/demo", json={"role": "admin"}).json()["token"]}
+
+
+@pytest.mark.parametrize("ctype", ["application/xml", "text/xml", ""])
+def test_xml_upload_is_read_directly_in_any_mode(client, ctype):
+    c, h = client
+    for mode in ("rules", "ai"):
+        r = c.post("/api/runs", files={"files": ("inv.xml", ubl.write(UBL_FIELDS).encode(), ctype)}, data={"mode": mode},
+                   headers={**h, "X-LLM-Provider": "gemini", "X-LLM-Key": "k"} if mode == "ai" else h)
+        assert r.status_code == 200, r.text
+        run = c.get(f"/api/runs/{r.json()['ids'][0]}", headers=h).json()
+        assert run["extractor"] == "ubl-xml" and run["status"] == "approved", (mode, run["status"], run["results"])
+        c.post("/api/admin/reset", json={}, headers=h)
+
+
+def test_unsafe_xml_upload_is_refused(client):
+    c, h = client
+    r = c.post("/api/runs", files={"files": ("x.xml", b'<?xml version="1.0"?><!DOCTYPE x [<!ENTITY e SYSTEM "file:///etc/passwd">]><Invoice>&e;</Invoice>', "application/xml")}, headers=h)
+    assert r.status_code == 415 and "DOCTYPE or ENTITY" in r.json()["detail"]
+
+
+def test_broken_xml_upload_fails_with_a_plain_message(client):
+    c, h = client
+    rid = c.post("/api/runs", files={"files": ("x.xml", b"<Invoice><broken></Invoice>", "application/xml")}, headers=h).json()["ids"][0]
+    run = c.get(f"/api/runs/{rid}", headers=h).json()
+    assert run["status"] == "failed" and run["error"].startswith("This XML file could not be read")

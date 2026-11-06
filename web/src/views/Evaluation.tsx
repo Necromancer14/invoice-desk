@@ -7,7 +7,7 @@ interface EvalAll { rules: EvalResult | null; ai_models: AiTotals[]; ai_last: Ai
 interface Job { status: string; error?: string; done?: number; total?: number; errors?: number; message?: string; stopped?: AiLastRun["stopped"] }
 interface AiOptions { sample_size: number; rpm: number; only_new: boolean; seed: number }
 
-const FORMAT: Record<string, string> = { txt: tk("Text"), pdf: tk("PDF with text"), png: tk("Image (needs vision)") };
+const FORMAT: Record<string, string> = { txt: tk("Text"), pdf: tk("PDF with text"), png: tk("Image (needs vision)"), xml: tk("UBL XML") };
 const LANG: Record<string, string> = { en: tk("English"), ar: tk("Arabic"), bi: tk("Bilingual"), hard: tk("Unusual wording") };
 const SCENARIO: Record<string, string> = {
   clean: tk("Clean invoice"), prompt_injection: tk("Hidden instruction inside the invoice"), bad_vat: tk("Malformed seller VAT number"),

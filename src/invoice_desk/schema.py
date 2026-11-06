@@ -6,7 +6,8 @@ import math
 SCALARS = ["invoice_number", "issue_date", "due_date", "seller_name", "seller_vat", "buyer_name",
            "buyer_vat", "currency", "subtotal", "vat_amount", "total", "qr_payload"]
 NUMERIC = {"subtotal", "vat_amount", "total"}
-FIELDS = SCALARS + ["line_items"]
+# invoice_type ("standard" or "simplified") is read but not scored by the evaluation, so its figures stay comparable
+FIELDS = SCALARS + ["invoice_type", "line_items"]
 # What a reviewer must be able to rely on before an invoice is auto-approved.
 REQUIRED = ["invoice_number", "issue_date", "seller_name", "seller_vat", "currency",
             "subtotal", "vat_amount", "total"]
@@ -26,6 +27,7 @@ INVOICE_SCHEMA = {
         "vat_amount": {"type": ["number", "null"]},
         "total": {"type": ["number", "null"], "description": "Total including VAT"},
         "qr_payload": {"type": ["string", "null"], "description": "Base64 text printed next to the QR code, if any"},
+        "invoice_type": {"type": ["string", "null"], "description": "standard (tax invoice) or simplified (simplified tax invoice); null if not stated"},
         "line_items": {
             "type": "array",
             "items": {
@@ -55,6 +57,7 @@ INVOICE_SCHEMA = {
 
 def empty_fields() -> dict:
     d = {k: None for k in SCALARS}
+    d["invoice_type"] = None
     d["line_items"] = []
     return d
 

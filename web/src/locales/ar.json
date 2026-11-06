@@ -185,7 +185,6 @@
   "Scenario": "الحالة المختبَرة",
   "Expected": "المتوقع",
   "Got": "الناتج",
-  "Drop files in, pick how they get read, and watch them move through validation. Text, PDF and image files up to 5 MB.": "أفلت الملفات هنا، واختر طريقة قراءتها، وتابع مرورها بمراحل التحقق. تُقبل ملفات النص وPDF والصور حتى 5 ميغابايت.",
   "You are signed in as a viewer. Sign in as reviewer or admin to upload.": "أنت مسجّل الدخول بصفة مشاهد. سجّل الدخول بصفة مراجع أو مدير لرفع الفواتير.",
   "How should invoices be read?": "كيف تُقرأ الفواتير؟",
   "Reading mode": "طريقة القراءة",
@@ -416,5 +415,8 @@
   "Standard rate": "النسبة الأساسية",
   "Zero-rated": "نسبة صفرية",
   "Exempt": "معفى",
-  "Out of scope": "خارج النطاق"
+  "Out of scope": "خارج النطاق",
+  "Drop files in, pick how they get read, and watch them move through validation. Text, PDF, image and UBL XML files up to 5 MB.": "أفلت الملفات هنا، واختر طريقة قراءتها، وتابع مرورها بمراحل التحقق. تُقبل ملفات النص وPDF والصور وUBL XML حتى 5 ميغابايت.",
+  "UBL XML": "UBL XML",
+  "Invoice type": "نوع الفاتورة"
 }

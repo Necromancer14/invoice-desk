@@ -43,7 +43,7 @@ export default function Intake() {
 
   return (
     <>
-      <Head title={t("Upload invoices")} sub={t("Drop files in, pick how they get read, and watch them move through validation. Text, PDF and image files up to 5 MB.")} />
+      <Head title={t("Upload invoices")} sub={t("Drop files in, pick how they get read, and watch them move through validation. Text, PDF, image and UBL XML files up to 5 MB.")} />
       {!allowed && <div className="notice warn" style={{ marginBottom: 14 }}>{t("You are signed in as a viewer. Sign in as reviewer or admin to upload.")}</div>}
       <div className="panel" style={{ marginBottom: 16 }}>
         <div className="row wrap">
@@ -65,7 +65,7 @@ export default function Intake() {
             onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
             onDrop={(e) => { e.preventDefault(); setOver(false); setFiles([...files, ...Array.from(e.dataTransfer.files)].slice(0, 20)); }}>
             <b>{t("Drop invoices here")}</b><p className="muted small">{t("or press to choose files")}</p>
-            <input ref={input} type="file" multiple hidden accept=".txt,.pdf,.png,.jpg,.jpeg,.webp,.gif" onChange={(e) => setFiles([...files, ...Array.from(e.target.files || [])].slice(0, 20))} />
+            <input ref={input} type="file" multiple hidden accept=".txt,.pdf,.png,.jpg,.jpeg,.webp,.gif,.xml" onChange={(e) => setFiles([...files, ...Array.from(e.target.files || [])].slice(0, 20))} />
           </div>
           {files.length > 0 && (
             <div className="col" style={{ marginTop: 12 }}>

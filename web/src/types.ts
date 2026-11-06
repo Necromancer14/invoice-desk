@@ -6,7 +6,7 @@ export interface LineItem { description: string; quantity: number | null; unit_p
 export interface Fields {
   invoice_number: string | null; issue_date: string | null; due_date: string | null; seller_name: string | null; seller_vat: string | null;
   buyer_name: string | null; buyer_vat: string | null; currency: string | null; subtotal: number | null; vat_amount: number | null;
-  total: number | null; qr_payload: string | null; line_items: LineItem[] | null;
+  total: number | null; qr_payload: string | null; line_items: LineItem[] | null; invoice_type?: "standard" | "simplified" | null;
 }
 export interface RuleResult { key: string; name: string; severity: Severity; status: "pass" | "fail" | "skip"; detail: string }
 export interface TraceStep { step: string; ms: number; ok: boolean; detail: string; at: string }

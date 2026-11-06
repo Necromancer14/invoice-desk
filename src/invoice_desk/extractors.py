@@ -45,10 +45,11 @@ class Extractor(Protocol):
 
 def guess_type(filename: str, declared: str | None) -> str:
     if declared and declared != "application/octet-stream":
-        return declared.split(";")[0].strip().lower()
+        declared = declared.split(";")[0].strip().lower()
+        return "application/xml" if declared == "text/xml" else declared
     ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
     return {"pdf": "application/pdf", "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg",
-            "webp": "image/webp", "gif": "image/gif", "txt": "text/plain"}.get(ext, "application/octet-stream")
+            "webp": "image/webp", "gif": "image/gif", "txt": "text/plain", "xml": "application/xml"}.get(ext, "application/octet-stream")
 
 
 def _overall(fields: dict, fc: dict) -> float:
@@ -161,6 +162,11 @@ class RuleBasedExtractor:
             if key in raw:
                 out[key] = to_number(raw[key])
         out["currency"] = _currency(raw.get("currency")) or _currency(raw.get("total")) or _currency(raw.get("subtotal"))
+        head = "\n".join(lines[:4])
+        if re.search(r"simplified\s+tax\s+invoice|فاتورة\s+ضريبية\s+مبسطة", head, re.I):
+            out["invoice_type"] = "simplified"
+        elif re.search(r"tax\s+invoice|فاتورة\s+ضريبية", head, re.I):
+            out["invoice_type"] = "standard"
         m = _QR.search(text)
         out["qr_payload"] = m.group(1) if m else None
         for n, line in enumerate(lines):
@@ -212,6 +218,8 @@ def normalise(data: dict) -> tuple[dict, dict, list]:
         fields[k] = to_number(data.get(k))
     cur = data.get("currency")
     fields["currency"] = (_currency(str(cur)) or str(cur).upper()) if cur else None
+    kind = str(data.get("invoice_type") or "").strip().lower()
+    fields["invoice_type"] = kind if kind in ("standard", "simplified") else None
     for it in data.get("line_items") or []:
         if isinstance(it, dict):
             item = dict(description=str(it.get("description", "")), quantity=to_number(it.get("quantity")),
