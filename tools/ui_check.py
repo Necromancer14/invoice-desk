@@ -5,6 +5,7 @@
 Exits non-zero with the failing checks listed. tools/e2e.py is the walk-through that also takes screenshots.
 """
 import sys
+import time
 
 from playwright.sync_api import Page, expect, sync_playwright
 
@@ -68,7 +69,31 @@ def mixed_direction(page: Page) -> None:
     check("English name reads left-to-right in the Arabic table, aligned right", bool(english) and all(e["dir"] == "ltr" and e["align"] == "right" for e in english), str(english))
 
 
-CHECKS = [mixed_direction]
+def review_badge(page: Page) -> None:
+    """The sidebar count drops as soon as an invoice is decided, even when the server is slow to report it."""
+    sign_in(page)
+    load_samples(page, ["inv-006.txt", "inv-012.txt", "inv-019.txt", "inv-009.txt"])
+    page.evaluate("location.hash = '#/review'")
+    page.wait_for_selector("#reject-note")
+    badge = "document.querySelector('.nav .count')?.textContent || '0'"
+    listed = page.locator(".rq-item").count()
+    page.wait_for_function(f"({badge}) === '{listed}'", timeout=5000)
+    check("badge matches the review list", page.evaluate(badge) == str(listed), f"badge {page.evaluate(badge)}, list {listed}")
+
+    def slow(route):  # every stats answer now takes 2 s
+        time.sleep(2)
+        route.continue_()
+    page.route("**/api/stats", slow)
+    page.keyboard.press("a")
+    page.wait_for_selector(".toast")
+    after = page.evaluate(badge)
+    check("badge drops at once after approving, before the slow server answers", after == str(listed - 1), f"was {listed}, now {after}")
+    page.wait_for_timeout(2500)
+    check("badge still right once the server answers", page.evaluate(badge) == str(listed - 1), page.evaluate(badge))
+    page.unroute("**/api/stats")
+
+
+CHECKS = [mixed_direction, review_badge]
 
 if __name__ == "__main__":
     with sync_playwright() as pw:

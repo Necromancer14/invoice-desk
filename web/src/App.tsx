@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, demoLogin, passwordLogin, session, setUnauthorizedHandler } from "./api";
 import { AppCtx, Err, makeT, setFormatLang, tk } from "./common";
 import type { Role, Stats } from "./types";
@@ -89,13 +89,28 @@ export default function App() {
   }, []);
   useEffect(() => { const h = () => { setRoute(parseHash()); setOpen(false); }; window.addEventListener("hashchange", h); return () => window.removeEventListener("hashchange", h); }, []);
 
-  const refreshCounts = useCallback(() => { api<Stats>("/stats").then((s) => setQueue(s.review_queue)).catch(() => {}); }, []);
-  useEffect(() => { if (role) { refreshCounts(); const id = setInterval(refreshCounts, 8000); return () => clearInterval(id); } }, [role, refreshCounts]);
+  // The review badge. A decision lowers it at once (change = -1) and the server's count follows. Only the newest
+  // answer counts, so a slow reply from before the decision cannot put the old number back. While invoices are
+  // still being processed the count is fetched again every 1.5 s instead of waiting for the 8 s heartbeat.
+  const countSeq = useRef(0);
+  const countPoll = useRef<number | undefined>(undefined);
+  const refreshCounts = useCallback((change = 0) => {
+    const seq = ++countSeq.current;
+    if (change) setQueue((q) => Math.max(0, q + change));
+    api<Stats>("/stats").then((s) => {
+      if (seq !== countSeq.current) return;
+      setQueue(s.review_queue);
+      window.clearTimeout(countPoll.current);
+      if (s.by_status.queued + s.by_status.processing > 0) countPoll.current = window.setTimeout(() => refreshCounts(), 1500);
+    }).catch(() => {});
+  }, []);
+  const setQueueCount = useCallback((n: number) => { countSeq.current++; setQueue(n); }, []);
+  useEffect(() => { if (role) { refreshCounts(); const id = setInterval(() => refreshCounts(), 8000); return () => { clearInterval(id); window.clearTimeout(countPoll.current); }; } }, [role, refreshCounts]);
   useEffect(() => { if (!toastMsg) return; const id = setTimeout(() => setToastMsg(null), 4000); return () => clearTimeout(id); }, [toastMsg]);
 
   const go = useCallback((tab: string, arg?: string) => { location.hash = `#/${tab}${arg ? "/" + arg : ""}`; }, []);
   const t = useMemo(() => { setFormatLang(lang); return makeT(lang); }, [lang]);
-  const ctx = useMemo(() => ({ t, lang, role: role ?? "viewer", name, toast: (msg: string, kind: "ok" | "err" = "ok") => setToastMsg({ msg, kind }), refreshCounts, go }), [t, lang, role, name, refreshCounts, go]);
+  const ctx = useMemo(() => ({ t, lang, role: role ?? "viewer", name, toast: (msg: string, kind: "ok" | "err" = "ok") => setToastMsg({ msg, kind }), refreshCounts, setQueueCount, go }), [t, lang, role, name, refreshCounts, setQueueCount, go]);
 
   if (!checked) return null;
   if (!role) return <Login t={t} lang={lang} setLang={setLang} onIn={(r, n) => { setRole(r); setName(n); }} />;

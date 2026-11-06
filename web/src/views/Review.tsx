@@ -17,11 +17,12 @@ const NEXT = "M6 3l5 5-5 5";
 
 /** Review queue: the waiting invoices on the left, the selected one on the right. The URL is #/review/<id>. */
 export default function Review({ openId }: { openId?: number }) {
-  const { t, go } = useApp();
+  const { t, go, setQueueCount } = useApp();
   const queue = useLoad(() => api<QueueItem[]>("/review/queue"), []);
   const [items, setItems] = useState<QueueItem[] | null>(null);
   const [q, setQ] = useState("");
   useEffect(() => { if (queue.data) setItems(queue.data); }, [queue.data]);
+  useEffect(() => { if (items) setQueueCount(items.length); }, [items, setQueueCount]);
   // New uploads land in the queue while someone is reviewing, so refresh it now and then.
   useEffect(() => { const id = setInterval(queue.reload, 10000); return () => clearInterval(id); }, [queue.reload]);
 

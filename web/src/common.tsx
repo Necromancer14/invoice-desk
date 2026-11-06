@@ -4,7 +4,11 @@ import { LOCALE, makeT, tk, type Lang, type Vars } from "./i18n";
 
 export interface Ctx {
   t: (s: string, vars?: Vars) => string; lang: Lang; role: Role; name: string; toast: (msg: string, kind?: "ok" | "err") => void;
-  refreshCounts: () => void; go: (tab: string, arg?: string) => void;
+  /** Fetch the review count again; change adjusts the badge at once (a decision is -1) until the answer arrives. */
+  refreshCounts: (change?: number) => void;
+  /** The Review page knows the exact count from its own list. */
+  setQueueCount: (n: number) => void;
+  go: (tab: string, arg?: string) => void;
 }
 export const AppCtx = createContext<Ctx>(null as unknown as Ctx);
 export const useApp = () => useContext(AppCtx);

@@ -88,7 +88,7 @@ export function ReviewForm({ run, onDone }: { run: Run; onDone: (r: Run) => void
     for (const f of EDIT_FIELDS) if (dirty(f.key)) edits[f.key] = vals[f.key];
     try {
       const out = await api<Run>(`/runs/${run.id}/review`, { method: "POST", body: { decision, note, edits } });
-      toast(decision === "approve" ? t("Approved") : t("Rejected")); refreshCounts(); onDone(out);
+      toast(decision === "approve" ? t("Approved") : t("Rejected")); refreshCounts(-1); onDone(out);
     } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
   }
   useEffect(() => {
