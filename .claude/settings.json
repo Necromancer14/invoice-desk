@@ -1,0 +1,53 @@
+{
+  "permissions": {
+    "allow": [
+      "Edit(./**)",
+      "Bash(npm *)",
+      "Bash(npx *)",
+      "Bash(pytest *)",
+      "Bash(python *)",
+      "Bash(py *)",
+      "Bash(pip *)",
+      "Bash(node *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git status *)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git checkout *)",
+      "Bash(git branch *)"
+    ],
+    "ask": [
+      "WebFetch",
+      "WebSearch",
+      "Bash(curl *)",
+      "Bash(wget *)",
+      "Bash(git push *)",
+      "PowerShell(curl *)",
+      "PowerShell(wget *)",
+      "PowerShell(Invoke-WebRequest *)",
+      "PowerShell(iwr *)",
+      "PowerShell(Invoke-RestMethod *)",
+      "PowerShell(irm *)",
+      "PowerShell(git push *)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./**/.env)",
+      "Read(./**/.env.*)",
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(git push * --force*)",
+      "Bash(git push * -f*)",
+      "Bash(rm -rf *)",
+      "Bash(rm -fr *)",
+      "PowerShell(git push --force*)",
+      "PowerShell(git push -f*)",
+      "PowerShell(git push * --force*)",
+      "PowerShell(git push * -f*)"
+    ],
+    "blockReadsOutsideWorkingDirectories": true,
+    "blockWritesOutsideWorkingDirectories": true
+  }
+}

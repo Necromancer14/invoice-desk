@@ -2,6 +2,39 @@
 
 Guidance for working in this repository. See `README.md` for the product overview and `docs/` for deploy, demo and Windows walk-throughs.
 
+## Standing rules
+
+These apply to every task in this repo.
+
+**Working style**
+- Work autonomously inside this repo. Do not ask for confirmation to edit files, run tests or commit. Stop and ask only when blocked by something only the owner can provide: an API key, or a business decision with real tradeoffs.
+- Plan first: write the plan to `docs/plans/<feature>.md`, then implement it without waiting for approval.
+
+**Git**
+- Work on branch `dev`. Commit after each completed step.
+- Never push to `main`. (Pushing at all needs the owner's approval; see `.claude/settings.json`.)
+
+**Quality gate before every commit**, fixing any failure yourself:
+```bash
+py -m pytest -q                   # full test suite (all from the repo root)
+npm --prefix web run typecheck    # TypeScript check
+npm --prefix web run build        # frontend build; commit the rebuilt web/dist
+node tools/check_i18n.mjs         # every t()/tk() key has Arabic
+```
+- Every change needs tests.
+- Every new UI string goes into both English and Arabic (`web/src/locales/en.json`, `ar.json`), and the right-to-left layout must look right.
+
+**Safety**
+- Never store or log API keys.
+- Do not use the internet (web search, web fetch, curl, wget, downloads) without asking first. Installing this project's dependencies from npm or pip is fine.
+- Do not touch files outside this repo folder.
+
+**Wording**
+- Do not claim compliance or accuracy that cannot be proved. Keep wording plain and honest.
+- No em dashes, in code, docs, UI text or commit messages.
+
+**End of every task**: write a short report covering what changed, the tests run, what is left, and how to verify it by hand.
+
 ## What this is
 
 invoice-desk is a Saudi e-invoice intake desk. A FastAPI backend reads invoices (text, PDF, image), validates the extracted fields with a rule engine whose rules live in SQLite, auto-approves, routes to human review or rejects, and logs everything. A React + TypeScript portal (`web/`) is built to `web/dist` and served by the same FastAPI app.
@@ -41,7 +74,7 @@ Key design points:
 - Keep HTTP concerns in `api.py` and business logic in `desk.py`.
 - Rules are data: any rule change goes through `Desk.upsert_rule`/`delete_rule`/`reorder_rules`/`rollback`, each of which snapshots a new rule version.
 - The AI key arrives per request in `X-LLM-Provider` / `X-LLM-Key` / `X-LLM-Model` headers and must never be stored or logged (tests check this).
-- If an AI call fails, processing falls back to the rule-based reader.
+- If an AI call fails during normal intake, processing falls back to the rule-based reader. The AI evaluation never falls back: a failed call is recorded as an error and left out of the figures.
 
 ## Running the tests
 
@@ -92,4 +125,4 @@ npm run build
 - `npm run build` runs `tsc --noEmit` and then `vite build`, writing to `web/dist/`. The FastAPI app serves `web/dist` directly, so restart or refresh the server after a build. Commit the updated `web/dist` because the app ships with the built portal.
 - `npm run typecheck` runs only the TypeScript check.
 - Dev mode with hot reload: run the API on port 8000, then `npm run dev` in `web/`. Vite proxies `/api` to `http://127.0.0.1:8000`.
-- The portal uses no UI or chart library; keep it that way (bundle is about 62 KB gzipped). Fonts are in `web/public/fonts`.
+- The portal uses no UI or chart library; keep it that way (bundle is about 78 KB gzipped). Fonts are in `web/public/fonts`.
