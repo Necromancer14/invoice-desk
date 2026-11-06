@@ -76,12 +76,21 @@ with sync_playwright() as pw:
             axe(page, f"sign-in {lang}/{theme}")
             page.locator(".roles button").first.click()
             page.wait_for_selector(".nav")
-            if lang == "en" and theme == "light":
-                tok = page.evaluate("localStorage.getItem('id-token')")
-                page.evaluate("""async (t) => { const h = { Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' };
-                    await fetch('/api/admin/reset', { method: 'POST', headers: h, body: '{}' });
-                    await fetch('/api/samples/submit', { method: 'POST', headers: h, body: JSON.stringify({ files: ['inv-006.txt', 'inv-012.txt', 'inv-013.txt', 'inv-003.txt'] }) }); }""", tok)
-                page.wait_for_timeout(1500)
+            # an empty database first: the welcome card and the reset dialog, then the samples for the other pages
+            tok = page.evaluate("localStorage.getItem('id-token')")
+            page.evaluate("""async (t) => fetch('/api/admin/reset', { method: 'POST', body: '{}',
+                headers: { Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' } })""", tok)
+            page.evaluate("location.hash = '#/dashboard'; location.reload()")
+            page.wait_for_selector(".welcome")
+            axe(page, f"welcome card {lang}/{theme}")
+            page.evaluate("location.hash = '#/settings'")
+            page.locator(".btn.danger").first.click()
+            page.wait_for_selector(".modal")
+            axe(page, f"reset dialog {lang}/{theme}")
+            page.keyboard.press("Escape")
+            page.evaluate("""async (t) => { const h = { Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' };
+                await fetch('/api/samples/submit', { method: 'POST', headers: h, body: JSON.stringify({ files: ['inv-006.txt', 'inv-012.txt', 'inv-013.txt', 'inv-003.txt'] }) }); }""", tok)
+            page.wait_for_timeout(1500)
             for name in PAGES:
                 page.evaluate(f"location.hash = '#/{name}'")
                 page.wait_for_timeout(700)

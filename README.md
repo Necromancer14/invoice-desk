@@ -22,6 +22,7 @@ A Saudi e-invoice intake desk. Invoices come in as text, PDF or photo. A built-i
 - **Human review** queue: a searchable list of everything waiting, beside the original and its extracted fields. Edit anything, approve or reject with a note, and move through the queue with Previous/Next or the keyboard (`j` next, `k` previous, `a` approve, `r` jump to the note). Each invoice has its own link (`#/review/<id>`), and after a decision the next one opens. Corrections are kept next to the original extraction.
 - **Rules as data**: add, edit, reorder, switch off and delete rules in the portal. Every change is a version you can restore. A dry run shows how many past invoices would get a different decision before you save.
 - **Vendor master and purchase orders**: a Vendors page to list, add, edit, delete and import vendors and POs from CSV, with name matching across English and Arabic and a one-click "Link to vendor" in review.
+- **Demo start**: on an empty database the dashboard offers "Load sample invoices" (20 samples, built-in reader, 11 approved, 6 to review, 3 rejected) or "Try with your own AI key". Each run is tagged as an upload or an evaluation run; the dashboard and Runs show uploads by default, the duplicate check only compares runs from the same source, and evaluation runs never enter the review queue. Admins reset the demo from Settings after a confirm step.
 - **Audit log** of every action, including automatic decisions.
 - **Evaluation** page: scores the reader and rules on 89 synthetic invoices with a known answer key (field accuracy, decision agreement, unsafe approvals, false rejections).
 - **Roles**: viewer, reviewer, admin. Signed tokens. Demo mode lets visitors pick a role; set `DEMO_MODE=0` and `INVOICE_DESK_USERS` for real sign-in.
@@ -166,7 +167,7 @@ flowchart LR
 
 ```bash
 pip install -e ".[dev,mcp]"
-pytest -q          # 267 tests: rules and their edge cases, vendor matching and IBANs, expression safety, pipeline, review and the review queue, versioning, API roles and input validation, provider adapters and 429/503 retries (fake servers), evaluation and the AI sample
+pytest -q          # 274 tests: rules and their edge cases, run sources and the demo start, vendor matching and IBANs, expression safety, pipeline, review and the review queue, versioning, API roles and input validation, provider adapters and 429/503 retries (fake servers), evaluation and the AI sample
 python tools/e2e.py         # with the server running: drives the portal in Chromium and saves the screenshots
 python tools/ui_check.py    # with a fresh server: behaviour checks (directions, badge, waking screen, error messages, uploads)
 python tools/a11y_check.py  # with a fresh server and `npm ci` in web/: axe-core on every page in English/Arabic, light/dark, plus keyboard checks
