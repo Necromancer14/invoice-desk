@@ -21,6 +21,7 @@ from .textnorm import number_key, parse_date, to_number, vat_key
 from .ubl import UblExtractor, XmlError, check_safe, looks_like_xml
 from .vendors import VendorBook, clean_po, clean_vendor, name_key, po_match, read_csv
 
+SOURCES = ("upload", "evaluation")
 SAMPLES_DIR = Path(__file__).resolve().parents[2] / "data" / "samples"
 
 MAX_BYTES = 5 * 1024 * 1024
@@ -90,6 +91,8 @@ class Desk:
         self.pool = None if sync else ThreadPoolExecutor(max_workers=workers)
         self.extractor_factory = extractor_factory or self._default_factory
         self.seed_vendors = seed_vendors
+        # every run is an upload (files and samples sent through intake) or an evaluation run; older rows said "sample"
+        self.db.run("UPDATE runs SET source='upload' WHERE source IS NULL OR source NOT IN ('upload','evaluation','history')")
         if not self.db.one("SELECT key FROM rules LIMIT 1"):  # a new database: an existing one keeps its rules and vendors
             self._seed_rules()
             if seed_vendors:
@@ -100,6 +103,8 @@ class Desk:
         return self.today or date.today()
 
     def audit(self, actor: str, action: str, target: str = "", detail: str = "") -> None:
+        if getattr(self, "_seeding", False):  # loading the demo vendor master is setup, not something anyone did
+            return
         self.db.run("INSERT INTO audit(ts,actor,action,target,detail) VALUES(?,?,?,?,?)", (now(), actor, action, target, detail))
 
     def _default_factory(self, mode: str, llm: dict | None):
@@ -246,13 +251,19 @@ class Desk:
         return loads(row["snapshot"], [])
 
     def _dup_checker(self, run_id: int | None):
+        """Only runs from the same source count: an evaluation never makes an upload a duplicate, nor the other way.
+        Evaluation history rows (the earlier invoice a duplicate sample copies) count for evaluation runs."""
+        row = self.db.one("SELECT source FROM runs WHERE id=?", (run_id,)) if run_id is not None else None
+        source = (row or {}).get("source") or "upload"
+        sources = ("evaluation", "history") if source == "evaluation" else (source, source)
+
         def check(vat: str, number: str) -> bool:
             # compared after normalising: Arabic-Indic digits, spaces, letter case
             want = (vat_key(vat), number_key(number))
             if not all(want):
                 return False
-            rows = self.db.all("SELECT fields, final_fields FROM runs WHERE (? IS NULL OR id < ?) AND status NOT IN "
-                               "('rejected','rejected_human','failed','queued')", (run_id, run_id))
+            rows = self.db.all("SELECT fields, final_fields FROM runs WHERE (? IS NULL OR id < ?) AND source IN (?,?) AND status NOT IN "
+                               "('rejected','rejected_human','failed','queued')", (run_id, run_id, *sources))
             for r in rows:
                 f = loads(r["final_fields"]) or loads(r["fields"], {}) or {}
                 if (vat_key(f.get("seller_vat")), number_key(f.get("invoice_number"))) == want:
@@ -395,7 +406,11 @@ class Desk:
         for name, fn in (("vendors.csv", self.import_vendors), ("purchase_orders.csv", self.import_pos)):
             path = SAMPLES_DIR / name
             if path.exists():
-                fn(path.read_text(encoding="utf-8"), "system")
+                self._seeding = True
+                try:
+                    fn(path.read_text(encoding="utf-8"), "system")
+                finally:
+                    self._seeding = False
 
     def simulate(self, candidate: list[dict] | None = None, limit: int = 300, rule: dict | None = None) -> dict:
         """Dry run: what would change if these rules had been in force for past runs? Nothing is written."""
@@ -578,8 +593,12 @@ class Desk:
             raise DeskError("run not found", 404)
         return r["blob"], r["content_type"], r["filename"]
 
-    def list_runs(self, status: str | None = None, q: str | None = None, limit: int = 50, offset: int = 0) -> dict:
+    def list_runs(self, status: str | None = None, q: str | None = None, limit: int = 50, offset: int = 0,
+                  source: str | None = None) -> dict:
         where, args = [], []
+        if source in SOURCES:
+            where.append("source=?")
+            args.append(source)
         if status:
             where.append("status IN (%s)" % ",".join("?" * len(status.split(","))))
             args += status.split(",")
@@ -593,13 +612,13 @@ class Desk:
         return dict(total=total, items=[self._run_view(r) for r in rows])
 
     def next_review(self, after_id: int | None = None) -> dict | None:
-        r = self.db.one("SELECT * FROM runs WHERE status='needs_review' ORDER BY id LIMIT 1")
+        r = self.db.one("SELECT * FROM runs WHERE status='needs_review' AND source='upload' ORDER BY id LIMIT 1")
         return self._run_view(r, True) if r else None
 
     def review_queue(self) -> list[dict]:
         """Every run waiting for a person, oldest first, without blobs or traces: enough to draw a list."""
         rows = self.db.all("SELECT id,filename,created_at,fields,final_fields,results FROM runs "
-                           "WHERE status='needs_review' ORDER BY id")
+                           "WHERE status='needs_review' AND source='upload' ORDER BY id")
         out = []
         for r in rows:
             f = self._current_fields(r) or {}
@@ -615,6 +634,8 @@ class Desk:
         r = self.db.one("SELECT * FROM runs WHERE id=?", (rid,))
         if not r:
             raise DeskError("run not found", 404)
+        if r["source"] == "evaluation":
+            raise DeskError("evaluation runs are scored against the answer key, not reviewed", 409)
         if r["status"] != "needs_review":
             raise DeskError(f"run is {r['status']}, only runs waiting for review can be decided", 409)
         if decision not in ("approve", "reject"):
@@ -670,13 +691,27 @@ class Desk:
             self.pool.submit(self.process, rid, llm)
 
     # ------------------------------------------------------------------ stats
-    def stats(self) -> dict:
-        rows = self.db.all("SELECT id,status,mode,created_at,decided_at,results,extraction,edited FROM runs")
+    def record_evaluation_runs(self, runs: list[dict]) -> int:
+        """Keep the runs an evaluation made on its scratch database, tagged evaluation, so they can be opened later.
+        They are scored against the answer key and never wait in the review queue."""
+        cols = ("filename", "content_type", "blob", "size", "status", "mode", "fields", "extraction", "results", "rules_version",
+                "error", "created_at", "updated_at", "decided_at", "submitted_by", "trace")
+        for r in runs:
+            self.db.run(f"INSERT INTO runs(source,{','.join(cols)}) VALUES('evaluation',{','.join('?' * len(cols))})",
+                        tuple(r.get(c) for c in cols))
+        return len(runs)
+
+    def stats(self, source: str | None = None) -> dict:
+        """source: upload or evaluation; anything else counts every run. The review queue is always uploads only."""
+        where = "WHERE source=?" if source in SOURCES else ""
+        rows = self.db.all(f"SELECT id,status,mode,created_at,decided_at,results,extraction,edited FROM runs {where}",
+                           (source,) if where else ())
         by_status = Counter(r["status"] for r in rows)
         s = self.settings()
         tin = tout = 0
         latencies, ttr = [], []
         failing: Counter = Counter()
+        reasons: Counter = Counter()
         days = Counter()
         for r in rows:
             ex = loads(r["extraction"], {}) or {}
@@ -687,6 +722,12 @@ class Desk:
             for x in loads(r["results"], []) or []:
                 if x["status"] == "fail":
                     failing[x["name"]] += 1
+                    if r["status"] == "rejected" and x["severity"] == "reject":
+                        reasons[x["name"]] += 1
+            if r["status"] == "rejected_human":
+                reasons["Rejected by a reviewer"] += 1
+            elif r["status"] == "failed":
+                reasons["Could not be processed"] += 1
             days[r["created_at"][:10]] += 1
             if r["status"] in ("approved_human", "rejected_human") and r["decided_at"]:
                 ttr.append((datetime.fromisoformat(r["decided_at"]) - datetime.fromisoformat(r["created_at"])).total_seconds())
@@ -698,13 +739,16 @@ class Desk:
             cost = round(tin / 1e6 * float(s["price_in_per_mtok"]) + tout / 1e6 * float(s["price_out_per_mtok"]), 4)
         return dict(total=len(rows), by_status={k: by_status.get(k, 0) for k in
                                                 ("approved", "needs_review", "rejected", "approved_human", "rejected_human", "failed", "queued", "processing")},
-                    review_queue=by_status["needs_review"],
+                    review_queue=self.db.one("SELECT COUNT(*) n FROM runs WHERE status='needs_review' AND source='upload'")["n"],
+                    source=source if source in SOURCES else "all",
+                    uploads=self.db.one("SELECT COUNT(*) n FROM runs WHERE source='upload'")["n"],
                     auto_approve_rate=round(by_status["approved"] / machine_done, 3) if machine_done else None,
                     human_corrected=sum(1 for r in rows if r["edited"]),
                     avg_extract_ms=int(sum(latencies) / len(latencies)) if latencies else None,
                     avg_time_to_review_s=int(sum(ttr) / len(ttr)) if ttr else None,
                     tokens_in=tin, tokens_out=tout, cost=cost, ai_runs=sum(1 for r in rows if r["mode"] == "ai"),
-                    top_failing=[dict(rule=k, count=v) for k, v in failing.most_common(6)], series=series,
+                    top_failing=[dict(rule=k, count=v) for k, v in failing.most_common(6)],
+                    top_rejections=[dict(reason=k, count=v) for k, v in reasons.most_common(6)], series=series,
                     rules_version=self.rules_version())
 
     def audit_log(self, limit: int = 200, actor: str | None = None, action: str | None = None) -> list[dict]:

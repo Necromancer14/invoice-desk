@@ -109,7 +109,13 @@ def evaluate(mode: str = "rules", llm: dict | None = None, rules: list[dict] | N
     stats = desk.stats()
     out = summarize_rows(per)
     out.update(mode=mode, as_of=data["as_of"], tokens_in=stats["tokens_in"], tokens_out=stats["tokens_out"], rows=per)
+    out["_runs"] = _runs(desk, list(ids.values()))
     return out
+
+
+def _runs(desk: Desk, ids: list[int]) -> list[dict]:
+    """The scratch database's scored runs (not the history rows), for the caller to keep. Not JSON: holds the files."""
+    return desk.db.all(f"SELECT * FROM runs WHERE id IN ({','.join('?' * len(ids))}) ORDER BY id", ids) if ids else []
 
 
 # ------------------------------------------------------------------------------------------- sampling
@@ -195,6 +201,7 @@ def _add_history(desk: Desk, src: dict) -> None:
     desk.db.run("INSERT INTO runs(filename,content_type,blob,source,size,status,mode,fields,created_at,updated_at,submitted_by,trace)"
                 " VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
                 (src["file"], "text/plain", b"", "history", 0, "approved", "rules", dumps(src["truth"]), now, now, "evaluation", "[]"))
+    # source "history": counts for the evaluation's duplicate check, and is never copied out as an evaluation run
 
 
 class _Replay:
@@ -229,6 +236,7 @@ def evaluate_ai(llm: dict, rules: list[dict] | None = None, *, sample_size: int 
             _add_history(desk, src)
 
     rows: list[dict] = []
+    run_ids: list[int] = []
     stopped: dict | None = None
     gap = 60.0 / max(rpm, 0.1)
     last = None
@@ -245,6 +253,7 @@ def evaluate_ai(llm: dict, rules: list[dict] | None = None, *, sample_size: int 
             from .ubl import UblExtractor
             replay.next = UblExtractor().extract(blob, ctype, it["file"])
             rid = desk.submit(it["file"], blob, ctype, "evaluation", mode="ai", llm={"provider": provider}, source="evaluation")
+            run_ids.append(rid)
             rows.append(_score(it, desk.get_run(rid)))
             report()
             continue
@@ -271,6 +280,7 @@ def evaluate_ai(llm: dict, rules: list[dict] | None = None, *, sample_size: int 
             continue
         replay.next = extraction
         rid = desk.submit(it["file"], blob, ctype, "evaluation", mode="ai", llm={"provider": provider}, source="evaluation")
+        run_ids.append(rid)
         row = _score(it, desk.get_run(rid))
         row.update(tokens_in=extraction.tokens_in, tokens_out=extraction.tokens_out)
         rows.append(row)
@@ -278,7 +288,7 @@ def evaluate_ai(llm: dict, rules: list[dict] | None = None, *, sample_size: int 
     report(stopped["message"] if stopped else "")
     return dict(mode="ai", provider=provider, model=model, as_of=data["as_of"], seed=seed, sample_size=sample_size,
                 picked=[i["id"] for i in sample], rows=rows, attempted=len(rows), evaluated=sum(r["outcome"] == "ok" for r in rows),
-                errors=sum(r["outcome"] == "error" for r in rows), stopped=stopped)
+                errors=sum(r["outcome"] == "error" for r in rows), stopped=stopped, _runs=_runs(desk, run_ids))
 
 
 # ------------------------------------------------------------------------------------------- storage

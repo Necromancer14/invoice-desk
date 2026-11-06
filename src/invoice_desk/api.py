@@ -20,7 +20,7 @@ from .desk import MAX_BYTES, Desk, DeskError
 from .evaluation import ai_history, evaluate, evaluate_ai, evaluated_ids, save_ai_rows
 from .providers import ProviderError, build_extractor, public_providers
 from .rules import HELP_FUNCS, RULE_TYPES
-from .samples import list_samples, sample_bytes
+from .samples import DEMO_SET, list_samples, sample_bytes
 from .schema import FIELDS
 
 WEB_DIST = Path(__file__).resolve().parents[2] / "web" / "dist"
@@ -159,8 +159,9 @@ def create_app(desk: Desk | None = None, auth: Auth | None = None, rate_limit: i
         return dict(ids=ids)
 
     @app.get("/api/runs")
-    def runs(status: str | None = None, q: str | None = None, limit: int = 50, offset: int = 0, user=Depends(need("viewer"))):
-        return desk.list_runs(status, (q or "")[:200] or None, max(1, min(limit, 200)), max(0, offset))
+    def runs(status: str | None = None, q: str | None = None, limit: int = 50, offset: int = 0, source: str | None = None,
+             user=Depends(need("viewer"))):
+        return desk.list_runs(status, (q or "")[:200] or None, max(1, min(limit, 200)), max(0, offset), source)
 
     @app.get("/api/runs/{rid}")
     def run(rid: int, user=Depends(need("viewer"))):
@@ -238,8 +239,11 @@ def create_app(desk: Desk | None = None, auth: Auth | None = None, rate_limit: i
         return desk.review_queue()
 
     @app.get("/api/stats")
-    def stats(user=Depends(need("viewer"))):
-        return desk.stats()
+    def stats(source: str = "upload", user=Depends(need("viewer"))):
+        """source: upload (default), evaluation or all."""
+        if source not in ("upload", "evaluation", "all"):
+            raise HTTPException(400, "source must be upload, evaluation or all")
+        return desk.stats(source)
 
     # ------------------------------------------------------------------ rules
     @app.get("/api/rules")
@@ -323,7 +327,15 @@ def create_app(desk: Desk | None = None, auth: Auth | None = None, rate_limit: i
         for name in files:
             if name not in known:
                 raise HTTPException(404, f"unknown sample {name}")
-            ids.append(desk.submit(name, sample_bytes(name), None, user["sub"], body.get("mode") or mode, llm, source="sample"))
+            ids.append(desk.submit(name, sample_bytes(name), None, user["sub"], body.get("mode") or mode, llm, source="upload"))
+        return dict(ids=ids)
+
+    @app.post("/api/samples/demo")
+    def samples_demo(request: Request, user=Depends(need("reviewer"))):
+        """The welcome set: 20 samples through the built-in reader, a realistic mix of approved, review and rejected."""
+        limiter.check(request.client.host if request.client else "local")
+        ids = [desk.submit(name, sample_bytes(name), None, user["sub"], "rules", None, source="upload") for name in DEMO_SET]
+        desk.audit(user["sub"], "demo.samples", "", f"{len(ids)} sample invoices loaded")
         return dict(ids=ids)
 
     @app.get("/api/samples/{name}")
@@ -343,6 +355,7 @@ def create_app(desk: Desk | None = None, auth: Auth | None = None, rate_limit: i
             skip = evaluated_ids(desk.db, llm["provider"], model) if opts["only_new"] else []
             res = evaluate_ai(llm, desk.rules(), sample_size=opts["sample_size"], seed=opts["seed"], rpm=opts["rpm"],
                               skip_ids=skip, transport=eval_transport, progress=job.update)
+            desk.record_evaluation_runs(res.pop("_runs", []))
             version = desk.rules_version()
             save_ai_rows(desk.db, res["provider"], res["model"], version, res["rows"])
             last = {k: res[k] for k in ("provider", "model", "seed", "sample_size", "attempted", "evaluated", "errors", "stopped")}
@@ -358,6 +371,7 @@ def create_app(desk: Desk | None = None, auth: Auth | None = None, rate_limit: i
     def _run_eval(job_id: str, mode: str, llm: dict | None):
         try:
             res = evaluate(mode=mode, llm=llm, rules=desk.rules())
+            desk.record_evaluation_runs(res.pop("_runs", []))
             res["provider"] = (llm or {}).get("provider")
             res["rules_version"] = desk.rules_version()
             res["ran_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
