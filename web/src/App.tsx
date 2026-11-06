@@ -27,8 +27,9 @@ const TABS: { id: string; label: string; icon: string }[] = [
 
 const ROLE_LABEL: Record<Role, string> = { admin: tk("Admin"), reviewer: tk("Reviewer"), viewer: tk("Viewer") };
 
-const LogoMark = () => (
-  <svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#19ac60" /><stop offset="1" stopColor="#006c35" /></linearGradient></defs><rect width="32" height="32" rx="10" fill="url(#lg)" /><path d="M9 7.5h10l4.5 4.5v12.5H9z" fill="none" stroke="#fff" strokeWidth="2" strokeLinejoin="round" /><path d="M13 17.5l3 3 5-6" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+/** The mark: a page with a tick, in the brand green of the active theme. */
+const LogoMark = ({ size = 28 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true" style={{ flex: "none" }}><rect width="32" height="32" rx="7" fill="var(--brand)" /><path d="M9 7.5h10l4.5 4.5v12.5H9z" fill="none" stroke="var(--on-brand)" strokeWidth="2" strokeLinejoin="round" /><path d="M13 17.5l3 3 5-6" fill="none" stroke="var(--on-brand)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
 );
 
 function parseHash(): { tab: string; arg?: string } {
@@ -80,7 +81,7 @@ function useHealth(attempt: number) {
 function Waking({ t, lang, setLang, failed, waited, retry }: { t: T; lang: Lang; setLang: (l: Lang) => void; failed: boolean; waited: number; retry: () => void }) {
   return (
     <main className="login"><div className="panel" role={failed ? "alert" : "status"} aria-live="polite">
-      <div className="row" style={{ gap: 12 }}><svg width="40" height="40" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#006c35" /><path d="M9 7.5h10l4.5 4.5v12.5H9z" fill="none" stroke="#fff" strokeWidth="2" strokeLinejoin="round" /><path d="M13 17.5l3 3 5-6" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg><div className="grow"><h1>invoice-desk</h1></div>
+      <div className="row" style={{ gap: 12 }}><LogoMark size={36} /><div className="grow"><h1>invoice-desk</h1></div>
         <button className="chip" style={{ alignSelf: "start" }} onClick={() => setLang(lang === "en" ? "ar" : "en")} aria-label={t("Switch language")}>{lang === "en" ? "العربية" : "English"}</button></div>
       {failed ? <>
         <h2>{t("The demo did not wake up")}</h2>
@@ -107,7 +108,7 @@ function Login({ onIn, t, lang, setLang, demo }: { onIn: (r: Role, name: string)
   }
   return (
     <main className="login"><div className="panel">
-      <div className="row" style={{ gap: 12 }}><svg width="40" height="40" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#006c35" /><path d="M9 7.5h10l4.5 4.5v12.5H9z" fill="none" stroke="#fff" strokeWidth="2" strokeLinejoin="round" /><path d="M13 17.5l3 3 5-6" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg><div className="grow"><h1>invoice-desk</h1><p className="muted">{t("Saudi e-invoice intake with human review")}</p></div>
+      <div className="row" style={{ gap: 12 }}><LogoMark size={36} /><div className="grow"><h1>invoice-desk</h1><p className="muted">{t("Saudi e-invoice intake with human review")}</p></div>
         <button className="chip" style={{ alignSelf: "start" }} onClick={() => setLang(lang === "en" ? "ar" : "en")} aria-label={t("Switch language")}>{lang === "en" ? "العربية" : "English"}</button></div>
       <Err msg={err} />
       {demo && <div className="roles" role="group" aria-label={t("Sign in as")}>

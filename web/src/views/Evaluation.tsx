@@ -45,7 +45,7 @@ function Metrics({ r, title, note, hideCount }: { r: EvalResult; title: string; 
         <div className="fact"><b>{pct(r.decision_agreement)}</b><span>{t("same decision as the answer key")}</span><small className="n-note">{nInv(n)}</small></div>
         <div className="fact"><b>{pct(r.field_accuracy)}</b><span>{t("fields read correctly")}</span><small className="n-note">{t("n = {n} fields", { n: r.fields_total ?? 0 })}</small></div>
         <div className="fact"><b>{pct(r.auto_approve_rate)}</b><span>{t("approved without a person")}</span><small className="n-note">{nInv(n)}</small></div>
-        <div className="fact"><b style={{ color: r.unsafe_auto_approvals ? "var(--red)" : undefined }}>{num(r.unsafe_auto_approvals)}</b><span>{t("approved when it should not have been")}</span><small className="n-note">{nInv(n)}</small></div>
+        <div className="fact"><b style={{ color: r.unsafe_auto_approvals ? "var(--bad)" : undefined }}>{num(r.unsafe_auto_approvals)}</b><span>{t("approved when it should not have been")}</span><small className="n-note">{nInv(n)}</small></div>
         <div className="fact"><b>{num(r.false_rejections)}</b><span>{t("wrongly rejected")}</span><small className="n-note">{nInv(n)}</small></div>
       </div>
       <h3 style={{ margin: "20px 0 6px" }}>{t("By kind of invoice")}</h3>

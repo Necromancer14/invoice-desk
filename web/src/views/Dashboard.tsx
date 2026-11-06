@@ -30,8 +30,6 @@ function Welcome({ onLoaded }: { onLoaded: () => void }) {
   );
 }
 
-const PART_COLOR: Record<string, string> = { a: "var(--accent)", h: "var(--accent-soft)", r: "var(--amber)", x: "var(--red)" };
-
 export default function Dashboard() {
   const { t } = useApp();
   const [source, setSource] = useState<Source>("upload");
@@ -66,7 +64,7 @@ export default function Dashboard() {
               {parts.filter((p) => p.n).map((p) => <div key={p.k} className={p.k} style={{ flexGrow: p.n }}>{p.n / sum > 0.07 ? num(p.n) : ""}</div>)}
             </div>
             <div className="legend">
-              {parts.map((p) => <span key={p.k}><i className={p.k} style={{ background: PART_COLOR[p.k], border: "1px solid var(--line-strong)" }} />{t(p.label)} ({num(p.n)})</span>)}
+              {parts.map((p) => <span key={p.k}><i className={p.k} />{t(p.label)} ({num(p.n)})</span>)}
             </div>
             <div className="facts">
               <div className="fact"><b>{num(s.total)}</b><span>{t("invoices received")}</span></div>
