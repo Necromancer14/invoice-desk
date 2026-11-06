@@ -226,7 +226,23 @@ def provider_failure(page: Page) -> None:
     page.evaluate("sessionStorage.clear()")
 
 
-CHECKS = [mixed_direction, review_badge, waking_screen, rule_with_open_limit, error_messages, damaged_file, provider_failure]
+def xml_is_indented(page: Page) -> None:
+    """A UBL XML invoice shows indented, one element per line, left-to-right even in Arabic."""
+    sign_in(page, lang="ar")
+    load_samples(page, ["inv-073.xml"])
+    page.evaluate("location.hash = '#/runs'")
+    page.locator("tbody tr").first.click()
+    pre = page.locator(".modal .doc pre")
+    expect(pre).to_be_visible()
+    page.wait_for_function("document.querySelector('.modal .doc pre').textContent.includes('</Invoice>')")
+    text = pre.inner_text()
+    lines = text.splitlines()
+    check("XML is shown on many lines", len(lines) > 40, f"{len(lines)} lines")
+    check("XML is indented", any(line.startswith("    <cbc:") for line in lines), lines[:5])
+    check("XML reads left-to-right in Arabic", pre.evaluate("e => getComputedStyle(e).direction") == "ltr")
+
+
+CHECKS = [mixed_direction, review_badge, waking_screen, rule_with_open_limit, error_messages, damaged_file, provider_failure, xml_is_indented]
 
 if __name__ == "__main__":
     with sync_playwright() as pw:

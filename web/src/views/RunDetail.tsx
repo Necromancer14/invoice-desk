@@ -15,6 +15,33 @@ const EDIT_FIELDS: { key: keyof Fields; type?: "number" | "date"; wide?: boolean
 /** UBL tax category of a line. Lines without one are standard-rated. */
 const VAT_CATEGORY = { S: tk("Standard rate"), Z: tk("Zero-rated"), E: tk("Exempt"), O: tk("Out of scope") };
 
+/** Indents an XML document for reading, two spaces a level; an element holding only text stays on one line.
+ *  If the XML cannot be parsed the original text is shown unchanged. */
+export function prettyXml(src: string): string {
+  const doc = new DOMParser().parseFromString(src, "application/xml");
+  if (doc.getElementsByTagName("parsererror").length) return src;
+  const esc = (v: string) => v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const attrs = (el: Element) => [...el.attributes].map((a) => ` ${a.name}="${esc(a.value).replace(/"/g, "&quot;")}"`).join("");
+  const out: string[] = [];
+  const decl = src.match(/^\s*<\?xml[^>]*\?>/);
+  if (decl) out.push(decl[0].trim());
+  const walk = (el: Element, depth: number) => {
+    const pad = "  ".repeat(depth);
+    const kids = [...el.childNodes].filter((n) => n.nodeType === 1 || n.nodeType === 8 || (n.nodeType === 3 && n.textContent!.trim()));
+    if (!kids.length) { out.push(`${pad}<${el.tagName}${attrs(el)}/>`); return; }
+    if (kids.every((n) => n.nodeType === 3)) { out.push(`${pad}<${el.tagName}${attrs(el)}>${esc(el.textContent!.trim())}</${el.tagName}>`); return; }
+    out.push(`${pad}<${el.tagName}${attrs(el)}>`);
+    for (const n of kids) {
+      if (n.nodeType === 1) walk(n as Element, depth + 1);
+      else if (n.nodeType === 8) out.push(`${pad}  <!--${n.textContent}-->`);
+      else out.push(`${pad}  ${esc(n.textContent!.trim())}`);
+    }
+    out.push(`${pad}</${el.tagName}>`);
+  };
+  walk(doc.documentElement, 0);
+  return out.join("\n");
+}
+
 export function Document({ run }: { run: Run }) {
   const { t } = useApp();
   const [url, setUrl] = useState<string | null>(null);
@@ -24,7 +51,8 @@ export function Document({ run }: { run: Run }) {
     setUrl(null); setText(null);
     fileBlobUrl(`/runs/${run.id}/file`).then(async (u) => {
       revoked = u;
-      if (run.content_type === "text/plain" || run.content_type === "application/xml") setText(await (await fetch(u)).text());
+      if (run.content_type === "text/plain") setText(await (await fetch(u)).text());
+      else if (run.content_type === "application/xml") setText(prettyXml(await (await fetch(u)).text()));
       else setUrl(u);
     }).catch(() => setText(t("Could not load the original file.")));
     return () => { if (revoked) URL.revokeObjectURL(revoked); };
@@ -32,8 +60,8 @@ export function Document({ run }: { run: Run }) {
   }, [run.id, run.content_type]);
   return (
     <div className="doc">
-      {/* the original may be Arabic, English or both: let it pick its own direction */}
-      {text !== null && <pre dir="auto">{text}</pre>}
+      {/* the original may be Arabic, English or both: let it pick its own direction. XML is code: always left-to-right */}
+      {text !== null && <pre dir={run.content_type === "application/xml" ? "ltr" : "auto"} className={run.content_type === "application/xml" ? "xml" : undefined}>{text}</pre>}
       {url && run.content_type === "application/pdf" && <iframe src={url} title={run.filename} />}
       {url && run.content_type.startsWith("image/") && <img src={url} alt={run.filename} />}
     </div>

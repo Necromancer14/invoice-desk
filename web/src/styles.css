@@ -136,6 +136,7 @@ td.n, th.n { text-align: end; font-variant-numeric: tabular-nums; }
 .doc { background: rgba(255, 255, 255, .92); border: 1px solid var(--edge); border-radius: var(--r-lg); overflow: hidden; min-height: 320px; box-shadow: var(--shadow); color: #14202b; }
 .doc iframe, .doc img { width: 100%; border: 0; display: block; } .doc iframe { height: 640px; background: #fff; }
 .doc pre { margin: 0; padding: 18px; white-space: pre-wrap; word-break: break-word; font: 13px/1.65 var(--font); max-height: 640px; overflow: auto; }
+.doc pre.xml { white-space: pre; word-break: normal; text-align: left; font: 12.5px/1.6 ui-monospace, Consolas, "Cascadia Mono", monospace; }
 .fieldgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px; } .fieldgrid .wide { grid-column: 1 / -1; }
 .conf { height: 4px; border-radius: 2px; background: var(--line); margin-top: 3px; overflow: hidden; } .conf i { display: block; height: 100%; background: var(--green-2); } .conf.low i { background: #e0a020; }
 .edited input { border-color: var(--amber); background: var(--amber-soft); }
