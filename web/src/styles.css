@@ -349,9 +349,14 @@ th[aria-sort] { color: var(--ink); }
 label.btn:focus-within { outline: 2px solid var(--focus); outline-offset: 2px; }
 .notice .outcome { font-size: var(--t-lg); }
 .eval-opts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.demo-note { margin: 0 0 var(--s4); padding: 6px 12px; border-radius: var(--r-md); font-size: var(--t-sm); color: var(--ink-2); background: var(--warn-bg); border: 1px solid color-mix(in srgb, var(--warn) 25%, transparent); }
-.welcome { display: grid; gap: var(--s3); max-width: 72ch; }
-.welcome p { line-height: 1.6; }
+/* demo note: one quiet line with an amber mark, so it is seen without shouting */
+.demo-note { display: flex; align-items: center; gap: var(--s2); margin: 0 0 var(--s4); padding: 6px 12px; border-radius: var(--r-md); font-size: var(--t-sm); color: var(--ink-2); background: var(--warn-bg); }
+.demo-note::before { content: ""; flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--warn-solid); }
+/* welcome card: first visit on an empty database */
+.welcome { display: grid; gap: var(--s4); max-width: 760px; padding: var(--s6); border-inline-start: 3px solid var(--brand); }
+.welcome h2 { font-size: var(--t-xl); }
+.welcome p { line-height: 1.65; max-width: 68ch; }
+.welcome > p.muted { margin-top: calc(-1 * var(--s2)); }
 
 /* ---------- small screens ---------- */
 @media (max-width: 1000px) { .g2, .g3, .split { grid-template-columns: 1fr; } .doc-pane { position: static; } .doc-pane .doc iframe { height: 70vh; } .doc-pane .doc pre, .doc-pane .doc img { max-height: 70vh; } .rq { grid-template-columns: 260px minmax(0, 1fr); } }

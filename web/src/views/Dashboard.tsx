@@ -23,7 +23,7 @@ function Welcome({ onLoaded }: { onLoaded: () => void }) {
         <button className="btn primary" disabled={!canLoad || busy} onClick={load}>{busy ? t("Loading…") : t("Load sample invoices")}</button>
         <button className="btn" onClick={() => go("evaluation")}>{t("Try with your own AI key")}</button>
       </div>
-      <p className="muted small" style={{ margin: 0 }}>
+      <p className="muted small">
         {canLoad ? t("20 invoices in English and Arabic, read by the built-in reader. No key needed.") : t("Sign in as reviewer or admin to load the samples.")}
       </p>
     </div>
