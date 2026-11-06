@@ -73,16 +73,34 @@ export function CheckMark({ s }: { s: "pass" | "fail" | "skip" }) {
   return <span className={`pill ${s}`} style={{ padding: 3 }} role="img" aria-label={t(CHECK_LABEL[s])}><Icon d={ICONS[s]} /></span>;
 }
 
+const FOCUSABLE = "button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])";
+
+/**
+ * A dialog that behaves for keyboard users: focus moves into it when it opens (the first field, else the dialog),
+ * Tab and Shift+Tab stay inside it, Escape closes it, and focus goes back to whatever opened it.
+ */
 export function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   const { t } = useApp();
+  const box = useRef<HTMLDivElement>(null);
+  const close = useRef(onClose); close.current = onClose;
   useEffect(() => {
-    const h = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const opener = document.activeElement as HTMLElement | null;
+    (box.current?.querySelector<HTMLElement>("input:not([disabled]), select:not([disabled]), textarea:not([disabled])") ?? box.current)?.focus();
+    const h = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { e.preventDefault(); close.current(); return; }
+      if (e.key !== "Tab" || !box.current) return;
+      const items = [...box.current.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((el) => !el.hasAttribute("disabled") && el.offsetParent !== null);
+      if (!items.length) return;
+      const at = items.indexOf(document.activeElement as HTMLElement);
+      if (e.shiftKey && at <= 0) { e.preventDefault(); items[items.length - 1].focus(); }
+      else if (!e.shiftKey && (at === -1 || at === items.length - 1)) { e.preventDefault(); items[0].focus(); }
+    };
     window.addEventListener("keydown", h);
-    return () => window.removeEventListener("keydown", h);
-  }, [onClose]);
+    return () => { window.removeEventListener("keydown", h); if (opener?.isConnected) opener.focus(); };
+  }, []);
   return (
     <div className="modal-bg" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal" role="dialog" aria-modal="true" aria-label={title}>
+      <div className="modal" role="dialog" aria-modal="true" aria-label={title} ref={box} tabIndex={-1}>
         <div className="row"><h2>{title}</h2><button className="btn ghost small right" onClick={onClose} aria-label={t("Close")}>✕</button></div>
         {children}
       </div>

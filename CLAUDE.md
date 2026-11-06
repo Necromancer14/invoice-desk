@@ -21,6 +21,11 @@ npm --prefix web run typecheck    # TypeScript check
 npm --prefix web run build        # frontend build; commit the rebuilt web/dist
 node tools/check_i18n.mjs         # every t()/tk() key has Arabic
 ```
+For changes to the portal, also run the browser checks against a fresh server (`py -m uvicorn invoice_desk.api:app --port 8000`, restarted after Python changes):
+```bash
+py tools/ui_check.py              # behaviour: directions, badge, waking screen, error messages, uploads
+py tools/a11y_check.py            # axe-core on every page in English/Arabic, light/dark, plus keyboard checks
+```
 - Every change needs tests.
 - Every new UI string goes into both English and Arabic (`web/src/locales/en.json`, `ar.json`), and the right-to-left layout must look right.
 

@@ -77,7 +77,7 @@ function useHealth(attempt: number) {
 
 function Waking({ t, lang, setLang, failed, waited, retry }: { t: T; lang: Lang; setLang: (l: Lang) => void; failed: boolean; waited: number; retry: () => void }) {
   return (
-    <div className="login"><div className="panel" role={failed ? "alert" : "status"} aria-live="polite">
+    <main className="login"><div className="panel" role={failed ? "alert" : "status"} aria-live="polite">
       <div className="row" style={{ gap: 12 }}><svg width="40" height="40" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#006c35" /><path d="M9 7.5h10l4.5 4.5v12.5H9z" fill="none" stroke="#fff" strokeWidth="2" strokeLinejoin="round" /><path d="M13 17.5l3 3 5-6" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg><div className="grow"><h1>invoice-desk</h1></div>
         <button className="chip" style={{ alignSelf: "start" }} onClick={() => setLang(lang === "en" ? "ar" : "en")} aria-label={t("Switch language")}>{lang === "en" ? "العربية" : "English"}</button></div>
       {failed ? <>
@@ -89,7 +89,7 @@ function Waking({ t, lang, setLang, failed, waited, retry }: { t: T; lang: Lang;
         <p className="muted">{t("This free demo server sleeps when nobody is using it, and starting it again can take about a minute. The page will carry on by itself.")}</p>
         <p className="muted small num">{t("Waiting for {n} seconds", { n: waited })}</p>
       </>}
-    </div></div>
+    </div></main>
   );
 }
 
@@ -104,7 +104,7 @@ function Login({ onIn, t, lang, setLang, demo }: { onIn: (r: Role, name: string)
     try { const r = await passwordLogin(name, pw); session.token = r.token; onIn(r.role, r.name); } catch (x) { setErr(t((x as Error).message)); }
   }
   return (
-    <div className="login"><div className="panel">
+    <main className="login"><div className="panel">
       <div className="row" style={{ gap: 12 }}><svg width="40" height="40" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#006c35" /><path d="M9 7.5h10l4.5 4.5v12.5H9z" fill="none" stroke="#fff" strokeWidth="2" strokeLinejoin="round" /><path d="M13 17.5l3 3 5-6" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg><div className="grow"><h1>invoice-desk</h1><p className="muted">{t("Saudi e-invoice intake with human review")}</p></div>
         <button className="chip" style={{ alignSelf: "start" }} onClick={() => setLang(lang === "en" ? "ar" : "en")} aria-label={t("Switch language")}>{lang === "en" ? "العربية" : "English"}</button></div>
       <Err msg={err} />
@@ -118,7 +118,7 @@ function Login({ onIn, t, lang, setLang, demo }: { onIn: (r: Role, name: string)
         <label className="f">{t("Name")}<input type="text" value={name} onChange={(e) => setName(e.target.value)} autoComplete="username" /></label>
         <label className="f">{t("Password")}<input type="password" value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="current-password" /></label>
         <button className="btn primary" type="submit">{t("Sign in")}</button></form>}
-    </div></div>
+    </div></main>
   );
 }
 

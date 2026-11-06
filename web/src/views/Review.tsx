@@ -98,19 +98,20 @@ export default function Review({ openId }: { openId?: number }) {
         <div className={`rq ${sel != null ? "show-detail" : ""}`}>
           <section className="panel rq-list" aria-label={t("Invoices waiting for review")}>
             <input type="search" placeholder={t("Search the queue")} aria-label={t("Search the queue")} value={q} onChange={(e) => setQ(e.target.value)} />
-            <div className="rq-items" role="listbox" aria-label={t("Invoices waiting for review")}>
+            {/* A plain list of buttons: Tab moves through it, j and k step through the queue. aria-current marks the open one. */}
+            <ul className="rq-items" aria-label={t("Invoices waiting for review")}>
               {shown.map((i) => (
-                <button key={i.id} role="option" aria-selected={i.id === selected} className="rq-item" onClick={() => select(i.id)}>
+                <li key={i.id}><button aria-current={i.id === selected ? "true" : undefined} className="rq-item" onClick={() => select(i.id)}>
                   <span className="rq-top"><b className="cell-text" dir="auto">{i.seller || i.filename}</b><span className="num"><bdi dir="ltr">{money(i.total, i.currency)}</bdi></span></span>
                   <span className="rq-sub muted small">
                     <bdi dir="ltr">{i.invoice_number || `#${i.id}`}</bdi>
                     <span className="rq-fails">{t("{n} checks failed", { n: i.failed_checks })}</span>
                     <span className="right">{ago(i.created_at)}</span>
                   </span>
-                </button>
+                </button></li>
               ))}
-              {shown.length === 0 && <p className="muted small" style={{ padding: 10 }}>{t("Nothing matches the search.")}</p>}
-            </div>
+              {shown.length === 0 && <li className="muted small" style={{ padding: 10 }}>{t("Nothing matches the search.")}</li>}
+            </ul>
           </section>
 
           <section className="rq-detail col" style={{ gap: 14 }} aria-live="polite">
