@@ -60,7 +60,7 @@ function RunModal({ id, onClose }: { id: number; onClose: () => void }) {
       {run && (
         <>
           <RunHeader run={run} />
-          {run.error && <div className="notice err">{run.error}</div>}
+          {run.error && <div className="notice err" dir="auto">{t(run.error)}</div>}
           {run.decision_note && <div className="notice">{t("Note")}: {run.decision_note}</div>}
           <Document run={run} />
           <Evidence run={run} />

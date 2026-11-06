@@ -64,7 +64,7 @@ export function Evidence({ run }: { run: Run }) {
           {run.extraction.tokens_in ? ` · ${t("{n} tokens", { n: run.extraction.tokens_in + run.extraction.tokens_out })}` : ""}
         </p>
       )}
-      {run.extraction?.notes?.map((n, i) => <div key={i} className="notice warn" dir="auto">{n}</div>)}
+      {run.extraction?.notes?.map((n, i) => <div key={i} className="notice warn" dir="auto">{t(n)}</div>)}
     </div>
   );
 }

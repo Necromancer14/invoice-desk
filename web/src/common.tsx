@@ -112,7 +112,12 @@ export function useLoad<T>(fn: () => Promise<T>, deps: unknown[] = [], poll?: (d
   return { data, error, loading, reload, setData };
 }
 
-export const Err = ({ msg }: { msg: string | null }) => (msg ? <div className="notice err" role="alert">{msg}</div> : null);
+/** An error notice. Known messages are translated; text the server wrote shows as sent (in its own direction). */
+export function Err({ msg }: { msg: string | null }) {
+  const ctx = useContext(AppCtx);  // also used on the sign-in screen, which sits outside the provider
+  if (!msg) return null;
+  return <div className="notice err" role="alert" dir="auto">{ctx ? ctx.t(msg) : msg}</div>;
+}
 export const Empty = ({ title, hint, children }: { title: string; hint?: string; children?: ReactNode }) => (
   <div className="empty"><h3>{title}</h3>{hint && <p>{hint}</p>}{children}</div>
 );

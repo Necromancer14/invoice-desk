@@ -29,7 +29,7 @@ export default function Settings({ theme, setTheme, lang, setLang }: { theme: st
   async function test() {
     saveAi(); setTesting(true); setTestMsg(null);
     try { const r = await api<{ ok: boolean; message: string; latency_ms: number }>("/llm/test", { method: "POST", ai: true }); setTestMsg({ ok: r.ok, text: `${t(r.message)} (${t("{ms} ms", { ms: r.latency_ms })})` }); }
-    catch (e) { setTestMsg({ ok: false, text: (e as Error).message }); } finally { setTesting(false); }
+    catch (e) { setTestMsg({ ok: false, text: t((e as Error).message) }); } finally { setTesting(false); }
   }
   async function save() {
     setErr(null);

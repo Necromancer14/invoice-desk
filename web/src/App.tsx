@@ -97,11 +97,11 @@ function Login({ onIn, t, lang, setLang, demo }: { onIn: (r: Role, name: string)
   const [err, setErr] = useState<string | null>(null);
   const [name, setName] = useState(""); const [pw, setPw] = useState("");
   async function pick(role: Role) {
-    try { const r = await demoLogin(role); session.token = r.token; onIn(r.role, r.name); } catch (e) { setErr((e as Error).message); }
+    try { const r = await demoLogin(role); session.token = r.token; onIn(r.role, r.name); } catch (e) { setErr(t((e as Error).message)); }
   }
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    try { const r = await passwordLogin(name, pw); session.token = r.token; onIn(r.role, r.name); } catch (x) { setErr((x as Error).message); }
+    try { const r = await passwordLogin(name, pw); session.token = r.token; onIn(r.role, r.name); } catch (x) { setErr(t((x as Error).message)); }
   }
   return (
     <div className="login"><div className="panel">
@@ -214,7 +214,7 @@ export default function App() {
         </aside>
         <main className="main" id="main">{view}</main>
       </div>
-      {toastMsg && <div className={`toast notice ${toastMsg.kind === "err" ? "err" : "ok"}`} role="status">{toastMsg.msg}</div>}
+      {toastMsg && <div className={`toast notice ${toastMsg.kind === "err" ? "err" : "ok"}`} role="status">{t(toastMsg.msg)}</div>}
     </AppCtx.Provider>
   );
 }

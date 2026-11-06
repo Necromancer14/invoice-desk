@@ -53,6 +53,10 @@ export const SERVER_TEXT = [
   // the built-in reader's name (AI readers are shown by their brand name)
   tk("rule-based"),
 
+  // processing outcomes and notes (desk.py)
+  tk("This PDF could not be opened. It may be damaged or not really a PDF."),
+  tk("The AI call failed, so the built-in reader was used instead"),
+
   // processing trace steps
   tk("ingest"), tk("extract"), tk("validate"), tk("route"), tk("human review"), tk("error"),
 ];

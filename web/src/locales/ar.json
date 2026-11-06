@@ -15,7 +15,6 @@
   "Viewer": "مشاهد",
   "Name": "الاسم",
   "Password": "كلمة المرور",
-  "Cannot reach the server.": "تعذّر الاتصال بالخادم.",
   "Saudi e-invoice intake with human review": "استقبال الفواتير الإلكترونية السعودية مع مراجعة بشرية",
   "This is a demo with made-up data. Pick a role to look around.": "هذا عرض تجريبي ببيانات وهمية. اختر دورًا لتستكشف النظام.",
   "Everything, including editing rules and settings": "صلاحيات كاملة، بما فيها تعديل القواعد والإعدادات",
@@ -400,5 +399,16 @@
   "leave empty for no lower limit": "اتركه فارغًا إن لم يكن هناك حد أدنى",
   "leave empty for no upper limit": "اتركه فارغًا إن لم يكن هناك حد أقصى",
   "min": "أدنى قيمة",
-  "Total is not negative": "المبلغ الإجمالي ليس سالبًا"
+  "Total is not negative": "المبلغ الإجمالي ليس سالبًا",
+  "Cannot reach the server. Check your connection and try again.": "تعذّر الاتصال بالخادم. تحقق من اتصالك بالإنترنت وحاول مرة أخرى.",
+  "The server took too long to answer. Try again in a moment.": "استغرق الخادم وقتًا أطول من اللازم للرد. حاول مرة أخرى بعد قليل.",
+  "Too many requests. Wait a minute and try again.": "طلبات كثيرة جدًا. انتظر دقيقة ثم حاول مرة أخرى.",
+  "The server is starting or busy. Try again in a moment.": "الخادم قيد التشغيل أو مشغول. حاول مرة أخرى بعد قليل.",
+  "Something went wrong on the server. Try again, and if it keeps happening, check the server log.": "حدث خطأ في الخادم. حاول مرة أخرى، وإن تكرر الخطأ فراجع سجل الخادم.",
+  "Your session ended. Pick a role to continue.": "انتهت جلستك. اختر دورًا للمتابعة.",
+  "Could not load the file.": "تعذّر تحميل الملف.",
+  "Demo sign in is switched off.": "الدخول التجريبي متوقف.",
+  "Sign in failed.": "تعذّر تسجيل الدخول.",
+  "This PDF could not be opened. It may be damaged or not really a PDF.": "تعذّر فتح ملف PDF هذا. قد يكون تالفًا أو ليس ملف PDF فعلًا.",
+  "The AI call failed, so the built-in reader was used instead": "فشل طلب الذكاء الاصطناعي، فاستُخدم القارئ المدمج بدلًا منه"
 }

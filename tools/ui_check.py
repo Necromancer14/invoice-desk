@@ -148,7 +148,85 @@ def rule_with_open_limit(page: Page) -> None:
     check("saving keeps the open upper limit", rule["params"].get("max") is None and rule["params"].get("min") == 0, str(rule["params"]))
 
 
-CHECKS = [mixed_direction, review_badge, waking_screen, rule_with_open_limit]
+def error_messages(page: Page) -> None:
+    """Rate limit, a busy server, no connection, a hung request and a damaged file each give a plain message, in both languages."""
+    sign_in(page)
+    api(page, "POST", "/admin/reset", {})
+    cases = [
+        ("429 rate limit", lambda r: r.fulfill(status=429, json={"detail": "too many requests, slow down a little"}),
+         "Too many requests. Wait a minute and try again.", "طلبات كثيرة جدًا. انتظر دقيقة ثم حاول مرة أخرى."),
+        ("503 while starting", lambda r: r.fulfill(status=503, body="Service Unavailable"),
+         "The server is starting or busy. Try again in a moment.", "الخادم قيد التشغيل أو مشغول. حاول مرة أخرى بعد قليل."),
+        ("500 with no detail", lambda r: r.fulfill(status=500, body="Internal Server Error"),
+         "Something went wrong on the server. Try again, and if it keeps happening, check the server log.", "حدث خطأ في الخادم."),
+        ("no connection", lambda r: r.abort("internetdisconnected"),
+         "Cannot reach the server. Check your connection and try again.", "تعذّر الاتصال بالخادم."),
+    ]
+    for lang in ("en", "ar"):
+        page.evaluate(f"localStorage.setItem('id-lang', '{lang}')")
+        for name, handler, en, ar in cases:
+            page.route("**/api/runs?*", handler)
+            page.evaluate("location.hash = '#/dashboard'")
+            page.evaluate("location.hash = '#/runs'; location.reload()")
+            alert = page.locator(".notice.err[role=alert]")
+            expect(alert).to_be_visible(timeout=8000)
+            text = alert.inner_text()
+            want = en if lang == "en" else ar
+            check(f"{name} ({lang}): plain message", want in text, text)
+            page.unroute("**/api/runs?*")
+
+    # a request that never answers stops after 30 s with a message (on a fake clock, so the check is quick)
+    page.evaluate("localStorage.setItem('id-lang', 'en')")
+    page.clock.install()
+    page.route("**/api/audit?*", lambda route: None)  # never answers
+    page.evaluate("location.hash = '#/audit'; location.reload()")
+    page.wait_for_selector(".seg")
+    page.clock.run_for(31_000)
+    alert = page.locator(".notice.err[role=alert]")
+    expect(alert).to_be_visible(timeout=5000)
+    check("hung request: times out with a message", "took too long" in alert.inner_text(), alert.inner_text())
+    page.unroute_all(behavior="ignoreErrors")  # let go of the request left hanging on purpose
+
+
+def damaged_file(page: Page) -> None:
+    """A damaged PDF and a program renamed to .txt are explained in plain words."""
+    sign_in(page)
+    api(page, "POST", "/admin/reset", {})
+    page.evaluate("location.hash = '#/intake'")
+    page.locator("input[type=file]").set_input_files([
+        {"name": "broken.pdf", "mimeType": "application/pdf", "buffer": b"%PDF-1.4 not really a pdf"}])
+    page.get_by_role("button", name="Process 1 file").click()
+    page.wait_for_selector("tbody tr")
+    page.wait_for_function("document.querySelector('tbody tr .pill')?.textContent.includes('Failed')", timeout=10000)
+    page.locator("tbody tr").first.click()
+    note = page.locator(".modal .notice.err")
+    expect(note).to_be_visible()
+    check("damaged PDF says it could not be opened", "could not be opened" in note.inner_text(), note.inner_text())
+    page.keyboard.press("Escape")
+    page.evaluate("location.hash = '#/intake'")
+    page.locator("input[type=file]").set_input_files([
+        {"name": "program.txt", "mimeType": "text/plain", "buffer": b"MZ\x90\x00\x03\x00"}])
+    page.get_by_role("button", name="Process 1 file").click()
+    alert = page.locator(".notice.err[role=alert]")
+    expect(alert).to_be_visible()
+    check("program renamed to .txt is refused with its name", "program.txt does not look like a text file" in alert.inner_text(), alert.inner_text())
+
+
+def provider_failure(page: Page) -> None:
+    """When the AI provider cannot be reached, the connection test says so, rather than blaming our server."""
+    sign_in(page)
+    page.evaluate("sessionStorage.setItem('id-llm-key-gemini', 'not-a-real-key'); localStorage.setItem('id-llm-provider', 'gemini')")
+    page.route("**/api/llm/test", lambda r: r.fulfill(status=502, json={"detail": "could not reach the provider: ConnectError"}))
+    page.evaluate("location.hash = '#/settings'; location.reload()")
+    page.get_by_role("button", name="Save and test connection").click()
+    msg = page.locator(".notice.err[role=status]")
+    expect(msg).to_be_visible()
+    check("provider failure shows the provider's problem", "could not reach the provider" in msg.inner_text(), msg.inner_text())
+    page.unroute("**/api/llm/test")
+    page.evaluate("sessionStorage.clear()")
+
+
+CHECKS = [mixed_direction, review_badge, waking_screen, rule_with_open_limit, error_messages, damaged_file, provider_failure]
 
 if __name__ == "__main__":
     with sync_playwright() as pw:
