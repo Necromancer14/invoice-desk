@@ -56,20 +56,24 @@ function RunModal({ id, onClose }: { id: number; onClose: () => void }) {
   const { t, role, toast, refreshCounts } = useApp();
   const { data: run, error, reload } = useLoad(() => api<RunDetail>(`/runs/${id}`), [id], (d) => d.status === "queued" || d.status === "processing");
   return (
-    <Modal title={t("Invoice run #{id}", { id })} onClose={onClose}>
+    <Modal title={t("Invoice run #{id}", { id })} onClose={onClose} wide>
       <Err msg={error} />
       {run && (
         <>
           <RunHeader run={run} />
           {run.error && <div className="notice err" dir="auto">{t(run.error)}</div>}
           {run.decision_note && <div className="notice">{t("Note")}: {run.decision_note}</div>}
-          <Document run={run} />
-          <Evidence run={run} />
-          {can(role, "reviewer") && run.status !== "queued" && run.status !== "processing" && (
-            <div><button className="btn small" onClick={async () => {
-              try { await api(`/runs/${id}/reprocess`, { method: "POST", ai: run.mode === "ai" }); toast(t("Processing again")); refreshCounts(); reload(); } catch (e) { toast((e as Error).message, "err"); }
-            }}>{t("Run again with the current rules")}</button></div>
-          )}
+          <div className="split run-split">
+            <div className="doc-pane"><Document run={run} /></div>
+            <div className="col run-side">
+              <Evidence run={run} />
+              {can(role, "reviewer") && run.status !== "queued" && run.status !== "processing" && (
+                <div><button className="btn small" onClick={async () => {
+                  try { await api(`/runs/${id}/reprocess`, { method: "POST", ai: run.mode === "ai" }); toast(t("Processing again")); refreshCounts(); reload(); } catch (e) { toast((e as Error).message, "err"); }
+                }}>{t("Run again with the current rules")}</button></div>
+              )}
+            </div>
+          </div>
         </>
       )}
     </Modal>

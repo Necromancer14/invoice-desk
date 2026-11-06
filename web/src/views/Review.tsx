@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
 import type { QueueItem, RunDetail } from "../types";
 import { Empty, Err, Head, ago, money, useApp, useLoad } from "../common";
-import { Document, Evidence, ReviewForm, RunHeader } from "./RunDetail";
+import { CheckList, Document, Evidence, ReviewForm, RunHeader } from "./RunDetail";
 
 const typing = (e: KeyboardEvent) => {
   const el = e.target as HTMLElement;
@@ -80,9 +80,7 @@ export default function Review({ openId }: { openId?: number }) {
 
   return (
     <>
-      <Head title={t("Review queue")} sub={t("Invoices the rules could not settle on their own. Check the original, fix anything the reader got wrong, then decide.")}>
-        <span className="muted small rq-keys">{t("Shortcuts")}: <kbd>j</kbd> {t("next")} · <kbd>k</kbd> {t("previous")} · <kbd>a</kbd> {t("approve")} · <kbd>r</kbd> {t("jump to note")}</span>
-      </Head>
+      <Head title={t("Review queue")} sub={t("Invoices the rules could not settle on their own. Check the original, fix anything the reader got wrong, then decide.")} />
       <Err msg={queue.error} />
       {sel != null && items && !inQueue && (
         <div className="notice warn" style={{ marginBottom: 14 }}>
@@ -126,11 +124,15 @@ export default function Review({ openId }: { openId?: number }) {
             {current && (
               <>
                 <RunHeader run={current} />
-                <div className="split">
-                  <Document run={current} />
-                  <div className="panel"><ReviewForm run={current} onDone={() => decided(current.id)} /></div>
+                <div className="split run-split">
+                  <div className="doc-pane"><Document run={current} /></div>
+                  <div className="col run-side">
+                    <section className="panel why"><h2>{t("Why this needs a person")}</h2><CheckList run={current} /></section>
+                    <ReviewForm run={current} onDone={() => decided(current.id)}>
+                      <section className="panel"><Evidence run={current} onChange={setRun} checks={false} /></section>
+                    </ReviewForm>
+                  </div>
                 </div>
-                <div className="panel"><h2>{t("Why this needs a person")}</h2><Evidence run={current} onChange={setRun} /></div>
               </>
             )}
           </section>

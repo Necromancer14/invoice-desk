@@ -71,7 +71,7 @@ export function StatusPill({ status }: { status: Status }) {
 }
 export function CheckMark({ s }: { s: "pass" | "fail" | "skip" }) {
   const { t } = useApp();
-  return <span className={`pill ${s}`} style={{ padding: 3 }} role="img" aria-label={t(CHECK_LABEL[s])}><Icon d={ICONS[s]} /></span>;
+  return <span className={`pill mark ${s}`} role="img" aria-label={t(CHECK_LABEL[s])}><Icon d={ICONS[s]} /></span>;
 }
 
 const FOCUSABLE = "button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])";
@@ -80,7 +80,7 @@ const FOCUSABLE = "button, [href], input, select, textarea, [tabindex]:not([tabi
  * A dialog that behaves for keyboard users: focus moves into it when it opens (the first field, else the dialog),
  * Tab and Shift+Tab stay inside it, Escape closes it, and focus goes back to whatever opened it.
  */
-export function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+export function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
   const { t } = useApp();
   const box = useRef<HTMLDivElement>(null);
   const close = useRef(onClose); close.current = onClose;
@@ -101,7 +101,7 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
   }, []);
   return (
     <div className="modal-bg" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal" role="dialog" aria-modal="true" aria-label={title} ref={box} tabIndex={-1}>
+      <div className={`modal${wide ? " wide" : ""}`} role="dialog" aria-modal="true" aria-label={title} ref={box} tabIndex={-1}>
         <div className="row"><h2>{title}</h2><button className="btn ghost small right" onClick={onClose} aria-label={t("Close")}>✕</button></div>
         {children}
       </div>

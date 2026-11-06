@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { api, fileBlobUrl } from "../api";
 import type { Fields, PoStatus, RunDetail as Run } from "../types";
 import { CheckMark, Err, FIELD_LABEL, StatusPill, can, money, num, pct, tk, useApp, when } from "../common";
@@ -109,7 +109,7 @@ function VendorPanel({ run, onChange }: { run: Run; onChange?: (r: Run) => void 
   }
   return (
     <section>
-      <h3 style={{ marginBottom: 6 }}>{t("Vendor and purchase order")}</h3>
+      <h3 className="sec-title">{t("Vendor and purchase order")}</h3>
       {vm && (vm.vendor ? (
         <div className="vm">
           <div className="row wrap" style={{ gap: 8 }}>
@@ -143,29 +143,57 @@ function VendorPanel({ run, onChange }: { run: Run; onChange?: (r: Run) => void 
   );
 }
 
-export function Evidence({ run, onChange }: { run: Run; onChange?: (r: Run) => void }) {
+/** Failed checks first, high risk on top, each with its reason in plain words. Passed checks fold away. */
+export function CheckList({ run }: { run: Run }) {
+  const { t } = useApp();
+  const rank = (r: Run["results"][number]) => (r.risk === "high" ? 0 : r.severity === "reject" ? 1 : 2);
+  const failed = run.results.filter((r) => r.status === "fail").sort((a, b) => rank(a) - rank(b));
+  const skipped = run.results.filter((r) => r.status === "skip");
+  const passed = run.results.filter((r) => r.status === "pass");
+  const row = (r: Run["results"][number]) => (
+    <div key={r.key} className={`ck ck-${r.status}${r.risk === "high" ? " high-risk" : ""}`}>
+      <CheckMark s={r.status} />
+      <div className="ck-body">
+        <div className="ck-name">
+          <span>{t(r.name)}</span>
+          {r.risk === "high" && <span className="pill risk-pill">{t("High risk")}</span>}
+          {r.status === "fail" && <span className={`ck-effect ${r.severity === "reject" ? "reject" : "review"}`}>{r.severity === "reject" ? t("would reject") : t("sends to review")}</span>}
+        </div>
+        {r.status !== "pass" && r.detail && <p className="ck-why"><bdi dir="auto">{r.detail}</bdi></p>}
+      </div>
+    </div>
+  );
+  if (!run.results.length) return <p className="muted small">{t("No checks ran.")}</p>;
+  return (
+    <div className="checks">
+      {failed.map(row)}
+      {!failed.length && <p className="checks-clear">{t("No check failed.")}</p>}
+      {skipped.map(row)}
+      {passed.length > 0 && <details className="checks-passed"><summary>{t("Passed checks ({n})", { n: passed.length })}</summary>{passed.map(row)}</details>}
+    </div>
+  );
+}
+
+export function Evidence({ run, onChange, checks = true }: { run: Run; onChange?: (r: Run) => void; checks?: boolean }) {
   const { t } = useApp();
   const qr = decodeQr((run.final_fields ?? run.extracted)?.qr_payload);
   return (
-    <div className="col" style={{ gap: 18 }}>
+    <div className="col evidence">
+      {checks && (
+        <section>
+          <h3 className="sec-title">{t("Checks")}</h3>
+          <CheckList run={run} />
+        </section>
+      )}
       <VendorPanel run={run} onChange={onChange} />
       {qr && (
         <section>
-          <h3 style={{ marginBottom: 6 }}>{t("What the QR code says")}</h3>
+          <h3 className="sec-title">{t("What the QR code says")}</h3>
           <dl className="qr-list">{QR_TAGS.filter(([n]) => qr[n]).map(([n, label]) => <div key={n}><dt>{t(label)}</dt><dd dir="auto">{qr[n]}</dd></div>)}</dl>
         </section>
       )}
       <section>
-        <h3 style={{ marginBottom: 6 }}>{t("Checks")}</h3>
-        <div className="checks">
-          {run.results.map((r) => (
-            <div key={r.key} className={r.risk === "high" ? "high-risk" : undefined}><CheckMark s={r.status} /><div>{t(r.name)}{r.risk === "high" && <span className="pill s-rejected risk-pill">{t("High risk")}</span>}<small>{r.status === "pass" ? "" : <bdi dir="auto">{r.detail}</bdi>}{r.status === "fail" ? ` · ${r.severity === "reject" ? t("would reject") : t("sends to review")}` : ""}</small></div></div>
-          ))}
-          {!run.results.length && <p className="muted small">{t("No checks ran.")}</p>}
-        </div>
-      </section>
-      <section>
-        <h3 style={{ marginBottom: 6 }}>{t("Trace")}</h3>
+        <h3 className="sec-title">{t("Trace")}</h3>
         <div className="trace">
           {run.trace.map((s, i) => (
             <div key={i} className={s.ok ? "" : "bad"}><b>{t(s.step)}</b> <span className="muted small num">{s.ms ? t("{ms} ms", { ms: s.ms }) : ""}</span><div className="small muted" dir="auto">{s.detail}</div></div>
@@ -184,7 +212,7 @@ export function Evidence({ run, onChange }: { run: Run; onChange?: (r: Run) => v
 }
 
 /** Editable fields + decision buttons. Used on the review screen. */
-export function ReviewForm({ run, onDone }: { run: Run; onDone: (r: Run) => void }) {
+export function ReviewForm({ run, onDone, children }: { run: Run; onDone: (r: Run) => void; children?: ReactNode }) {
   const { t, role, toast, refreshCounts } = useApp();
   const base = run.extracted ?? ({} as Fields);
   const [vals, setVals] = useState<Record<string, string>>({});
@@ -220,45 +248,63 @@ export function ReviewForm({ run, onDone }: { run: Run; onDone: (r: Run) => void
   }, [run.id, vals, note, canAct]);
 
   return (
-    <div className="col" style={{ gap: 14 }}>
-      <div className="fieldgrid">
-        {EDIT_FIELDS.map((f) => {
-          const fc = run.extraction?.field_confidence?.[f.key as string];
-          const empty = shown(f.key) === "";
-          return (
-            <label key={f.key} className={`f ${f.wide ? "wide" : ""} ${dirty(f.key) ? "edited" : ""}`}>
-              <span>{t(FIELD_LABEL[f.key])}{f.type === "date" && <span className="hint"> (<bdi dir="ltr">YYYY-MM-DD</bdi>)</span>}</span>
-              <input type="text" dir={f.ltr ? "ltr" : "auto"} inputMode={f.type === "number" ? "decimal" : undefined} value={shown(f.key)} disabled={!canAct}
-                aria-invalid={empty} placeholder={empty ? t("Missing") : ""} onChange={(e) => setVals({ ...vals, [f.key]: e.target.value })} />
-              {fc != null && <span className={`conf ${fc < 0.85 ? "low" : ""}`} title={t("confidence {pct}", { pct: pct(fc) })}><i style={{ width: `${fc * 100}%` }} /></span>}
-            </label>
-          );
-        })}
-      </div>
-      {base.line_items && base.line_items.length > 0 && (
-        <div className="tw"><table><thead><tr><th>{t("Item")}</th><th className="n">{t("Qty")}</th><th className="n">{t("Unit price")}</th><th className="n">{t("Line total")}</th><th>{t("VAT")}</th></tr></thead>
-          <tbody>{base.line_items.map((l, i) => <tr key={i}><td>{l.description}</td><td className="n">{l.quantity == null ? "–" : num(l.quantity, Number.isInteger(l.quantity) ? 0 : 2)}</td><td className="n">{money(l.unit_price)}</td><td className="n">{money(l.line_total)}</td><td className="small">{t(VAT_CATEGORY[l.vat_category || "S"])}</td></tr>)}</tbody></table></div>
-      )}
-      <label className="f">{t("Note")} {" "}<span className="hint">{t("(required when rejecting)")}</span>
-        <textarea id="reject-note" dir="auto" value={note} onChange={(e) => setNote(e.target.value)} disabled={!canAct} />
-      </label>
-      <Err msg={err} />
-      <div className="row wrap">
-        <button className="btn primary" disabled={!canAct || busy} onClick={() => decide("approve")}>{t("Approve")} <kbd>a</kbd></button>
-        <button className="btn danger" disabled={!canAct || busy} onClick={() => decide("reject")}>{t("Reject")}</button>
-        {!canAct && <span className="muted small">{t("Viewers can read but not decide. Sign in as reviewer.")}</span>}
-      </div>
-    </div>
+    <>
+      <section className="panel">
+        <h2>{t("Fields read from the invoice")}</h2>
+        <div className="fieldgrid">
+          {EDIT_FIELDS.map((f) => {
+            const fc = run.extraction?.field_confidence?.[f.key as string];
+            const empty = shown(f.key) === "";
+            return (
+              <label key={f.key} className={`f ${f.wide ? "wide" : ""} ${dirty(f.key) ? "edited" : ""}`}>
+                <span>{t(FIELD_LABEL[f.key])}{f.type === "date" && <span className="hint"> (<bdi dir="ltr">YYYY-MM-DD</bdi>)</span>}</span>
+                <input type="text" dir={f.ltr ? "ltr" : "auto"} inputMode={f.type === "number" ? "decimal" : undefined} value={shown(f.key)} disabled={!canAct}
+                  aria-invalid={empty} placeholder={empty ? t("Missing") : ""} onChange={(e) => setVals({ ...vals, [f.key]: e.target.value })} />
+                {fc != null && <span className={`conf ${fc < 0.85 ? "low" : ""}`} title={t("confidence {pct}", { pct: pct(fc) })}><i style={{ width: `${fc * 100}%` }} /></span>}
+              </label>
+            );
+          })}
+        </div>
+        {base.line_items && base.line_items.length > 0 && (
+          <div className="tw lines"><table><thead><tr><th>{t("Item")}</th><th className="n">{t("Qty")}</th><th className="n">{t("Unit price")}</th><th className="n">{t("Line total")}</th><th>{t("VAT")}</th></tr></thead>
+            <tbody>{base.line_items.map((l, i) => <tr key={i}><td>{l.description}</td><td className="n">{l.quantity == null ? "–" : num(l.quantity, Number.isInteger(l.quantity) ? 0 : 2)}</td><td className="n">{money(l.unit_price)}</td><td className="n">{money(l.line_total)}</td><td className="small">{t(VAT_CATEGORY[l.vat_category || "S"])}</td></tr>)}</tbody></table></div>
+        )}
+      </section>
+      {children}
+      {/* stays on screen while the reviewer scrolls through the fields and evidence */}
+      <section className="decide" aria-label={t("Decision")}>
+        <label className="f"><span>{t("Note")} <span className="hint">{t("(required when rejecting)")}</span></span>
+          <textarea id="reject-note" dir="auto" rows={2} value={note} onChange={(e) => setNote(e.target.value)} disabled={!canAct} />
+        </label>
+        <Err msg={err} />
+        <div className="decide-row">
+          <button className="btn primary" disabled={!canAct || busy} onClick={() => decide("approve")}>{t("Approve")} <kbd>a</kbd></button>
+          <button className="btn danger" disabled={!canAct || busy} onClick={() => decide("reject")}>{t("Reject")}</button>
+          {!canAct && <span className="muted small">{t("Viewers can read but not decide. Sign in as reviewer.")}</span>}
+          <span className="rq-keys">{t("Shortcuts")}: <kbd>j</kbd> {t("next")} · <kbd>k</kbd> {t("previous")} · <kbd>a</kbd> {t("approve")} · <kbd>r</kbd> {t("jump to note")}</span>
+        </div>
+      </section>
+    </>
   );
 }
 
 export function RunHeader({ run }: { run: Run }) {
   const { t } = useApp();
+  const f = run.final_fields ?? run.extracted;
   return (
-    <div className="row wrap">
-      <StatusPill status={run.status} />
-      <span className="muted small"><bdi dir="ltr">{run.filename}</bdi> · <bdi dir="ltr">#{run.id}</bdi> · {when(run.created_at)}</span>
-      {run.decision_by && <span className="muted small">· {t("decided by {name}", { name: run.decision_by })}</span>}
+    <div className="run-head">
+      <div className="grow">
+        <h2 className="run-title"><span className="cell-text" dir="auto">{f?.seller_name || run.filename}</span></h2>
+        <div className="run-meta">
+          <StatusPill status={run.status} />
+          {f?.invoice_number && <bdi dir="ltr">{f.invoice_number}</bdi>}
+          <bdi dir="ltr">{run.filename}</bdi>
+          <bdi dir="ltr">#{run.id}</bdi>
+          <span>{when(run.created_at)}</span>
+          {run.decision_by && <span>{t("decided by {name}", { name: run.decision_by })}</span>}
+        </div>
+      </div>
+      {f?.total != null && <div className="run-total"><b><bdi dir="ltr">{money(f.total, f.currency)}</bdi></b><span>{t("Total")}</span></div>}
     </div>
   );
 }

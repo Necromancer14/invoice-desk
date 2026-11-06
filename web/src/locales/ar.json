@@ -541,5 +541,9 @@
   "Reset demo data?": "إعادة ضبط البيانات التجريبية؟",
   "Every invoice and every audit entry will be deleted, and the rules go back to the defaults. This cannot be undone.": "ستُحذف كل الفواتير وكل قيود التدقيق، وتعود القواعد إلى الوضع الافتراضي. لا يمكن التراجع عن ذلك.",
   "Yes, reset": "نعم، أعد الضبط",
-  "Demo with sample data. Do not upload real invoices.": "نسخة تجريبية ببيانات نموذجية. لا ترفع فواتير حقيقية."
+  "Demo with sample data. Do not upload real invoices.": "نسخة تجريبية ببيانات نموذجية. لا ترفع فواتير حقيقية.",
+  "No check failed.": "لم يفشل أي فحص.",
+  "Passed checks ({n})": "الفحوص الناجحة ({n})",
+  "Fields read from the invoice": "الحقول المقروءة من الفاتورة",
+  "Decision": "القرار"
 }

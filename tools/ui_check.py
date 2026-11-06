@@ -93,6 +93,34 @@ def review_badge(page: Page) -> None:
     page.unroute("**/api/stats")
 
 
+def review_layout(page: Page) -> None:
+    """Review and run detail: the document beside the fields and checks (mirrored in Arabic), failed checks first,
+    Approve and Reject on screen while the reviewer scrolls."""
+    sign_in(page)
+    load_samples(page, ["inv-016.pdf", "inv-089.txt", "inv-084.xml", "inv-003.txt"])
+    for lang in ("en", "ar"):
+        page.evaluate(f"localStorage.setItem('id-lang', '{lang}'); location.hash = '#/review'; location.reload()")
+        page.wait_for_selector(".why .ck")
+        box = page.evaluate("""() => { const d = document.querySelector('.rq-detail .doc-pane').getBoundingClientRect(),
+            s = document.querySelector('.rq-detail .run-side').getBoundingClientRect(); return { dl: d.left, dr: d.right, sl: s.left, sr: s.right, dt: d.top, st: s.top }; }""")
+        beside = box["dr"] <= box["sl"] + 1 if lang == "en" else box["sr"] <= box["dl"] + 1
+        check(f"review: document and fields side by side, document first in reading order ({lang})", beside and abs(box["dt"] - box["st"]) < 4, str(box))
+        check(f"review: failed checks come first ({lang})", "ck-fail" in page.locator(".why .ck").first.get_attribute("class"))
+        for where in ("top", "bottom"):
+            if where == "bottom":
+                page.evaluate("window.scrollTo(0, document.body.scrollHeight / 2)")
+                page.wait_for_timeout(200)
+            on_screen = page.evaluate("""() => [...document.querySelectorAll('.decide .btn')].slice(0, 2).every(b => {
+                const r = b.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; })""")
+            check(f"review: Approve and Reject on screen at the {where} of the page ({lang})", on_screen)
+        check(f"review: shortcuts shown beside the decision ({lang})", page.locator(".decide .rq-keys kbd").count() == 4)
+    page.evaluate("localStorage.setItem('id-lang', 'en'); location.hash = '#/runs'; location.reload()")
+    page.locator("tbody tr", has=page.locator(".s-needs_review")).first.click()
+    page.wait_for_selector(".modal .ck")
+    check("run detail: document beside the checks", page.locator(".modal.wide .run-split .doc-pane").count() == 1)
+    check("run detail: failed checks come first", "ck-fail" in page.locator(".modal .ck").first.get_attribute("class"))
+
+
 def waking_screen(page: Page) -> None:
     """While /api/health does not answer, a 'waking up' screen shows in the chosen language, then sign-in follows."""
     page.goto(BASE)
@@ -305,7 +333,7 @@ def demo_start(page: Page) -> None:
 
 
 CHECKS = [mixed_direction, review_badge, waking_screen, rule_with_open_limit, error_messages, damaged_file, provider_failure, xml_is_indented,
-          vendors_and_risk, demo_start]
+          vendors_and_risk, demo_start, review_layout]
 
 if __name__ == "__main__":
     with sync_playwright() as pw:
