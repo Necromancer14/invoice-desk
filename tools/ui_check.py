@@ -97,7 +97,7 @@ def review_layout(page: Page) -> None:
     """Review and run detail: the document beside the fields and checks (mirrored in Arabic), failed checks first,
     Approve and Reject on screen while the reviewer scrolls."""
     sign_in(page)
-    load_samples(page, ["inv-016.pdf", "inv-089.txt", "inv-084.xml", "inv-003.txt"])
+    load_samples(page, ["inv-016.pdf", "inv-089.txt", "inv-084.xml", "inv-003.txt"])  # inv-084 has a changed IBAN: high risk
     for lang in ("en", "ar"):
         page.evaluate(f"localStorage.setItem('id-lang', '{lang}'); location.hash = '#/review'; location.reload()")
         page.wait_for_selector(".why .ck")
@@ -114,6 +114,12 @@ def review_layout(page: Page) -> None:
                 const r = b.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; })""")
             check(f"review: Approve and Reject on screen at the {where} of the page ({lang})", on_screen)
         check(f"review: shortcuts shown beside the decision ({lang})", page.locator(".decide .rq-keys kbd").count() == 4)
+        rows = page.evaluate("""() => [...document.querySelectorAll('.rq-item')].map(b => ({
+            top: b.querySelector('.rq-top').getBoundingClientRect().height, sub: b.querySelector('.rq-sub').getBoundingClientRect().height, end: Math.round(document.dir === 'rtl' ? b.querySelector('.rq-amt').getBoundingClientRect().left
+                : b.querySelector('.rq-amt').getBoundingClientRect().right) }))""")
+        check(f"queue: every invoice takes two lines, neither wraps ({lang})", bool(rows) and all(r["top"] <= 26 and r["sub"] <= 22 for r in rows), str(rows))
+        check(f"queue: amounts line up at the row end ({lang})", len({r["end"] for r in rows}) == 1, str(rows))
+        check(f"queue: the high-risk invoice is marked in the list ({lang})", page.locator(".rq-item.risky .risk-pill").count() >= 1)
     page.evaluate("localStorage.setItem('id-lang', 'en'); location.hash = '#/runs'; location.reload()")
     page.locator("tbody tr", has=page.locator(".s-needs_review")).first.click()
     page.wait_for_selector(".modal .ck")

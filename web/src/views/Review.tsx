@@ -95,25 +95,31 @@ export default function Review({ openId }: { openId?: number }) {
       {items && items.length > 0 && (
         <div className={`rq ${sel != null ? "show-detail" : ""}`}>
           <section className="panel rq-list" aria-label={t("Invoices waiting for review")}>
-            <input type="search" placeholder={t("Search the queue")} aria-label={t("Search the queue")} value={q} onChange={(e) => setQ(e.target.value)} />
+            <div className="rq-head">
+              <span className="rq-count">{t("{n} waiting", { n: items.length })}</span>
+              <input type="search" placeholder={t("Search the queue")} aria-label={t("Search the queue")} value={q} onChange={(e) => setQ(e.target.value)} />
+            </div>
             {/* A plain list of buttons: Tab moves through it, j and k step through the queue. aria-current marks the open one. */}
             <ul className="rq-items" aria-label={t("Invoices waiting for review")}>
               {shown.map((i) => (
-                <li key={i.id}><button aria-current={i.id === selected ? "true" : undefined} className="rq-item" onClick={() => select(i.id)}>
-                  <span className="rq-top"><b className="cell-text" dir="auto">{i.seller || i.filename}</b><span className="num"><bdi dir="ltr">{money(i.total, i.currency)}</bdi></span></span>
-                  <span className="rq-sub muted small">
-                    <bdi dir="ltr">{i.invoice_number || `#${i.id}`}</bdi>
+                <li key={i.id}><button aria-current={i.id === selected ? "true" : undefined} className={`rq-item${i.high_risk ? " risky" : ""}`} onClick={() => select(i.id)}>
+                  <span className="rq-top">
+                    <b className="cell-text" dir="auto">{i.seller || i.filename}</b>
+                    {i.high_risk && <span className="pill risk-pill">{t("High risk")}</span>}
+                    <span className="rq-amt num"><bdi dir="ltr">{money(i.total, i.currency)}</bdi></span>
+                  </span>
+                  <span className="rq-sub">
+                    <bdi dir="ltr" className="rq-no">{i.invoice_number || `#${i.id}`}</bdi>
                     <span className="rq-fails">{t("{n} checks failed", { n: i.failed_checks })}</span>
-                    {i.high_risk && <span className="pill s-rejected risk-pill">{t("High risk")}</span>}
-                    <span className="right">{ago(i.created_at)}</span>
+                    <span className="rq-age">{ago(i.created_at)}</span>
                   </span>
                 </button></li>
               ))}
-              {shown.length === 0 && <li className="muted small" style={{ padding: 10 }}>{t("Nothing matches the search.")}</li>}
+              {shown.length === 0 && <li className="muted small rq-none">{t("Nothing matches the search.")}</li>}
             </ul>
           </section>
 
-          <section className="rq-detail col" style={{ gap: 14 }} aria-live="polite">
+          <section className="rq-detail col" aria-live="polite">
             <div className="row wrap rq-nav">
               <button className="btn small rq-back" onClick={() => select(undefined)}><Arrow d={PREV} />{t("Back to the list")}</button>
               <button className="btn small" disabled={pos <= 0} onClick={() => step(-1)}><Arrow d={PREV} />{t("Previous")}</button>
