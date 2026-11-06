@@ -61,3 +61,12 @@ Accessibility (English and Arabic, light and dark)
 ## Not in scope
 - Translating server error messages (they stay English, as before).
 - A separate always-on status page for the Render cold start.
+
+## Outcome
+
+All items above are done, each in its own commit on `dev`, with tests. Two more found while working:
+- An upload with an unknown extension was treated as text, and the declared type was trusted without looking at the
+  file: a program renamed to `.txt` or sent as `application/octet-stream` was accepted. The first bytes must now match.
+- The AI connection test's 502 ("could not reach the provider") would have been replaced by a generic "server busy"
+  message; a JSON explanation from our API is now kept.
+

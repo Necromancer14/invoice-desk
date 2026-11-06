@@ -116,8 +116,10 @@ flowchart LR
 
 ```bash
 pip install -e ".[dev,mcp]"
-pytest -q          # 116 tests: rules, expression safety, pipeline, review and the review queue, versioning, API roles, provider adapters and 429/503 retries (fake servers), evaluation and the AI sample
-python tools/e2e.py   # with the server running: drives the portal in Chromium
+pytest -q          # 162 tests: rules and their edge cases, expression safety, pipeline, review and the review queue, versioning, API roles and input validation, provider adapters and 429/503 retries (fake servers), evaluation and the AI sample
+python tools/e2e.py         # with the server running: drives the portal in Chromium and saves the screenshots
+python tools/ui_check.py    # with a fresh server: behaviour checks (directions, badge, waking screen, error messages, uploads)
+python tools/a11y_check.py  # with a fresh server and `npm ci` in web/: axe-core on every page in English/Arabic, light/dark, plus keyboard checks
 ```
 
 ## Limits, stated plainly
