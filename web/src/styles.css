@@ -214,8 +214,14 @@ kbd { font: 12px var(--font); padding: 1px 7px; border: 1px solid var(--line-str
   .rq-keys { display: none; }
 }
 :root[dir="rtl"] .flip-rtl { transform: scaleX(-1); }
-/* names and file names keep their own direction (so the ellipsis lands at their end) but line up with the column they sit in */
-.ellip[dir] { text-align: match-parent; }
+/* A name or file name in a table cell or list row. It keeps its own direction (dir="auto" or "ltr"), so an Arabic name
+   in the English table, or an English one in the Arabic table, reads correctly and its ellipsis lands at its own end.
+   Its alignment follows the page instead, so it lines up with the column heading. (text-align: match-parent would say
+   this in one line, but Chromium ignores it.) */
+.cell-text { display: block; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+:root:not([dir="rtl"]) .cell-text { text-align: left; }
+:root[dir="rtl"] .cell-text { text-align: right; }
+.rq-top .cell-text { flex: 1; min-width: 0; max-width: none; font-weight: 650; }
 /* codes and amounts are typed left-to-right, but in an Arabic form they line up with the labels on the right */
 :root[dir="rtl"] input[dir="ltr"], :root[dir="rtl"] textarea[dir="ltr"] { text-align: right; }
 /* a row of filter buttons wider than a phone scrolls on its own instead of widening the page */

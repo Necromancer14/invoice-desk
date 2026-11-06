@@ -37,8 +37,8 @@ export default function Runs({ openId }: { openId?: number }) {
             <tbody>
               {data?.items.map((r) => (
                 <tr key={r.id} className="click" tabIndex={0} onClick={() => setOpen(r.id)} onKeyDown={(e) => e.key === "Enter" && setOpen(r.id)}>
-                  <td className="num">{r.id}</td><td className="ellip" dir="ltr">{r.filename}</td><td><bdi dir="ltr">{r.summary?.invoice_number ?? "–"}</bdi></td>
-                  <td className="ellip" dir="auto">{r.summary?.seller_name ?? "–"}</td><td className="n"><bdi dir="ltr">{money(r.summary?.total, r.summary?.currency)}</bdi></td>
+                  <td className="num">{r.id}</td><td><span className="cell-text" dir="ltr">{r.filename}</span></td><td><bdi dir="ltr">{r.summary?.invoice_number ?? "–"}</bdi></td>
+                  <td><span className="cell-text" dir="auto">{r.summary?.seller_name ?? "–"}</span></td><td className="n"><bdi dir="ltr">{money(r.summary?.total, r.summary?.currency)}</bdi></td>
                   <td><StatusPill status={r.status as Status} /></td><td className="small muted">{when(r.created_at)}</td>
                 </tr>
               ))}
