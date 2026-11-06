@@ -119,7 +119,7 @@ export default function Vendors() {
               <tr key={v.id}>
                 <td><div className="cell-text" dir="auto">{v.name_en}</div>{v.name_ar && <div className="cell-text small muted" dir="rtl" lang="ar">{v.name_ar}</div>}</td>
                 <td className="num"><bdi dir="ltr">{v.vat || "–"}</bdi></td>
-                <td className="num small"><bdi dir="ltr">{ibanText(v.iban)}</bdi></td>
+                <td className="num small" style={{ whiteSpace: "nowrap" }}><bdi dir="ltr">{ibanText(v.iban)}</bdi></td>
                 <td><bdi dir="ltr">{v.currency}</bdi></td>
                 <td><span className={`pill ${v.status === "blocked" ? "s-rejected" : "s-approved"}`}>{t(STATUS[v.status])}</span></td>
                 <td className="num">{v.linked_names}</td>

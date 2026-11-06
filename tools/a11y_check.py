@@ -13,7 +13,7 @@ from playwright.sync_api import Page, expect, sync_playwright
 
 BASE = sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8000"
 AXE = (Path(__file__).resolve().parent.parent / "web" / "node_modules" / "axe-core" / "axe.min.js").read_text(encoding="utf-8")
-PAGES = ["dashboard", "intake", "runs", "review", "rules", "evaluation", "audit", "settings"]
+PAGES = ["dashboard", "intake", "runs", "review", "rules", "vendors", "evaluation", "audit", "settings"]
 problems: list[str] = []
 
 
@@ -90,6 +90,11 @@ with sync_playwright() as pw:
             page.locator(".rulecard button.btn.small").last.click()
             page.wait_for_selector(".modal")
             axe(page, f"rule editor {lang}/{theme}")
+            page.keyboard.press("Escape")
+            page.evaluate("location.hash = '#/vendors'")
+            page.locator(".page-head .btn.primary").first.click()
+            page.wait_for_selector(".modal")
+            axe(page, f"vendor editor {lang}/{theme}")
             page.keyboard.press("Escape")
     page.evaluate("localStorage.setItem('id-lang', 'en'); localStorage.setItem('id-theme', 'light'); location.reload()")
     page.wait_for_selector(".nav")
