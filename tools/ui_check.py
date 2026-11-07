@@ -4,6 +4,7 @@
 
 Exits non-zero with the failing checks listed. tools/e2e.py is the walk-through that also takes screenshots.
 """
+import re
 import sys
 import time
 
@@ -125,6 +126,28 @@ def review_layout(page: Page) -> None:
     page.wait_for_selector(".modal .ck")
     check("run detail: document beside the checks", page.locator(".modal.wide .run-split .doc-pane").count() == 1)
     check("run detail: failed checks come first", "ck-fail" in page.locator(".modal .ck").first.get_attribute("class"))
+
+
+def reasons_in_arabic(page: Page) -> None:
+    """The reasons under failed checks and the vendor match explanation are in Arabic when the portal is, with
+    numbers, IBANs and names kept in their own direction; in English they are shown exactly as the server wrote them."""
+    sign_in(page)
+    load_samples(page, ["inv-084.xml", "inv-003.txt", "inv-016.pdf", "inv-089.txt"])
+    for lang in ("ar", "en"):
+        page.evaluate(f"localStorage.setItem('id-lang', '{lang}'); location.hash = '#/review'; location.reload()")
+        page.wait_for_selector(".why .ck")
+        texts = []
+        for i in range(page.locator(".rq-item").count()):
+            page.locator(".rq-item").nth(i).click()
+            page.wait_for_timeout(300)
+            texts += page.evaluate("() => [...document.querySelectorAll('.ck-why, .vm-why')].map(e => e.textContent)")
+        arabic = [t for t in texts if re.search("[؀-ۿ]", t)]
+        if lang == "ar":
+            check("reasons: every reason in the review queue is in Arabic (ar)", bool(texts) and len(arabic) == len(texts),
+                  str([t for t in texts if t not in arabic]))
+            check("reasons: values inside an Arabic reason keep their own direction (ar)", any("⁨" in t for t in texts))
+        else:
+            check("reasons: shown as the server wrote them (en)", bool(texts) and not any("⁨" in t for t in texts), str(texts[:3]))
 
 
 def dashboard_layout(page: Page) -> None:
@@ -378,7 +401,7 @@ def demo_start(page: Page) -> None:
     expect(page.locator(".welcome")).to_be_visible()
 
 
-CHECKS = [mixed_direction, review_badge, waking_screen, rule_with_open_limit, error_messages, damaged_file, provider_failure, xml_is_indented,
+CHECKS = [mixed_direction, reasons_in_arabic, review_badge, waking_screen, rule_with_open_limit, error_messages, damaged_file, provider_failure, xml_is_indented,
           vendors_and_risk, demo_start, review_layout, dashboard_layout, runs_sorting]
 
 if __name__ == "__main__":

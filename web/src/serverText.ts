@@ -1,7 +1,8 @@
 /**
  * Fixed English texts the server sends that the portal shows. Listing them with tk() lets
  * tools/check_i18n.mjs insist on an Arabic entry for each; views translate them with t(value).
- * Anything not listed here (a rule an admin named, a check's detail line) is shown as sent.
+ * Anything not listed here (a rule an admin named) is shown as sent. Check reasons and vendor match explanations
+ * are sentences built from templates; those templates live in reasons.ts.
  * Keep in step with rules.py RULE_TYPES, providers.py PROVIDERS, samples.py LABELS,
  * default_rules.py and the trace step names in desk.py.
  */

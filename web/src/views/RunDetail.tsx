@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { api, fileBlobUrl } from "../api";
 import type { Fields, PoStatus, RunDetail as Run } from "../types";
+import { reason } from "../reasons";
 import { CheckMark, Err, FIELD_LABEL, StatusPill, can, money, num, pct, tk, useApp, when } from "../common";
 
 /** ltr: codes, dates and amounts, typed and shown left-to-right even in Arabic. Labels come from FIELD_LABEL. */
@@ -131,8 +132,8 @@ function VendorPanel({ run, onChange }: { run: Run; onChange?: (r: Run) => void 
           ))}</ul>}
         </div>
       ))}
-      {/* the explanation is the server's own sentence, in English, with the names as written */}
-      {vm && <p className="small muted" style={{ margin: "4px 0 0" }}><bdi dir="auto">{vm.why}</bdi></p>}
+      {/* the server's own sentence; in Arabic it is translated when it is one of the known ones */}
+      {vm && <Why text={vm.why} className="small muted vm-why" />}
       {po && po.status !== "no_po" && (
         <div className={`po-line ${PO_TONE[po.status]}`}>
           <b>{t(PO_STATUS[po.status], { po: po.po_number || "" })}</b>
@@ -141,6 +142,13 @@ function VendorPanel({ run, onChange }: { run: Run; onChange?: (r: Run) => void 
       )}
     </section>
   );
+}
+
+/** A reason the server wrote, in the reader's language when it is a known sentence (see reasons.ts). */
+function Why({ text, className }: { text: string; className: string }) {
+  const { t, lang } = useApp();
+  const shown = reason(text, t, lang);
+  return <p className={className}><bdi dir={shown === text ? "auto" : "rtl"}>{shown}</bdi></p>;
 }
 
 /** Failed checks first, high risk on top, each with its reason in plain words. Passed checks fold away. */
@@ -159,7 +167,7 @@ export function CheckList({ run }: { run: Run }) {
           {r.risk === "high" && <span className="pill risk-pill">{t("High risk")}</span>}
           {r.status === "fail" && <span className={`ck-effect ${r.severity === "reject" ? "reject" : "review"}`}>{r.severity === "reject" ? t("would reject") : t("sends to review")}</span>}
         </div>
-        {r.status !== "pass" && r.detail && <p className="ck-why"><bdi dir="auto">{r.detail}</bdi></p>}
+        {r.status !== "pass" && r.detail && <Why text={r.detail} className="ck-why" />}
       </div>
     </div>
   );

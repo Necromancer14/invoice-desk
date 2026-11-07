@@ -245,6 +245,7 @@ th[aria-sort] { color: var(--ink); }
 .ck-effect { font-size: var(--t-xs); font-weight: 500; color: var(--muted); }
 .ck-effect.reject { color: var(--bad); } .ck-effect.review { color: var(--warn); }
 .ck-why { margin-top: 2px; color: var(--ink-2); overflow-wrap: anywhere; }
+.vm-why { margin: var(--s1) 0 0; overflow-wrap: anywhere; }
 .ck-skip .ck-name, .ck-skip .ck-why { color: var(--muted); font-weight: 400; }
 .checks .high-risk { border-inline-start: 3px solid var(--risk); padding-inline-start: var(--s3); margin-inline-start: calc(-1 * var(--s3) - 3px); }
 .checks-clear { padding: 10px 0; color: var(--ok); font-weight: 600; border-bottom: 1px solid var(--line); }
