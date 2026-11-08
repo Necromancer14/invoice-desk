@@ -105,6 +105,17 @@ with sync_playwright() as pw:
             page.wait_for_selector(".modal")
             axe(page, f"vendor editor {lang}/{theme}")
             page.keyboard.press("Escape")
+            # an XML invoice laid out as an invoice, with its source XML opened
+            page.evaluate("""async (t) => { const h = { Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' };
+                await fetch('/api/samples/submit', { method: 'POST', headers: h, body: JSON.stringify({ files: ['inv-084.xml'] }) }); }""", tok)
+            page.wait_for_timeout(1000)
+            page.evaluate("location.hash = '#/runs'")
+            page.locator("tbody tr", has_text="inv-084.xml").first.click()
+            page.wait_for_selector(".modal .inv")
+            page.locator(".inv-src summary").click()
+            page.wait_for_selector(".modal pre.xml")
+            axe(page, f"XML invoice view {lang}/{theme}")
+            page.keyboard.press("Escape")
     page.evaluate("localStorage.setItem('id-lang', 'en'); localStorage.setItem('id-theme', 'light'); location.reload()")
     page.wait_for_selector(".nav")
     keyboard(page)
