@@ -10,7 +10,8 @@ tables and the sample vendors and purchase orders; an existing database keeps it
 - Hijri dates (1420 to 1500 AH) read and converted with the Umm al-Qura calendar.
 - Zero-rated, exempt and out-of-scope lines carry no VAT; the VAT check uses only the standard-rated amount.
 - SAR is assumed when no currency is printed, with a note.
-- UBL 2.1 XML invoices are read directly, with no AI; XML with a DOCTYPE or ENTITY is refused.
+- UBL 2.1 XML invoices are read directly, with no AI; XML with a DOCTYPE or ENTITY is refused. In review and run detail an
+  XML invoice is shown as an invoice (parties, lines, totals, IBAN, PO, QR code), with the source XML behind a toggle.
 - QR codes are read from images and PDF pages, not only from printed text, and compared with the invoice.
 - 18 new synthetic samples for these checks.
 
@@ -43,7 +44,7 @@ tables and the sample vendors and purchase orders; an existing database keeps it
 **Docs and tests**
 - README: Gemini 3.1 Flash Lite and rule-based results, labelled as synthetic regression figures; a table of what
   is and is not checked; fresh screenshots in English and Arabic.
-- 288 tests. Browser checks (`tools/ui_check.py`) and axe-core accessibility checks
+- 304 tests. Browser checks (`tools/ui_check.py`) and axe-core accessibility checks
   (`tools/a11y_check.py`) pass in English and Arabic, light and dark.
 
 ## Steps to publish

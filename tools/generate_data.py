@@ -13,9 +13,12 @@ Needs playwright with chromium for the PDF and PNG files.
 from __future__ import annotations
 
 import base64
+import copy
+import csv
 import io
 import json
 import random
+import re
 import sys
 from datetime import date
 from pathlib import Path
@@ -272,10 +275,10 @@ def render_html(t, lang, qr_payload=None):
     bname = t["_ar"]["buyer_name"] if rtl else t["buyer_name"]
     L = (dict(title="فاتورة ضريبية", inv="رقم الفاتورة", date="تاريخ الإصدار", due="تاريخ الاستحقاق", svat="الرقم الضريبي للبائع", buyer="المشتري",
               bvat="الرقم الضريبي للمشتري", desc="البيان", qty="الكمية", unit="سعر الوحدة", tot="الإجمالي", sub="المجموع الفرعي",
-              vat="ضريبة القيمة المضافة (15%)", total="الإجمالي شامل الضريبة", seller="البائع")
+              vat="ضريبة القيمة المضافة (15%)", total="الإجمالي شامل الضريبة", seller="البائع", iban="رقم الآيبان", po="رقم أمر الشراء")
          if rtl else dict(title="TAX INVOICE", inv="Invoice No", date="Issue Date", due="Due Date", svat="Seller VAT No", buyer="Buyer",
                           bvat="Buyer VAT No", desc="Description", qty="Qty", unit="Unit price", tot="Total", sub="Subtotal",
-                          vat="VAT (15%)", total="Total (including VAT)", seller="Seller"))
+                          vat="VAT (15%)", total="Total (including VAT)", seller="Seller", iban="IBAN", po="PO Number"))
     num = ar_digits if rtl else (lambda s: s)
     fmt_date = (lambda s: num(dmy(s))) if rtl else (lambda s: s)
     rows = "".join(f"<tr><td>{i['description_ar'] if rtl else i['description']}</td><td>{num(str(i['quantity']))}</td><td>{num(money(i['unit_price']))}</td><td>{num(money(i['line_total']))}</td></tr>" for i in t["line_items"])
@@ -285,18 +288,25 @@ def render_html(t, lang, qr_payload=None):
         extra += f"<div>{L['due']}: <b>{fmt_date(t['due_date'])}</b></div>"
     vat_line = f"<div>{L['svat']}: <b>{num(t['seller_vat'])}</b></div>" if t["seller_vat"] else ""
     bvat_line = f"<div>{L['bvat']}: <b>{num(t['buyer_vat'])}</b></div>" if t["buyer_vat"] else ""
+    # IBAN and PO number, when the invoice has them (only the PDF copies below do), always left to right
+    pay = ""
+    if t.get("iban"):
+        pay += f"<div>{L['iban']}: <b dir=\"ltr\">{' '.join(t['iban'][i:i + 4] for i in range(0, len(t['iban']), 4))}</b></div>"
+    if t.get("po_number"):
+        pay += f"<div>{L['po']}: <b dir=\"ltr\">{t['po_number']}</b></div>"
+    pay = f'<div class="pay">{pay}</div>' if pay else ""
     return f"""<!doctype html><html lang="{'ar' if rtl else 'en'}" dir="{'rtl' if rtl else 'ltr'}"><head><meta charset="utf-8"><style>{font_css()}
 body{{margin:0;padding:36px 44px;width:720px;font-family:AR,LAT,sans-serif;font-size:15px;color:#14202b;background:#fff}}
 h1{{margin:0 0 4px;font-size:26px;letter-spacing:.5px}} .row{{display:flex;justify-content:space-between;gap:20px;margin-top:18px}}
 .row div{{line-height:1.9}} table{{width:100%;border-collapse:collapse;margin-top:22px}} th,td{{border-bottom:1px solid #cfd8de;padding:9px 6px;text-align:start}}
 th{{background:#eef3f1}} .tot{{margin-top:16px;line-height:2;text-align:end}} .tot b{{font-size:17px}} img{{width:170px;height:170px;margin-top:14px;image-rendering:pixelated}}
-.bar{{height:6px;background:#006c35;margin-bottom:18px}}</style></head><body><div class="bar"></div>
+.bar{{height:6px;background:#006c35;margin-bottom:18px}} .pay{{margin-top:18px;padding-top:10px;border-top:1px solid #cfd8de;line-height:1.9}}</style></head><body><div class="bar"></div>
 <h1>{L['title']}</h1><div>{L['inv']}: <b>{t['invoice_number']}</b></div>
 <div class="row"><div><div>{L['date']}: <b>{fmt_date(t['issue_date'])}</b></div>{extra}<div>{L['seller']}: <b>{sname}</b></div>{vat_line}</div>
 <div><div>{L['buyer']}: <b>{bname}</b></div>{bvat_line}<div>{'العملة' if rtl else 'Currency'}: <b>{cur_txt}</b></div></div></div>
 <table><thead><tr><th>{L['desc']}</th><th>{L['qty']}</th><th>{L['unit']}</th><th>{L['tot']}</th></tr></thead><tbody>{rows}</tbody></table>
 <div class="tot"><div>{L['sub']}: {num(money(t['subtotal']))} {cur_txt}</div><div>{L['vat']}: {num(money(t['vat_amount']))} {cur_txt}</div>
-<div><b>{L['total']}: {num(money(t['total']))} {cur_txt}</b></div></div>{f'<img src="{qr_img(qr_payload)}" alt="QR">' if qr_payload else ''}</body></html>"""
+<div><b>{L['total']}: {num(money(t['total']))} {cur_txt}</b></div></div>{pay}{f'<img src="{qr_img(qr_payload)}" alt="QR">' if qr_payload else ''}</body></html>"""
 
 
 def qr_for(t, lang, total=None) -> str:
@@ -421,6 +431,67 @@ def add_vendor_set(sellers_vat, answers, seen_ok):
             seen_ok.append(dict(scenario=scenario, truth=clean_truth, full=truth))
 
 
+# PDF versions of three XML demo samples, so the demo can show invoices that look like paper ones: the same data, a new
+# invoice number (so loading both is not a duplicate), IBAN and PO number printed, the QR code as an image
+PDF_COPIES = [("inv-084", "iban_changed"), ("inv-075", "bad_vat"), ("inv-077", "qr_mismatch")]
+
+
+def add_pdf_copies(page, answers, seen_ok):
+    by_id = {a["id"]: a for a in answers}
+    for src_id, scenario in PDF_COPIES:
+        src = by_id[src_id]
+        assert src["scenario"] == scenario, (src_id, src["scenario"])
+        n = len(answers) + 1
+        clean_truth = copy.deepcopy(src["truth"])
+        clean_truth["invoice_number"] = re.sub(r"\d+$", f"{100 + n:04d}", clean_truth["invoice_number"])
+        truth = dict(clean_truth, _ar=dict(src["alt_names"]))
+        expected = decide(run_rules(DEFAULT_RULES, clean_truth, ctx_for(seen_ok)))
+        assert expected == src["expected_status"], (src_id, expected, src["expected_status"])
+        sid, fname = f"inv-{n:03d}", f"inv-{n:03d}.pdf"
+        page.set_content(render_html(truth, src["lang"], clean_truth["qr_payload"]))
+        page.wait_for_timeout(120)
+        (OUT / fname).write_bytes(page.pdf(width="820px", print_background=True))
+        answers.append(dict(id=sid, file=fname, format="pdf", lang=src["lang"], scenario=scenario, expected_status=expected,
+                            vision_only=False, truth=clean_truth, alt_names=dict(src["alt_names"]), copy_of=src_id))
+        print(sid, "PDF copy of", src_id, scenario, expected)
+
+
+def load_existing():
+    """The vendor master, purchase orders and answer key already on disk, for adding the PDF copies on their own."""
+    with open(OUT / "vendors.csv", encoding="utf-8", newline="") as fh:
+        VENDORS[:] = [dict(id=n, name_en=r["name_en"], name_ar=r["name_ar"], vat=r["vat_number"], iban=r["iban"], currency=r["currency"],
+                           status=r["status"]) for n, r in enumerate(csv.DictReader(fh), 1)]
+    by_name = {v["name_en"]: v["id"] for v in VENDORS}
+    with open(OUT / "purchase_orders.csv", encoding="utf-8", newline="") as fh:
+        POS.clear()
+        for r in csv.DictReader(fh):
+            POS[r["po_number"]] = dict(po_number=r["po_number"], vendor_id=by_name[r["vendor"]], vendor_name=r["vendor"],
+                                       amount=float(r["amount"]), currency=r["currency"], status=r["status"])
+    answers = json.loads((OUT / "answers.json").read_text(encoding="utf-8"))["invoices"]
+    answers = [a for a in answers if "copy_of" not in a]
+    seen_ok = [dict(scenario=a["scenario"], truth=a["truth"]) for a in answers if a["expected_status"] == "approved"]
+    return answers, seen_ok
+
+
+def pdf_copies_only():
+    """py tools/generate_data.py --pdf-copies: adds (or remakes) the PDF copies without touching any other sample."""
+    from playwright.sync_api import sync_playwright
+
+    answers, seen_ok = load_existing()
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch()
+        page = browser.new_page(viewport={"width": 820, "height": 1100}, device_scale_factor=1.4)
+        add_pdf_copies(page, answers, seen_ok)
+        browser.close()
+    write_answers(answers)
+
+
+def write_answers(answers):
+    (OUT / "answers.json").write_text(json.dumps({"as_of": AS_OF.isoformat(), "invoices": answers}, indent=1, ensure_ascii=False), encoding="utf-8")
+    from collections import Counter
+    print(len(answers), "invoices", dict(Counter(a["expected_status"] for a in answers)), dict(Counter(a["format"] for a in answers)))
+
+
 def main():
     from playwright.sync_api import sync_playwright
 
@@ -468,12 +539,11 @@ def main():
                 seen_ok.append(dict(scenario=scenario, truth=clean_truth, full=truth))
         add_zatca_set(page, sellers_vat, answers, seen_ok)
         add_vendor_set(sellers_vat, answers, seen_ok)
+        add_pdf_copies(page, answers, seen_ok)
         browser.close()
     write_purchase_orders()
-    (OUT / "answers.json").write_text(json.dumps({"as_of": AS_OF.isoformat(), "invoices": answers}, indent=1, ensure_ascii=False), encoding="utf-8")
-    from collections import Counter
-    print(len(answers), "invoices", dict(Counter(a["expected_status"] for a in answers)), dict(Counter(a["format"] for a in answers)))
+    write_answers(answers)
 
 
 if __name__ == "__main__":
-    main()
+    pdf_copies_only() if "--pdf-copies" in sys.argv else main()

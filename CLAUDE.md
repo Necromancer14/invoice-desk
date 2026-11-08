@@ -72,8 +72,9 @@ tests/                   pytest suite; conftest.py sets INVOICE_DESK_AUTOCREATE=
                          `desk` (in-memory, sync, fixed today=2026-11-05, empty vendor master), `auth`, `good` fixtures.
 web/                     Portal source: src/App.tsx, src/views/*.tsx, src/api.ts, src/i18n.ts (EN/AR).
 web/dist/                Built portal, committed so Node is not needed to run the app.
-data/samples/            89 synthetic invoices + answers.json (generated, do not hand-edit): the original 60,
-                         18 for the checks against ZATCA e-invoicing fields, 11 for vendors and POs (own seeds),
+data/samples/            92 synthetic invoices + answers.json (generated, do not hand-edit): the original 60,
+                         18 for the checks against ZATCA e-invoicing fields, 11 for vendors and POs (own seeds), and
+                         PDF copies of three of those (inv-090 to 092; `--pdf-copies` adds them without touching the rest),
                          plus vendors.csv and purchase_orders.csv, loaded into fresh and reset demo databases.
 tools/generate_data.py   Regenerates data/samples (needs qrcode, reportlab, playwright+chromium).
 tools/e2e.py             Playwright walk-through against a running server; rewrites docs/screens/*.png.

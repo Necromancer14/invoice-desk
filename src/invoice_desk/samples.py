@@ -29,8 +29,8 @@ LABELS = {"clean": "Clean invoice", "prompt_injection": "Hidden instruction insi
 # The welcome set for a first visit: samples the built-in reader reads as the answer key expects, so the dashboard shows
 # 11 approved, 6 sent to review and 3 rejected across text, PDF and XML, English and Arabic. No duplicates, no images.
 DEMO_SET = ["inv-003.txt", "inv-004.pdf", "inv-016.pdf", "inv-017.pdf", "inv-022.pdf", "inv-035.pdf", "inv-061.txt", "inv-062.txt",
-            "inv-063.txt", "inv-064.txt", "inv-067.txt", "inv-071.pdf", "inv-074.xml", "inv-075.xml", "inv-077.xml", "inv-078.xml",
-            "inv-081.xml", "inv-082.txt", "inv-084.xml", "inv-089.txt"]
+            "inv-063.txt", "inv-064.txt", "inv-067.txt", "inv-071.pdf", "inv-074.xml", "inv-091.pdf", "inv-092.pdf", "inv-078.xml",
+            "inv-081.xml", "inv-082.txt", "inv-090.pdf", "inv-089.txt"]
 
 
 def list_samples(root: Path = SAMPLES) -> list[dict]:

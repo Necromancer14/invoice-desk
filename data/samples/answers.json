@@ -4210,6 +4210,143 @@
     "seller_name": "البحر الأحمر للخدمات اللوجستية",
     "buyer_name": "مجموعة الميناء للتجزئة"
    }
+  },
+  {
+   "id": "inv-090",
+   "file": "inv-090.pdf",
+   "format": "pdf",
+   "lang": "en",
+   "scenario": "iban_changed",
+   "expected_status": "needs_review",
+   "vision_only": false,
+   "truth": {
+    "invoice_number": "GHC-2026-0190",
+    "issue_date": "2026-09-11",
+    "due_date": "2026-10-11",
+    "seller_name": "Gulf Horizon Consulting",
+    "seller_vat": "325006057695133",
+    "buyer_name": "Nakheel Hospitality",
+    "buyer_vat": null,
+    "currency": "SAR",
+    "subtotal": 620.24,
+    "vat_amount": 93.04,
+    "total": 713.28,
+    "qr_payload": "ARdHdWxmIEhvcml6b24gQ29uc3VsdGluZwIPMzI1MDA2MDU3Njk1MTMzAxQyMDI2LTA5LTExVDA5OjMwOjAwWgQGNzEzLjI4BQU5My4wNA==",
+    "line_items": [
+     {
+      "description": "Cleaning service",
+      "description_ar": "خدمة نظافة",
+      "quantity": 4,
+      "unit_price": 155.06,
+      "line_total": 620.24
+     }
+    ],
+    "iban": "SA1505236208800380025375",
+    "invoice_type": "standard",
+    "po_number": "PO-2026-0184"
+   },
+   "alt_names": {
+    "seller_name": "أفق الخليج للاستشارات",
+    "buyer_name": "نخيل للضيافة"
+   },
+   "copy_of": "inv-084"
+  },
+  {
+   "id": "inv-091",
+   "file": "inv-091.pdf",
+   "format": "pdf",
+   "lang": "en",
+   "scenario": "bad_vat",
+   "expected_status": "rejected",
+   "vision_only": false,
+   "truth": {
+    "invoice_number": "HCS-2026-0191",
+    "issue_date": "2026-10-15",
+    "due_date": "2026-11-15",
+    "seller_name": "Hejaz Catering Services",
+    "seller_vat": "477695923130983",
+    "buyer_name": "Bayan Construction",
+    "buyer_vat": "353578195018533",
+    "currency": "SAR",
+    "subtotal": 4893.96,
+    "vat_amount": 734.09,
+    "total": 5628.05,
+    "qr_payload": "ARdIZWpheiBDYXRlcmluZyBTZXJ2aWNlcwIPNDc3Njk1OTIzMTMwOTgzAxQyMDI2LTEwLTE1VDA5OjMwOjAwWgQHNTYyOC4wNQUGNzM0LjA5",
+    "line_items": [
+     {
+      "description": "Vehicle rental",
+      "description_ar": "تأجير مركبات",
+      "quantity": 1,
+      "unit_price": 342.31,
+      "line_total": 342.31
+     },
+     {
+      "description": "Software license",
+      "description_ar": "ترخيص برمجيات",
+      "quantity": 1,
+      "unit_price": 4551.65,
+      "line_total": 4551.65
+     }
+    ],
+    "invoice_type": "standard"
+   },
+   "alt_names": {
+    "seller_name": "حجاز لخدمات التموين",
+    "buyer_name": "بيان للمقاولات"
+   },
+   "copy_of": "inv-075"
+  },
+  {
+   "id": "inv-092",
+   "file": "inv-092.pdf",
+   "format": "pdf",
+   "lang": "en",
+   "scenario": "qr_mismatch",
+   "expected_status": "needs_review",
+   "vision_only": false,
+   "truth": {
+    "invoice_number": "HCS-2026-0192",
+    "issue_date": "2026-08-22",
+    "due_date": "2026-09-22",
+    "seller_name": "Hejaz Catering Services",
+    "seller_vat": "377695923130983",
+    "buyer_name": "Bayan Construction",
+    "buyer_vat": "365607339678013",
+    "currency": "SAR",
+    "subtotal": 10800.57,
+    "vat_amount": 1620.09,
+    "total": 12420.66,
+    "qr_payload": "ARdIZWpheiBDYXRlcmluZyBTZXJ2aWNlcwIPMzc3Njk1OTIzMTMwOTgzAxQyMDI2LTA4LTIyVDA5OjMwOjAwWgQIMTI2NzAuNjYFBzE2MjAuMDk=",
+    "line_items": [
+     {
+      "description": "Cleaning service",
+      "description_ar": "خدمة نظافة",
+      "quantity": 12,
+      "unit_price": 432.91,
+      "line_total": 5194.92
+     },
+     {
+      "description": "Medical consumables",
+      "description_ar": "مستهلكات طبية",
+      "quantity": 12,
+      "unit_price": 262.25,
+      "line_total": 3147.0
+     },
+     {
+      "description": "Vehicle rental",
+      "description_ar": "تأجير مركبات",
+      "quantity": 5,
+      "unit_price": 491.73,
+      "line_total": 2458.65
+     }
+    ],
+    "invoice_type": "standard"
+   },
+   "alt_names": {
+    "seller_name": "حجاز لخدمات التموين",
+    "buyer_name": "بيان للمقاولات"
+   },
+   "copy_of": "inv-077"
   }
  ]
 }

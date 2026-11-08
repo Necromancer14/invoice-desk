@@ -24,7 +24,7 @@ A Saudi e-invoice intake desk. Invoices come in as text, PDF or photo. A built-i
 - **Vendor master and purchase orders**: a Vendors page to list, add, edit, delete and import vendors and POs from CSV, with name matching across English and Arabic and a one-click "Link to vendor" in review.
 - **Demo start**: on an empty database the dashboard offers "Load sample invoices" (20 samples, built-in reader, 11 approved, 6 to review, 3 rejected) or "Try with your own AI key". Each run is tagged as an upload or an evaluation run; the dashboard and Runs show uploads by default, the duplicate check only compares runs from the same source, and evaluation runs never enter the review queue. Admins reset the demo from Settings after a confirm step.
 - **Audit log** of every action, including automatic decisions.
-- **Evaluation** page: scores the reader and rules on 89 synthetic invoices with a known answer key (field accuracy, decision agreement, unsafe approvals, false rejections).
+- **Evaluation** page: scores the reader and rules on 92 synthetic invoices with a known answer key (field accuracy, decision agreement, unsafe approvals, false rejections).
 - **Roles**: viewer, reviewer, admin. Signed tokens. Demo mode lets visitors pick a role; set `DEMO_MODE=0` and `INVOICE_DESK_USERS` for real sign-in.
 - **Portal**: React and TypeScript, about 100 KB gzipped (script and styles), no UI or chart library. Solid surfaces in a calm green, one set of status colours (green approved, amber review, red rejected, dark red high risk), IBM Plex Sans with IBM Plex Sans Arabic served from the app, tabular figures, light and dark themes, responsive down to phone width. The review screen puts the original beside the reasons and fields, failed checks first, with Approve and Reject always on screen.
 - **Full Arabic** with a right-to-left layout: every screen is translated, with Arabic plural forms, and numbers and dates are formatted for the chosen language, while invoice numbers, VAT numbers, amounts and currency codes stay left-to-right. The reasons under failed checks are translated too. `node tools/check_i18n.mjs` (run in CI) fails if any text in the portal is missing its Arabic.
@@ -83,7 +83,7 @@ What is checked, with the default rules:
 - **Currency and numbers**: SAR is the expected currency and is assumed when none is printed (with a note). Arabic-Indic digits and the Arabic decimal and thousands separators are read before any check.
 - **Dates**: Gregorian or Hijri. Hijri dates (1420 to 1500 AH) are converted to Gregorian with the Umm al-Qura calendar, from a table generated offline out of the ICU data in Node (`tools/build_hijri_table.mjs`). Future-dated invoices go to review.
 - **QR code**: the base64 TLV payload (seller name, VAT number, time stamp, total, VAT amount) is read from the printed text, from UBL XML, or from the QR image in a PDF or picture, and compared with the invoice, including the time stamp's date in Saudi time. A mismatch goes to review; no QR code at all is a warning only (the rule can be limited to simplified tax invoices).
-- **UBL 2.1 XML**: uploaded XML invoices are read directly into the same fields and checked by the same rules. XML with any DOCTYPE or ENTITY declaration is refused, so external entities cannot be used.
+- **UBL 2.1 XML**: uploaded XML invoices are read directly into the same fields and checked by the same rules. XML with any DOCTYPE or ENTITY declaration is refused, so external entities cannot be used. Reviewers see an XML invoice laid out as an invoice (seller and buyer, lines, totals, IBAN, PO and QR code, in English or Arabic); the source XML is one click away for technical users.
 
 What is not checked: cryptographic signatures, the certificate, the invoice hash chain (PIH), the cryptographic stamp and the later QR tags (6 to 9), invoice counters, and the full UBL schema and business rules. Nothing is submitted to Fatoora (clearance or reporting). The QR image reader handles clean, digitally made codes, upright or turned by a right angle; a phone photo taken at an angle may not be readable. It is a small reader written for this project, which checks every read by re-encoding it with the `qrcode` package; it does not do error correction.
 
@@ -137,23 +137,23 @@ On the original 60 synthetic invoices (text, PDF and images, English and Arabic)
 | Fields correct | over 99% |
 | Wrong approvals | 0 |
 
-Run from the Evaluation page with a free Gemini key. It has not been run on the 29 invoices added since (ZATCA fields,
-vendors and POs).
+Run from the Evaluation page with a free Gemini key. It has not been run on the 32 invoices added since (ZATCA fields,
+vendors and POs, and PDF copies of three demo samples).
 
 ### Rule-based reader (no key)
 
-89 synthetic invoices (the original 60, 18 for the checks against ZATCA e-invoicing fields and 11 for the vendor master and POs), answer key generated alongside them, `python -m invoice_desk.evaluation`:
+92 synthetic invoices (the original 60, 18 for the checks against ZATCA e-invoicing fields, 11 for the vendor master and POs, and PDF copies of three of those: the changed IBAN, the wrong VAT number and the QR code mismatch), answer key generated alongside them, `python -m invoice_desk.evaluation`:
 
 | | Invoices | Right decision | Fields correct |
 |---|---|---|---|
-| All | 89 | 85% | 85% |
+| All | 92 | 86% | 85% |
 | Text | 57 | 93% | 95% |
-| PDF with a text layer | 12 | 100% | 100% |
+| PDF with a text layer | 15 | 100% | 100% |
 | UBL XML | 8 | 100% | 100% |
 | Image | 12 | 25% | 12% |
 | Unusual wording ("Billed on", "Amount payable") | 4 | 0% | 25% |
 
-On the original 60 alone the figures are unchanged (80% decisions, 81% fields). The 18 for the ZATCA fields score 94% and 90%; the miss is an image, which the rule-based reader cannot read. The 11 vendor samples (a known vendor, a name written differently, a changed IBAN, a blocked vendor, an unknown vendor, a VAT number that differs, an invoice above its PO) score 100% and 100%; they are text and XML written for this reader.
+On the original 60 alone the figures are unchanged (80% decisions, 81% fields). The 18 for the ZATCA fields score 94% and 90%; the miss is an image, which the rule-based reader cannot read. The 11 vendor samples (a known vendor, a name written differently, a changed IBAN, a blocked vendor, an unknown vendor, a VAT number that differs, an invoice above its PO) score 100% and 100%; they are text and XML written for this reader. The three PDF copies (changed IBAN, wrong VAT number, QR code mismatch) score 100% and 100%.
 
 Unsafe auto-approvals: 0. Wrongly rejected: 0. When the rule-based reader cannot read something, the invoice goes to a person, it is not guessed at.
 
@@ -161,9 +161,9 @@ Unsafe auto-approvals: 0. Wrongly rejected: 0. When the rule-based reader cannot
 
 ### Evaluating an AI model on a free tier
 
-Gemini's free tier allows only about 5 to 10 requests a minute and around 20 a day per model, so all 89 invoices cannot be read in one go. The Evaluation page handles that:
+Gemini's free tier allows only about 5 to 10 requests a minute and around 20 a day per model, so all 92 invoices cannot be read in one go. The Evaluation page handles that:
 
-- **A sample, not all 89.** Choose how many invoices (default 20). The pick is stratified: it always includes every file type, every language, a duplicate and the prompt-injection sample, then as many kinds of check as fit (18 of the 28 at 20, all of them from 30), and fills the rest in proportion to the full set. The same seed gives the same invoices. UBL XML in the sample is read directly, so it costs no AI requests.
+- **A sample, not all 92.** Choose how many invoices (default 20). The pick is stratified: it always includes every file type, every language, a duplicate and the prompt-injection sample, then as many kinds of check as fit (18 of the 28 at 20, all of them from 30), and fills the rest in proportion to the full set. The same seed gives the same invoices. UBL XML in the sample is read directly, so it costs no AI requests.
 - **Continue tomorrow.** Tick *Only invoices not yet evaluated with this model* and the next run picks from what is left. Results are stored per provider and model with the date, and the page shows combined totals over everything evaluated so far, with the sample size *n* next to every percentage.
 - **Paced.** *Requests per minute* (default 4) spaces the calls. A 429 or 503 is retried up to 3 times, honouring `Retry-After` (or Gemini's `retryDelay`) when given and backing off otherwise. A daily-quota answer stops the run at once with a clear message; what was done is kept.
 - **No silent fallback.** During evaluation a failed AI call is never handed to the built-in reader. That invoice is recorded as an error, shown in the count ("14 of 20 evaluated, 6 errors") and left out of every percentage.
@@ -196,7 +196,7 @@ flowchart LR
 
 ```bash
 pip install -e ".[dev,mcp]"
-pytest -q          # 288 tests: rules and their edge cases, run sources and the demo start, vendor matching and IBANs, expression safety, pipeline, review and the review queue, versioning, API roles and input validation, provider adapters and 429/503 retries (fake servers), evaluation and the AI sample
+pytest -q          # 304 tests: rules and their edge cases, run sources and the demo start, vendor matching and IBANs, expression safety, pipeline, review and the review queue, versioning, API roles and input validation, provider adapters and 429/503 retries (fake servers), evaluation and the AI sample
 python tools/e2e.py         # with the server running: drives the portal in Chromium and saves the screenshots
 python tools/ui_check.py    # with a fresh server: behaviour checks (directions, badge, waking screen, error messages, uploads)
 python tools/a11y_check.py  # with a fresh server and `npm ci` in web/: axe-core on every page in English/Arabic, light/dark, plus keyboard checks
