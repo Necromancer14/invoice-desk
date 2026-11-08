@@ -126,6 +126,12 @@ def review_layout(page: Page) -> None:
     page.wait_for_selector(".modal .ck")
     check("run detail: document beside the checks", page.locator(".modal.wide .run-split .doc-pane").count() == 1)
     check("run detail: failed checks come first", "ck-fail" in page.locator(".modal .ck").first.get_attribute("class"))
+    page.keyboard.press("Escape")
+    page.locator("tbody tr", has_text="inv-016.pdf").first.click()
+    frame = page.locator(".modal .doc iframe")
+    expect(frame).to_be_visible()
+    check("run detail: a PDF opens at the pane width, without the page sidebar",
+          frame.get_attribute("src").endswith("#navpanes=0&view=FitH"), frame.get_attribute("src"))
 
 
 def reasons_in_arabic(page: Page) -> None:

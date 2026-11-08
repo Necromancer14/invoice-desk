@@ -155,7 +155,8 @@ export function Document({ run }: { run: Run }) {
       {xml && failed && text !== null && <pre dir="ltr" className="xml">{text}</pre>}
       {/* the original may be Arabic, English or both: let it pick its own direction */}
       {!xml && text !== null && <pre dir="auto">{text}</pre>}
-      {url && run.content_type === "application/pdf" && <iframe src={url} title={run.filename} />}
+      {/* open a PDF at the pane's width, without the page sidebar that would shrink it; the viewer's toolbar stays */}
+      {url && run.content_type === "application/pdf" && <iframe src={`${url}#navpanes=0&view=FitH`} title={run.filename} />}
       {url && run.content_type.startsWith("image/") && <img src={url} alt={run.filename} />}
     </div>
   );
