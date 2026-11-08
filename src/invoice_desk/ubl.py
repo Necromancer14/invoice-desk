@@ -53,13 +53,7 @@ def _party(root, which: str) -> tuple[str | None, str | None]:
 
 def read(blob: bytes) -> dict:
     """The desk's fields from a UBL 2.1 invoice. Raises XmlError for unsafe, malformed or non-invoice XML."""
-    check_safe(blob)
-    try:
-        root = ET.fromstring(blob)
-    except ET.ParseError as exc:
-        raise XmlError(f"the XML could not be read ({exc})") from None
-    if root.tag != f"{{{NS['inv']}}}Invoice":
-        raise XmlError("this XML is not a UBL 2.1 Invoice")
+    root = _parse(blob)
     f = empty_fields()
     f["invoice_number"] = _text(root, "cbc:ID")
     f["issue_date"] = parse_date(_text(root, "cbc:IssueDate"))
@@ -89,6 +83,50 @@ def read(blob: bytes) -> dict:
             item["vat_category"] = category
         f["line_items"].append(item)
     return f
+
+
+_ADDRESS = ("cbc:StreetName", "cbc:AdditionalStreetName", "cbc:BuildingNumber", "cbc:CitySubdivisionName",
+            "cbc:CityName", "cbc:PostalZone", "cbc:CountrySubentity", "cac:Country/cbc:IdentificationCode")
+
+
+def _parse(blob: bytes):
+    check_safe(blob)
+    try:
+        root = ET.fromstring(blob)
+    except ET.ParseError as exc:
+        raise XmlError(f"the XML could not be read ({exc})") from None
+    if root.tag != f"{{{NS['inv']}}}Invoice":
+        raise XmlError("this XML is not a UBL 2.1 Invoice")
+    return root
+
+
+def _view_party(root, which: str) -> dict:
+    party = root.find(f"cac:{which}/cac:Party", NS)
+    name, vat = _party(root, which)
+    addr = party.find("cac:PostalAddress", NS) if party is not None else None
+    parts = [_text(addr, p) for p in _ADDRESS] if addr is not None else []
+    # street and building on one line, district and city on the next, then postal code, region and country
+    lines = [" ".join(p for p in parts[:3] if p), ", ".join(p for p in parts[3:5] if p), " ".join(p for p in parts[5:] if p)]
+    return {"name": name, "vat": vat, "address": [ln for ln in lines if ln]}
+
+
+def view(blob: bytes) -> dict:
+    """What a person reads on a UBL invoice, for the portal's invoice view. Raises XmlError like read()."""
+    root = _parse(blob)
+    f = read(blob)
+    lines = []
+    for line, item in zip(root.findall("cac:InvoiceLine", NS), f["line_items"]):
+        rate = to_number(_text(line, "cac:Item/cac:ClassifiedTaxCategory/cbc:Percent"))
+        lines.append(dict(item, vat_category=item.get("vat_category") or None, vat_rate=rate))
+    tc = root.find("cbc:InvoiceTypeCode", NS)
+    return {
+        "invoice_type": f["invoice_type"], "type_code": tc.text.strip() if tc is not None and tc.text else None,
+        "invoice_number": f["invoice_number"], "issue_date": f["issue_date"], "issue_time": _text(root, "cbc:IssueTime"),
+        "due_date": f["due_date"], "currency": f["currency"],
+        "seller": _view_party(root, "AccountingSupplierParty"), "buyer": _view_party(root, "AccountingCustomerParty"),
+        "lines": lines, "subtotal": f["subtotal"], "vat_amount": f["vat_amount"], "total": f["total"],
+        "iban": f["iban"], "po_number": f["po_number"], "qr_payload": f["qr_payload"],
+    }
 
 
 class UblExtractor:

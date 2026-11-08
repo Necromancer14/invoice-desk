@@ -618,5 +618,11 @@
   "Warning: no QR code was found": "تنبيه: لم يُعثر على رمز الاستجابة السريعة",
   "Unknown vendor": "مورد غير معروف",
   "Above the PO amount": "أعلى من مبلغ أمر الشراء",
-  "{message} ({detail})": "{message} ({detail})"
+  "{message} ({detail})": "{message} ({detail})",
+  "Invoice {number}": "الفاتورة {number}",
+  "Tax invoice": "فاتورة ضريبية",
+  "Description": "الوصف",
+  "The QR code could not be decoded.": "تعذّرت قراءة رمز الاستجابة السريعة.",
+  "Show source XML": "عرض ملف XML الأصلي",
+  "Source XML": "ملف XML الأصلي"
 }

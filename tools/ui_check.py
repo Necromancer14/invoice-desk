@@ -323,20 +323,32 @@ def provider_failure(page: Page) -> None:
     page.evaluate("sessionStorage.clear()")
 
 
-def xml_is_indented(page: Page) -> None:
-    """A UBL XML invoice shows indented, one element per line, left-to-right even in Arabic."""
+def xml_reads_as_an_invoice(page: Page) -> None:
+    """A UBL XML invoice is shown as an invoice (parties, lines, totals, IBAN), not as XML. The source is behind a
+    closed "Show source XML" toggle; opened, it is indented and left to right. Checked in Arabic and English."""
     sign_in(page, lang="ar")
-    load_samples(page, ["inv-073.xml"])
-    page.evaluate("location.hash = '#/runs'")
-    page.locator("tbody tr").first.click()
-    pre = page.locator(".modal .doc pre")
-    expect(pre).to_be_visible()
-    page.wait_for_function("document.querySelector('.modal .doc pre').textContent.includes('</Invoice>')")
-    text = pre.inner_text()
-    lines = text.splitlines()
-    check("XML is shown on many lines", len(lines) > 40, f"{len(lines)} lines")
-    check("XML is indented", any(line.startswith("    <cbc:") for line in lines), lines[:5])
-    check("XML reads left-to-right in Arabic", pre.evaluate("e => getComputedStyle(e).direction") == "ltr")
+    load_samples(page, ["inv-084.xml"])
+    for lang in ("ar", "en"):
+        page.evaluate(f"localStorage.setItem('id-lang', '{lang}'); location.hash = '#/runs'; location.reload()")
+        page.locator("tbody tr").first.click()
+        inv = page.locator(".modal .doc .inv")
+        expect(inv).to_be_visible()
+        check(f"XML: invoice view shows number, seller, lines and total ({lang})",
+              "GHC-2026-0184" in inv.inner_text() and "Gulf Horizon Consulting" in inv.inner_text()
+              and inv.locator(".inv-lines tbody tr").count() >= 1 and "713.28" in inv.locator(".inv-total").inner_text())
+        check(f"XML: IBAN shown in groups, left to right ({lang})",
+              inv.locator(".inv-pay bdi").first.evaluate("e => e.textContent.startsWith('SA15 0523') && getComputedStyle(e).direction === 'ltr'"))
+        check(f"XML: invoice view follows the page direction ({lang})",
+              inv.evaluate("e => getComputedStyle(e).direction") == ("rtl" if lang == "ar" else "ltr"))
+        check(f"XML: no source visible until asked ({lang})", not page.locator(".modal .doc pre.xml").is_visible()
+              and "<cbc:" not in inv.inner_text())
+        page.locator(".inv-src summary").click()
+        pre = page.locator(".modal .doc pre.xml")
+        expect(pre).to_be_visible()
+        page.wait_for_function("document.querySelector('.modal .doc pre.xml').textContent.includes('</Invoice>')")
+        lines = pre.inner_text().splitlines()
+        check(f"XML: source is indented, one element a line ({lang})", len(lines) > 40 and any(ln.startswith("    <cbc:") for ln in lines), lines[:3])
+        check(f"XML: source reads left to right ({lang})", pre.evaluate("e => getComputedStyle(e).direction") == "ltr")
 
 
 def vendors_and_risk(page: Page) -> None:
@@ -401,7 +413,7 @@ def demo_start(page: Page) -> None:
     expect(page.locator(".welcome")).to_be_visible()
 
 
-CHECKS = [mixed_direction, reasons_in_arabic, review_badge, waking_screen, rule_with_open_limit, error_messages, damaged_file, provider_failure, xml_is_indented,
+CHECKS = [mixed_direction, reasons_in_arabic, review_badge, waking_screen, rule_with_open_limit, error_messages, damaged_file, provider_failure, xml_reads_as_an_invoice,
           vendors_and_risk, demo_start, review_layout, dashboard_layout, runs_sorting]
 
 if __name__ == "__main__":

@@ -18,6 +18,7 @@ from .providers import ProviderError, build_extractor
 from .rules import RULE_TYPES, Ctx, decide, run_rules, validate_rule
 from .schema import FIELDS, NUMERIC, SCALARS, empty_fields
 from .textnorm import number_key, parse_date, to_number, vat_key
+from . import ubl
 from .ubl import UblExtractor, XmlError, check_safe, looks_like_xml
 from .vendors import VendorBook, clean_po, clean_vendor, name_key, po_match, read_csv
 
@@ -592,6 +593,16 @@ class Desk:
         if not r:
             raise DeskError("run not found", 404)
         return r["blob"], r["content_type"], r["filename"]
+
+    def invoice_view(self, rid: int) -> dict:
+        """The UBL invoice of an XML run, laid out for reading. 404 for other file types, 422 if the XML cannot be read."""
+        blob, ctype, _ = self.get_blob(rid)
+        if ctype != "application/xml":
+            raise DeskError("this run is not an XML invoice", 404)
+        try:
+            return ubl.view(blob)
+        except ubl.XmlError as exc:
+            raise DeskError(str(exc), 422) from None
 
     def list_runs(self, status: str | None = None, q: str | None = None, limit: int = 50, offset: int = 0,
                   source: str | None = None) -> dict:

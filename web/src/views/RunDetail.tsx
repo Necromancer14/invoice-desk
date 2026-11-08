@@ -43,26 +43,118 @@ export function prettyXml(src: string): string {
   return out.join("\n");
 }
 
+/** A UBL invoice laid out for reading, from GET /runs/{id}/invoice. */
+export type InvoiceParty = { name: string | null; vat: string | null; address: string[] };
+export type InvoiceLine = { description: string; quantity: number | null; unit_price: number | null; line_total: number | null;
+  vat_category: "S" | "Z" | "E" | "O" | null; vat_rate: number | null };
+export type UblView = {
+  invoice_type: "standard" | "simplified" | null; invoice_number: string | null; issue_date: string | null; issue_time: string | null;
+  due_date: string | null; currency: string | null; seller: InvoiceParty; buyer: InvoiceParty; lines: InvoiceLine[];
+  subtotal: number | null; vat_amount: number | null; total: number | null; iban: string | null; po_number: string | null; qr_payload: string | null;
+};
+
+/** Codes, numbers and amounts read left to right inside Arabic text too. */
+const Ltr = ({ children, className }: { children: ReactNode; className?: string }) => <bdi dir="ltr" className={className}>{children}</bdi>;
+/** An IBAN in groups of four, as it is printed on paper. */
+const ibanGroups = (iban: string) => iban.replace(/(.{4})(?=.)/g, "$1 ");
+
+export function InvoiceView({ inv, source }: { inv: UblView; source: string | null }) {
+  const { t } = useApp();
+  const cur = inv.currency;
+  const party = (title: string, p: InvoiceParty) => (
+    <section className="inv-party">
+      <h4>{title}</h4>
+      <p className="inv-name" dir="auto">{p.name || "–"}</p>
+      {p.vat && <p><span className="muted">{t("VAT number")} </span><Ltr className="num">{p.vat}</Ltr></p>}
+      {p.address.map((line, i) => <p key={i} className="muted" dir="auto">{line}</p>)}
+    </section>
+  );
+  const qr = decodeQr(inv.qr_payload);
+  return (
+    <article className="inv" tabIndex={0} aria-label={t("Invoice {number}", { number: inv.invoice_number || "–" })}>
+      <header className="inv-head">
+        <div>
+          <h3 className="inv-title">{inv.invoice_type === "simplified" ? t("Simplified tax invoice") : t("Tax invoice")}</h3>
+          <Ltr className="inv-no num">{inv.invoice_number || "–"}</Ltr>
+        </div>
+        <dl className="inv-meta">
+          <div><dt>{t("Issue date")}</dt><dd><Ltr className="num">{inv.issue_date || "–"}{inv.issue_time ? ` ${inv.issue_time.slice(0, 5)}` : ""}</Ltr></dd></div>
+          {inv.due_date && <div><dt>{t("Due date")}</dt><dd><Ltr className="num">{inv.due_date}</Ltr></dd></div>}
+          {cur && <div><dt>{t("Currency")}</dt><dd><Ltr>{cur}</Ltr></dd></div>}
+        </dl>
+      </header>
+      <div className="inv-parties">{party(t("Seller"), inv.seller)}{party(t("Buyer"), inv.buyer)}</div>
+      <div className="inv-lines">
+        <table>
+          <caption className="sr-only">{t("Line items")}</caption>
+          <thead><tr><th>{t("Description")}</th><th className="n">{t("Qty")}</th><th className="n">{t("Unit price")}</th><th>{t("VAT")}</th><th className="n">{t("Line total")}</th></tr></thead>
+          <tbody>{inv.lines.map((l, i) => { const vat = VAT_CATEGORY[l.vat_category || "S"]; return (
+            <tr key={i}>
+              <td dir="auto">{l.description || "–"}</td>
+              <td className="n"><Ltr>{num(l.quantity, Number.isInteger(l.quantity ?? 0) ? 0 : 2)}</Ltr></td>
+              <td className="n"><Ltr>{money(l.unit_price)}</Ltr></td>
+              <td>{t(vat)}{l.vat_rate != null && <span className="muted"> <Ltr>{`${num(l.vat_rate)}%`}</Ltr></span>}</td>
+              <td className="n"><Ltr>{money(l.line_total)}</Ltr></td>
+            </tr>
+          ); })}</tbody>
+        </table>
+      </div>
+      <dl className="inv-totals">
+        <div><dt>{t("Subtotal")}</dt><dd><Ltr>{money(inv.subtotal, cur)}</Ltr></dd></div>
+        <div><dt>{t("VAT")}</dt><dd><Ltr>{money(inv.vat_amount, cur)}</Ltr></dd></div>
+        <div className="inv-total"><dt>{t("Total")}</dt><dd><Ltr>{money(inv.total, cur)}</Ltr></dd></div>
+      </dl>
+      {(inv.iban || inv.po_number) && (
+        <dl className="inv-pay">
+          {inv.iban && <div><dt>{t("IBAN")}</dt><dd><Ltr className="num">{ibanGroups(inv.iban)}</Ltr></dd></div>}
+          {inv.po_number && <div><dt>{t("PO number")}</dt><dd><Ltr>{inv.po_number}</Ltr></dd></div>}
+        </dl>
+      )}
+      {inv.qr_payload && (
+        <section className="inv-qr">
+          <h4>{t("QR code")}</h4>
+          {qr ? <dl className="qr-list">{QR_TAGS.filter(([n]) => qr[n]).map(([n, label]) => <div key={n}><dt>{t(label)}</dt><dd dir="auto">{qr[n]}</dd></div>)}</dl>
+            : <p className="muted">{t("The QR code could not be decoded.")}</p>}
+          <p className="inv-payload" dir="ltr">{inv.qr_payload}</p>
+        </section>
+      )}
+      {source !== null && (
+        <details className="inv-src">
+          <summary>{t("Show source XML")}</summary>
+          <pre className="xml" dir="ltr" tabIndex={0} aria-label={t("Source XML")}>{source}</pre>
+        </details>
+      )}
+    </article>
+  );
+}
+
 export function Document({ run }: { run: Run }) {
   const { t } = useApp();
   const [url, setUrl] = useState<string | null>(null);
   const [text, setText] = useState<string | null>(null);
+  const [inv, setInv] = useState<UblView | null>(null);
+  const [failed, setFailed] = useState(false);
+  const xml = run.content_type === "application/xml";
   useEffect(() => {
-    let revoked: string | null = null;
-    setUrl(null); setText(null);
+    let revoked: string | null = null, live = true;
+    setUrl(null); setText(null); setInv(null); setFailed(false);
+    if (xml) api<UblView>(`/runs/${run.id}/invoice`).then((v) => { if (live) setInv(v); }).catch(() => { if (live) setFailed(true); });
     fileBlobUrl(`/runs/${run.id}/file`).then(async (u) => {
       revoked = u;
       if (run.content_type === "text/plain") setText(await (await fetch(u)).text());
-      else if (run.content_type === "application/xml") setText(prettyXml(await (await fetch(u)).text()));
+      else if (xml) setText(prettyXml(await (await fetch(u)).text()));
       else setUrl(u);
     }).catch(() => setText(t("Could not load the original file.")));
-    return () => { if (revoked) URL.revokeObjectURL(revoked); };
+    return () => { live = false; if (revoked) URL.revokeObjectURL(revoked); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [run.id, run.content_type]);
   return (
-    <div className="doc">
-      {/* the original may be Arabic, English or both: let it pick its own direction. XML is code: always left-to-right */}
-      {text !== null && <pre dir={run.content_type === "application/xml" ? "ltr" : "auto"} className={run.content_type === "application/xml" ? "xml" : undefined}>{text}</pre>}
+    <div className={xml && !failed ? "doc doc-inv" : "doc"}>
+      {/* an XML invoice is shown as an invoice; its source only on request, or if the invoice view cannot be built */}
+      {xml && inv && <InvoiceView inv={inv} source={text} />}
+      {xml && failed && text !== null && <pre dir="ltr" className="xml">{text}</pre>}
+      {/* the original may be Arabic, English or both: let it pick its own direction */}
+      {!xml && text !== null && <pre dir="auto">{text}</pre>}
       {url && run.content_type === "application/pdf" && <iframe src={url} title={run.filename} />}
       {url && run.content_type.startsWith("image/") && <img src={url} alt={run.filename} />}
     </div>

@@ -173,6 +173,10 @@ def create_app(desk: Desk | None = None, auth: Auth | None = None, rate_limit: i
         return Response(blob, media_type=ctype, headers={"Content-Disposition": f'inline; filename="{name}"',
                                                          "X-Content-Type-Options": "nosniff"})
 
+    @app.get("/api/runs/{rid}/invoice")
+    def run_invoice(rid: int, user=Depends(need("viewer"))):
+        return desk.invoice_view(rid)
+
     @app.post("/api/runs/{rid}/review")
     def review(rid: int, body: Review, user=Depends(need("reviewer"))):
         return desk.review(rid, body.decision, user["sub"], body.edits, body.note)
