@@ -53,6 +53,7 @@ export const FIELD_LABEL: Record<string, string> = {
   invoice_number: tk("Invoice number"), issue_date: tk("Issue date"), due_date: tk("Due date"), seller_name: tk("Seller"),
   seller_vat: tk("Seller VAT number"), buyer_name: tk("Buyer"), buyer_vat: tk("Buyer VAT number"), currency: tk("Currency"),
   subtotal: tk("Subtotal"), vat_amount: tk("VAT amount"), total: tk("Total"), qr_payload: tk("QR code"), line_items: tk("Line items"),
+  invoice_type: tk("Invoice type"), iban: tk("IBAN"), po_number: tk("PO number"),
 };
 const CHECK_LABEL = { pass: tk("Check passed"), fail: tk("Check failed"), skip: tk("Check skipped") };
 
@@ -70,7 +71,7 @@ export function StatusPill({ status }: { status: Status }) {
 }
 export function CheckMark({ s }: { s: "pass" | "fail" | "skip" }) {
   const { t } = useApp();
-  return <span className={`pill ${s}`} style={{ padding: 3 }} role="img" aria-label={t(CHECK_LABEL[s])}><Icon d={ICONS[s]} /></span>;
+  return <span className={`pill mark ${s}`} role="img" aria-label={t(CHECK_LABEL[s])}><Icon d={ICONS[s]} /></span>;
 }
 
 const FOCUSABLE = "button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])";
@@ -79,7 +80,7 @@ const FOCUSABLE = "button, [href], input, select, textarea, [tabindex]:not([tabi
  * A dialog that behaves for keyboard users: focus moves into it when it opens (the first field, else the dialog),
  * Tab and Shift+Tab stay inside it, Escape closes it, and focus goes back to whatever opened it.
  */
-export function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+export function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
   const { t } = useApp();
   const box = useRef<HTMLDivElement>(null);
   const close = useRef(onClose); close.current = onClose;
@@ -100,7 +101,7 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
   }, []);
   return (
     <div className="modal-bg" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal" role="dialog" aria-modal="true" aria-label={title} ref={box} tabIndex={-1}>
+      <div className={`modal${wide ? " wide" : ""}`} role="dialog" aria-modal="true" aria-label={title} ref={box} tabIndex={-1}>
         <div className="row"><h2>{title}</h2><button className="btn ghost small right" onClick={onClose} aria-label={t("Close")}>✕</button></div>
         {children}
       </div>
@@ -143,3 +144,17 @@ export function Head({ title, sub, children }: { title: string; sub?: string; ch
   return <div className="page-head"><div className="grow"><h1>{title}</h1>{sub && <p>{sub}</p>}</div>{children}</div>;
 }
 export { makeT, tk };
+
+/** Where a run came from: uploads (files and samples sent through intake) or the Evaluation page. */
+export type Source = "upload" | "evaluation" | "all";
+export const SOURCES: { value: Source; label: string }[] = [
+  { value: "upload", label: tk("Uploads") }, { value: "evaluation", label: tk("Evaluation") }, { value: "all", label: tk("All") },
+];
+export function SourceFilter({ value, onChange }: { value: Source; onChange: (s: Source) => void }) {
+  const { t } = useApp();
+  return (
+    <div className="seg" role="group" aria-label={t("Source")}>
+      {SOURCES.map((x) => <button key={x.value} aria-pressed={value === x.value} onClick={() => onChange(x.value)}>{t(x.label)}</button>)}
+    </div>
+  );
+}

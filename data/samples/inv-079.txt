@@ -1,0 +1,20 @@
+TAX INVOICE
+Invoice No: DRP-2026-0179
+Issue Date: 2026-08-28
+Due Date: 2026-09-28
+Seller: Desert Rose Printing
+Seller VAT No: 345946419931163
+Buyer: Bayan Construction
+Buyer VAT No: 319239270158153
+IBAN: SA94 1095 5906 6220 0975 0747
+PO Number: PO-2026-0179
+Currency: SAR
+
+Description   Qty   Unit price   Total
+1. Maintenance contract   7   3,217.46   22,522.22
+2. Vehicle rental   11   790.66   8,697.26
+
+Subtotal: 31,219.48 SAR
+VAT (15%): 4,682.92 SAR
+Total (including VAT): 35,902.40 SAR
+QR: ARREZXNlcnQgUm9zZSBQcmludGluZwIPMzQ1OTQ2NDE5OTMxMTYzAxQyMDI2LTA4LTI4VDA5OjMwOjAwWgQIMzU5MDIuNDAFBzQ2ODIuOTI=

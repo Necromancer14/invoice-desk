@@ -1,4 +1,5 @@
 """Browser walk-through against a running server: python tools/e2e.py [base_url]. Fails loudly if a screen breaks. Saves screenshots to docs/screens."""
+import re
 import sys
 from pathlib import Path
 
@@ -22,7 +23,7 @@ with sync_playwright() as pw:
     page.screenshot(path=OUT / "01-empty-dashboard.png")
 
     page.get_by_role("button", name="Upload invoices").first.click()
-    page.get_by_role("button", name="Load all 60").click()
+    page.get_by_role("button", name=re.compile(r"^Load all \d+$")).click()
     expect(page.get_by_role("heading", name="Runs")).to_be_visible()
     page.wait_for_function("document.querySelectorAll('tbody tr').length >= 30", timeout=20000)
     page.wait_for_timeout(2500)

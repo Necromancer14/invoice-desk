@@ -4,6 +4,7 @@
 
 Exits non-zero with the failing checks listed. tools/e2e.py is the walk-through that also takes screenshots.
 """
+import re
 import sys
 import time
 
@@ -91,6 +92,108 @@ def review_badge(page: Page) -> None:
     page.wait_for_timeout(2500)
     check("badge still right once the server answers", page.evaluate(badge) == str(listed - 1), page.evaluate(badge))
     page.unroute("**/api/stats")
+
+
+def review_layout(page: Page) -> None:
+    """Review and run detail: the document beside the fields and checks (mirrored in Arabic), failed checks first,
+    Approve and Reject on screen while the reviewer scrolls."""
+    sign_in(page)
+    load_samples(page, ["inv-016.pdf", "inv-089.txt", "inv-084.xml", "inv-003.txt"])  # inv-084 has a changed IBAN: high risk
+    for lang in ("en", "ar"):
+        page.evaluate(f"localStorage.setItem('id-lang', '{lang}'); location.hash = '#/review'; location.reload()")
+        page.wait_for_selector(".why .ck")
+        box = page.evaluate("""() => { const d = document.querySelector('.rq-detail .doc-pane').getBoundingClientRect(),
+            s = document.querySelector('.rq-detail .run-side').getBoundingClientRect(); return { dl: d.left, dr: d.right, sl: s.left, sr: s.right, dt: d.top, st: s.top }; }""")
+        beside = box["dr"] <= box["sl"] + 1 if lang == "en" else box["sr"] <= box["dl"] + 1
+        check(f"review: document and fields side by side, document first in reading order ({lang})", beside and abs(box["dt"] - box["st"]) < 4, str(box))
+        check(f"review: failed checks come first ({lang})", "ck-fail" in page.locator(".why .ck").first.get_attribute("class"))
+        for where in ("top", "bottom"):
+            if where == "bottom":
+                page.evaluate("window.scrollTo(0, document.body.scrollHeight / 2)")
+                page.wait_for_timeout(200)
+            on_screen = page.evaluate("""() => [...document.querySelectorAll('.decide .btn')].slice(0, 2).every(b => {
+                const r = b.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; })""")
+            check(f"review: Approve and Reject on screen at the {where} of the page ({lang})", on_screen)
+        check(f"review: shortcuts shown beside the decision ({lang})", page.locator(".decide .rq-keys kbd").count() == 4)
+        rows = page.evaluate("""() => [...document.querySelectorAll('.rq-item')].map(b => ({
+            top: b.querySelector('.rq-top').getBoundingClientRect().height, sub: b.querySelector('.rq-sub').getBoundingClientRect().height, end: Math.round(document.dir === 'rtl' ? b.querySelector('.rq-amt').getBoundingClientRect().left
+                : b.querySelector('.rq-amt').getBoundingClientRect().right) }))""")
+        check(f"queue: every invoice takes two lines, neither wraps ({lang})", bool(rows) and all(r["top"] <= 26 and r["sub"] <= 22 for r in rows), str(rows))
+        check(f"queue: amounts line up at the row end ({lang})", len({r["end"] for r in rows}) == 1, str(rows))
+        check(f"queue: the high-risk invoice is marked in the list ({lang})", page.locator(".rq-item.risky .risk-pill").count() >= 1)
+    page.evaluate("localStorage.setItem('id-lang', 'en'); location.hash = '#/runs'; location.reload()")
+    page.locator("tbody tr", has=page.locator(".s-needs_review")).first.click()
+    page.wait_for_selector(".modal .ck")
+    check("run detail: document beside the checks", page.locator(".modal.wide .run-split .doc-pane").count() == 1)
+    check("run detail: failed checks come first", "ck-fail" in page.locator(".modal .ck").first.get_attribute("class"))
+    page.keyboard.press("Escape")
+    page.locator("tbody tr", has_text="inv-016.pdf").first.click()
+    frame = page.locator(".modal .doc iframe")
+    expect(frame).to_be_visible()
+    check("run detail: a PDF opens at the pane width, without the page sidebar",
+          frame.get_attribute("src").endswith("#navpanes=0&view=FitH"), frame.get_attribute("src"))
+
+
+def reasons_in_arabic(page: Page) -> None:
+    """The reasons under failed checks and the vendor match explanation are in Arabic when the portal is, with
+    numbers, IBANs and names kept in their own direction; in English they are shown exactly as the server wrote them."""
+    sign_in(page)
+    load_samples(page, ["inv-084.xml", "inv-003.txt", "inv-016.pdf", "inv-089.txt"])
+    for lang in ("ar", "en"):
+        page.evaluate(f"localStorage.setItem('id-lang', '{lang}'); location.hash = '#/review'; location.reload()")
+        page.wait_for_selector(".why .ck")
+        texts = []
+        for i in range(page.locator(".rq-item").count()):
+            page.locator(".rq-item").nth(i).click()
+            page.wait_for_timeout(300)
+            texts += page.evaluate("() => [...document.querySelectorAll('.ck-why, .vm-why')].map(e => e.textContent)")
+        arabic = [t for t in texts if re.search("[؀-ۿ]", t)]
+        if lang == "ar":
+            check("reasons: every reason in the review queue is in Arabic (ar)", bool(texts) and len(arabic) == len(texts),
+                  str([t for t in texts if t not in arabic]))
+            check("reasons: values inside an Arabic reason keep their own direction (ar)", any("⁨" in t for t in texts))
+        else:
+            check("reasons: shown as the server wrote them (en)", bool(texts) and not any("⁨" in t for t in texts), str(texts[:3]))
+
+
+def dashboard_layout(page: Page) -> None:
+    """Dashboard: one headline figure before the status bar; a single busy day draws as one bar with its count,
+    the empty days as faint ticks, on a scale whose halfway mark is a whole number."""
+    sign_in(page)
+    load_samples(page, ["inv-003.txt", "inv-016.pdf", "inv-089.txt"])
+    page.evaluate("location.hash = '#/dashboard'; location.reload()")
+    page.wait_for_selector(".dc-plot")
+    order = page.evaluate("""() => { const h = document.querySelector('.headline'), s = document.querySelector('.strip');
+        return !!h && !!s && (h.compareDocumentPosition(s) & Node.DOCUMENT_POSITION_FOLLOWING) > 0; }""")
+    check("dashboard: headline figure comes before the status bar", order)
+    check("dashboard: one bar for the one busy day", page.locator(".dc-bar").count() == 1)
+    val = page.locator(".dc-val").inner_text().strip()
+    check("dashboard: the busy day is labelled with its count", val == "3", val)
+    check("dashboard: empty days drawn as ticks", page.locator(".dc-col.zero").count() == 13)
+    top, mid = page.locator(".dc-tick.top").inner_text(), page.locator(".dc-tick.mid").inner_text()
+    check("dashboard: scale has a whole-number halfway mark", top == "4" and mid == "2", f"{top} / {mid}")
+
+
+def runs_sorting(page: Page) -> None:
+    """Runs: headings sort the rows, say which way with aria-sort, and keep names in their own direction."""
+    sign_in(page)
+    load_samples(page, ["inv-003.txt", "inv-013.txt", "inv-016.pdf", "inv-089.txt"])
+    page.evaluate("location.hash = '#/runs'; location.reload()")
+    page.wait_for_selector("tbody tr")
+    totals = lambda: page.evaluate("""() => [...document.querySelectorAll('tbody tr td:nth-child(5)')].map(td =>
+        parseFloat(td.textContent.replace(/[^0-9.]/g, '')) || 0)""")  # noqa: E731
+    head = page.locator("th", has=page.get_by_role("button", name="Total"))
+    head.get_by_role("button").click()
+    first = totals()
+    check("runs: Total sorts largest first", first == sorted(first, reverse=True), str(first))
+    check("runs: the sorted heading says so", head.get_attribute("aria-sort") == "descending")
+    head.get_by_role("button").click()
+    check("runs: a second press sorts smallest first", totals() == sorted(first), str(totals()))
+    check("runs: the other headings are not marked sorted", page.locator("th[aria-sort]").count() == 1)
+    page.get_by_role("button", name="Seller").click()
+    dirs = page.evaluate("""() => [...document.querySelectorAll('tbody tr td:nth-child(4) .cell-text')].map(e => [e.textContent, getComputedStyle(e).direction])""")
+    arabic_rtl = [d for n, d in dirs if any("؀" <= ch <= "ۿ" for ch in n)]
+    check("runs: Arabic seller names stay right-to-left after sorting", bool(arabic_rtl) and all(d == "rtl" for d in arabic_rtl), str(dirs))
 
 
 def waking_screen(page: Page) -> None:
@@ -226,7 +329,98 @@ def provider_failure(page: Page) -> None:
     page.evaluate("sessionStorage.clear()")
 
 
-CHECKS = [mixed_direction, review_badge, waking_screen, rule_with_open_limit, error_messages, damaged_file, provider_failure]
+def xml_reads_as_an_invoice(page: Page) -> None:
+    """A UBL XML invoice is shown as an invoice (parties, lines, totals, IBAN), not as XML. The source is behind a
+    closed "Show source XML" toggle; opened, it is indented and left to right. Checked in Arabic and English."""
+    sign_in(page, lang="ar")
+    load_samples(page, ["inv-084.xml"])
+    for lang in ("ar", "en"):
+        page.evaluate(f"localStorage.setItem('id-lang', '{lang}'); location.hash = '#/runs'; location.reload()")
+        page.locator("tbody tr").first.click()
+        inv = page.locator(".modal .doc .inv")
+        expect(inv).to_be_visible()
+        check(f"XML: invoice view shows number, seller, lines and total ({lang})",
+              "GHC-2026-0184" in inv.inner_text() and "Gulf Horizon Consulting" in inv.inner_text()
+              and inv.locator(".inv-lines tbody tr").count() >= 1 and "713.28" in inv.locator(".inv-total").inner_text())
+        check(f"XML: IBAN shown in groups, left to right ({lang})",
+              inv.locator(".inv-pay bdi").first.evaluate("e => e.textContent.startsWith('SA15 0523') && getComputedStyle(e).direction === 'ltr'"))
+        check(f"XML: invoice view follows the page direction ({lang})",
+              inv.evaluate("e => getComputedStyle(e).direction") == ("rtl" if lang == "ar" else "ltr"))
+        check(f"XML: no source visible until asked ({lang})", not page.locator(".modal .doc pre.xml").is_visible()
+              and "<cbc:" not in inv.inner_text())
+        page.locator(".inv-src summary").click()
+        pre = page.locator(".modal .doc pre.xml")
+        expect(pre).to_be_visible()
+        page.wait_for_function("document.querySelector('.modal .doc pre.xml').textContent.includes('</Invoice>')")
+        lines = pre.inner_text().splitlines()
+        check(f"XML: source is indented, one element a line ({lang})", len(lines) > 40 and any(ln.startswith("    <cbc:") for ln in lines), lines[:3])
+        check(f"XML: source reads left to right ({lang})", pre.evaluate("e => getComputedStyle(e).direction") == "ltr")
+
+
+def vendors_and_risk(page: Page) -> None:
+    """The Vendors page lists the demo vendor master in Arabic; a changed IBAN is marked high risk in the queue and the
+    run detail; a seller can be linked to a vendor in one click; a malformed IBAN is refused with a message."""
+    sign_in(page, lang="ar")
+    load_samples(page, ["inv-083.txt", "inv-086.txt"])
+    page.evaluate("location.hash = '#/vendors'")
+    rows = page.locator("table").first.locator("tbody tr")
+    expect(rows.first).to_be_visible()
+    check("Vendors page lists the vendor master", rows.count() >= 13, rows.count())
+    iban = page.locator("table").first.locator("tbody tr td.num bdi").nth(1)
+    check("IBAN reads left-to-right in Arabic", iban.evaluate("e => getComputedStyle(e).direction") == "ltr")
+    page.get_by_role("button", name="إضافة مورد").click()
+    page.locator(".modal input").first.fill("Test Vendor")
+    page.locator(".modal input").nth(4).fill("SA00 1234")
+    page.locator(".modal .btn.primary").click()
+    expect(page.locator(".modal .notice.err")).to_be_visible()
+    check("A malformed IBAN is refused with a message", "IBAN" in page.locator(".modal .notice.err").inner_text())
+    page.keyboard.press("Escape")
+    page.evaluate("location.hash = '#/review'")
+    expect(page.locator(".rq-item").first).to_be_visible()
+    check("Changed IBAN is marked high risk in the queue", page.locator(".rq-item .risk-pill").count() == 1)
+    page.locator(".rq-item", has=page.locator(".risk-pill")).click()
+    expect(page.locator(".checks .high-risk")).to_be_visible()
+    check("Run detail shows the high-risk check", page.locator(".checks .high-risk .risk-pill").count() == 1)
+    check("Run detail shows the PO", page.locator(".po-line").count() == 1)
+    page.locator(".rq-item", has_not=page.locator(".risk-pill")).click()
+    link = page.get_by_role("button", name="ربط بالمورد").first
+    expect(link).to_be_visible()
+    link.click()
+    expect(page.locator(".vm .pill.s-approved")).to_be_visible()
+    check("Link to vendor matches the seller", "اسم مرتبط" in page.locator(".vm").first.inner_text())
+
+
+def demo_start(page: Page) -> None:
+    """An empty database greets a first visitor in Arabic; the sample set gives a mix, not a wall of red; the source
+    filter and the demo note are there; Settings resets the demo after a confirm step."""
+    sign_in(page, lang="ar")
+    api(page, "POST", "/admin/reset", {})
+    page.reload()
+    expect(page.locator(".welcome")).to_be_visible()
+    check("Demo note is shown", page.locator(".demo-note").count() == 1)
+    check("Welcome card reads right-to-left", page.locator(".welcome").evaluate("e => getComputedStyle(e).direction") == "rtl")
+    page.get_by_role("button", name="تحميل فواتير نموذجية").click()
+    expect(page.locator(".strip")).to_be_visible(timeout=20000)
+    page.wait_for_function("document.querySelectorAll('.hbar.bad').length > 0", timeout=20000)
+    s = api(page, "GET", "/stats", None)["body"]
+    b = s["by_status"]
+    check("Sample set is a mix", (b["approved"], b["needs_review"], b["rejected"]) == (11, 6, 3), b)
+    check("Top rejection reasons are listed", page.locator(".hbar.bad").count() >= 2)
+    page.locator(".page-head .seg button").nth(1).click()
+    expect(page.locator("main .empty h3")).to_contain_text("لا توجد عمليات تقييم", timeout=10000)
+    check("Evaluation source starts empty", page.locator(".strip").count() == 0)
+    page.evaluate("location.hash = '#/settings'")
+    page.get_by_role("button", name="إعادة ضبط البيانات التجريبية").click()
+    expect(page.locator(".modal")).to_be_visible()
+    page.locator(".modal .btn.danger").click()
+    expect(page.locator(".modal")).to_have_count(0)
+    check("Reset clears the runs", api(page, "GET", "/stats", None)["body"]["total"] == 0)
+    page.evaluate("location.hash = '#/dashboard'")
+    expect(page.locator(".welcome")).to_be_visible()
+
+
+CHECKS = [mixed_direction, reasons_in_arabic, review_badge, waking_screen, rule_with_open_limit, error_messages, damaged_file, provider_failure, xml_reads_as_an_invoice,
+          vendors_and_risk, demo_start, review_layout, dashboard_layout, runs_sorting]
 
 if __name__ == "__main__":
     with sync_playwright() as pw:

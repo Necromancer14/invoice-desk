@@ -2,13 +2,14 @@ export type Role = "viewer" | "reviewer" | "admin";
 export type Status = "queued" | "processing" | "approved" | "needs_review" | "rejected" | "approved_human" | "rejected_human" | "failed";
 export type Severity = "reject" | "review" | "info";
 
-export interface LineItem { description: string; quantity: number | null; unit_price: number | null; line_total: number | null }
+export interface LineItem { description: string; quantity: number | null; unit_price: number | null; line_total: number | null; vat_category?: "S" | "Z" | "E" | "O" }
 export interface Fields {
   invoice_number: string | null; issue_date: string | null; due_date: string | null; seller_name: string | null; seller_vat: string | null;
   buyer_name: string | null; buyer_vat: string | null; currency: string | null; subtotal: number | null; vat_amount: number | null;
-  total: number | null; qr_payload: string | null; line_items: LineItem[] | null;
+  total: number | null; qr_payload: string | null; line_items: LineItem[] | null; invoice_type?: "standard" | "simplified" | null;
+  iban?: string | null; po_number?: string | null;
 }
-export interface RuleResult { key: string; name: string; severity: Severity; status: "pass" | "fail" | "skip"; detail: string }
+export interface RuleResult { key: string; name: string; severity: Severity; status: "pass" | "fail" | "skip"; detail: string; risk?: "high" }
 export interface TraceStep { step: string; ms: number; ok: boolean; detail: string; at: string }
 export interface RunSummary {
   id: number; filename: string; content_type: string; size: number; source: string; status: Status; mode: "rules" | "ai";
@@ -18,19 +19,33 @@ export interface RunSummary {
 }
 export interface QueueItem {
   id: number; filename: string; created_at: string; seller: string | null; invoice_number: string | null;
-  total: number | null; currency: string | null; failed_checks: number;
+  total: number | null; currency: string | null; failed_checks: number; high_risk?: boolean;
 }
+export interface Vendor {
+  id: number; name_en: string | null; name_ar: string | null; vat: string | null; iban: string | null; currency: string;
+  status: "approved" | "blocked"; linked_names?: number;
+}
+export interface PurchaseOrder { id: number; po_number: string; vendor_id: number | null; vendor_name: string | null; amount: number; currency: string; status: "open" | "closed" }
+export interface ImportResult { added: number; updated: number; error_count: number; errors: { row: number; message: string }[] }
+export interface VendorMatch {
+  vendor: Vendor | null; score: number; matched_on: "English name" | "Arabic name" | "linked name" | "VAT number" | null; why: string;
+  suggestions: { id: number; name_en: string | null; name_ar: string | null; score: number }[];
+}
+export type PoStatus = "no_po" | "not_found" | "vendor_mismatch" | "currency_mismatch" | "closed" | "over" | "matched";
+export interface PoMatch { status: PoStatus; detail: string; po_number?: string; po_amount?: number; po_currency?: string; amount?: number | null }
 export interface Extraction {
   confidence: number; field_confidence: Record<string, number>; notes: string[]; extractor: string; model: string | null;
   tokens_in: number; tokens_out: number; latency_ms: number;
 }
 export interface RunDetail extends RunSummary {
   extracted: Fields | null; final_fields: Fields | null; extraction: Extraction; results: RuleResult[]; trace: TraceStep[]; decision_note: string | null;
+  vendor_match?: VendorMatch | null; po_match?: PoMatch;
 }
 export interface Stats {
   total: number; by_status: Record<Status, number>; review_queue: number; auto_approve_rate: number | null; human_corrected: number;
   avg_extract_ms: number | null; avg_time_to_review_s: number | null; tokens_in: number; tokens_out: number; cost: number | null;
   ai_runs: number; top_failing: { rule: string; count: number }[]; series: { day: string; count: number }[]; rules_version: number;
+  top_rejections: { reason: string; count: number }[]; source: "upload" | "evaluation" | "all"; uploads: number;
 }
 export interface Rule {
   key: string; name: string; type: string; params: Record<string, unknown>; severity: Severity; enabled: boolean; message: string;

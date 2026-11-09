@@ -1,0 +1,20 @@
+TAX INVOICE
+Invoice No: HCS-2026-0186
+Issue Date: 2026-10-21
+Due Date: 2026-11-21
+Seller: Oasis Prime Supplies
+Seller VAT No: 311865708408473
+Buyer: Nakheel Hospitality
+IBAN: SA13 3011 0674 7236 9593 3100
+Currency: SAR
+
+Description   Qty   Unit price   Total
+1. Printing and delivery   1   330.53   330.53
+2. Printing and delivery   1   112.52   112.52
+3. Office furniture   1   2,989.46   2,989.46
+4. Maintenance contract   1   1,268.42   1,268.42
+
+Subtotal: 4,700.93 SAR
+VAT (15%): 705.14 SAR
+Total (including VAT): 5,406.07 SAR
+QR: ARRPYXNpcyBQcmltZSBTdXBwbGllcwIPMzExODY1NzA4NDA4NDczAxQyMDI2LTEwLTIxVDA5OjMwOjAwWgQHNTQwNi4wNwUGNzA1LjE0

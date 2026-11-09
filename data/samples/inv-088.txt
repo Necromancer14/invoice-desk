@@ -1,0 +1,21 @@
+TAX INVOICE
+Invoice No: MTI-2026-0188
+Issue Date: 2026-08-26
+Due Date: 2026-09-26
+Seller: Madar Training Institute
+Seller VAT No: 303895844204933
+Buyer: Al Amal Clinics
+Buyer VAT No: 327804229187833
+IBAN: SA64 8047 4292 0000 5366 8564
+PO Number: PO-2026-0188
+Currency: SAR
+
+Description   Qty   Unit price   Total
+1. Catering package   1   786.56   786.56
+2. Office furniture   1   2,935.71   2,935.71
+3. Consulting services   1   1,823.88   1,823.88
+
+Subtotal: 5,546.15 SAR
+VAT (15%): 831.92 SAR
+Total (including VAT): 6,378.07 SAR
+QR: ARhNYWRhciBUcmFpbmluZyBJbnN0aXR1dGUCDzMwMzg5NTg0NDIwNDkzMwMUMjAyNi0wOC0yNlQwOTozMDowMFoEBzYzNzguMDcFBjgzMS45Mg==

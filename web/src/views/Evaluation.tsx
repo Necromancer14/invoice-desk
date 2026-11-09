@@ -7,13 +7,17 @@ interface EvalAll { rules: EvalResult | null; ai_models: AiTotals[]; ai_last: Ai
 interface Job { status: string; error?: string; done?: number; total?: number; errors?: number; message?: string; stopped?: AiLastRun["stopped"] }
 interface AiOptions { sample_size: number; rpm: number; only_new: boolean; seed: number }
 
-const FORMAT: Record<string, string> = { txt: tk("Text"), pdf: tk("PDF with text"), png: tk("Image (needs vision)") };
+const FORMAT: Record<string, string> = { txt: tk("Text"), pdf: tk("PDF with text"), png: tk("Image (needs vision)"), xml: tk("UBL XML") };
 const LANG: Record<string, string> = { en: tk("English"), ar: tk("Arabic"), bi: tk("Bilingual"), hard: tk("Unusual wording") };
 const SCENARIO: Record<string, string> = {
   clean: tk("Clean invoice"), prompt_injection: tk("Hidden instruction inside the invoice"), bad_vat: tk("Malformed seller VAT number"),
   vat_rate: tk("Wrong VAT rate"), totals: tk("Totals do not add up"), future_date: tk("Issue date in the future"),
   duplicate: tk("Duplicate of an earlier invoice"), qr_mismatch: tk("QR code disagrees with printed total"), non_sar: tk("Foreign currency"),
   over_limit: tk("High value invoice"), missing_vat: tk("Seller VAT number missing"), due_before_issue: tk("Due date before issue date"),
+  vat_digits_spaced: tk("VAT number in Arabic digits, grouped with spaces"), arabic_decimals: tk("Arabic-Indic digits and decimal separators"), zero_rated: tk("Zero-rated line, VAT on the rest only"), exempt: tk("Exempt line, VAT on the rest only"), zero_rated_wrong: tk("VAT charged on a zero-rated line"), hijri_date: tk("Hijri issue date"), hijri_future: tk("Hijri issue date in the future"), qr_missing: tk("No QR code on the invoice"), simplified: tk("Simplified tax invoice"),
+  vendor_ok: tk("Known vendor, IBAN and PO agree"), vendor_fuzzy: tk("Vendor name written differently"), iban_changed: tk("IBAN differs from the vendor master"),
+  blocked_vendor: tk("Blocked vendor"), unknown_vendor: tk("Vendor not in the vendor master"), vendor_vat_mismatch: tk("VAT number differs from the vendor master"),
+  po_over: tk("Invoice above its purchase order"),
 };
 const DEFAULTS: AiOptions = { sample_size: 20, rpm: 4, only_new: false, seed: 1 };
 const OPTIONS_KEY = "id-eval-ai";
@@ -37,19 +41,19 @@ function Metrics({ r, title, note, hideCount }: { r: EvalResult; title: string; 
       <p className="muted small">
         {[hideCount ? "" : t("{n} invoices", { n }), r.rules_version != null ? t("rules version {v}", { v: r.rules_version }) : "", r.ran_at ? when(r.ran_at) : "", note ?? ""].filter(Boolean).join(" · ")}
       </p>
-      <div className="facts" style={{ marginTop: 12 }}>
+      <div className="facts mt3">
         <div className="fact"><b>{pct(r.decision_agreement)}</b><span>{t("same decision as the answer key")}</span><small className="n-note">{nInv(n)}</small></div>
         <div className="fact"><b>{pct(r.field_accuracy)}</b><span>{t("fields read correctly")}</span><small className="n-note">{t("n = {n} fields", { n: r.fields_total ?? 0 })}</small></div>
         <div className="fact"><b>{pct(r.auto_approve_rate)}</b><span>{t("approved without a person")}</span><small className="n-note">{nInv(n)}</small></div>
-        <div className="fact"><b style={{ color: r.unsafe_auto_approvals ? "var(--red)" : undefined }}>{num(r.unsafe_auto_approvals)}</b><span>{t("approved when it should not have been")}</span><small className="n-note">{nInv(n)}</small></div>
+        <div className="fact"><b className={r.unsafe_auto_approvals ? "bad-figure" : undefined}>{num(r.unsafe_auto_approvals)}</b><span>{t("approved when it should not have been")}</span><small className="n-note">{nInv(n)}</small></div>
         <div className="fact"><b>{num(r.false_rejections)}</b><span>{t("wrongly rejected")}</span><small className="n-note">{nInv(n)}</small></div>
       </div>
-      <h3 style={{ margin: "20px 0 6px" }}>{t("By kind of invoice")}</h3>
+      <h3 className="sec-title mt5">{t("By kind of invoice")}</h3>
       <div className="tw"><table><thead><tr><th>{t("Kind")}</th><th className="n">{t("Invoices (n)")}</th><th className="n">{t("Right decision")}</th><th className="n">{t("Fields correct")}</th></tr></thead><tbody>
         {Object.entries(r.by_format).map(([k, b]) => <tr key={k}><td>{FORMAT[k] ? t(FORMAT[k]) : k}</td><td className="n">{num(b.n)}</td><td className="n">{pct(b.agree / b.n)}</td><td className="n">{pct(b.fields_ok / b.fields_total)}</td></tr>)}
         {Object.entries(r.by_lang).map(([k, b]) => <tr key={k}><td>{LANG[k] ? t(LANG[k]) : k}</td><td className="n">{num(b.n)}</td><td className="n">{pct(b.agree / b.n)}</td><td className="n">{pct(b.fields_ok / b.fields_total)}</td></tr>)}
       </tbody></table></div>
-      {wrong.length > 0 && <p style={{ marginTop: 14 }}><button className="btn small" onClick={() => setShow(!show)}>{show ? t("Hide the {n} disagreements", { n: wrong.length }) : t("Show the {n} disagreements", { n: wrong.length })}</button></p>}
+      {wrong.length > 0 && <p className="mt3"><button className="btn small" onClick={() => setShow(!show)}>{show ? t("Hide the {n} disagreements", { n: wrong.length }) : t("Show the {n} disagreements", { n: wrong.length })}</button></p>}
       {show && <div className="tw"><table><thead><tr><th>{t("File")}</th><th>{t("Scenario")}</th><th>{t("Expected")}</th><th>{t("Got")}</th></tr></thead><tbody>
         {wrong.map((x) => <tr key={x.id}><td><bdi dir="ltr">{x.file}</bdi></td><td>{SCENARIO[x.scenario] ? t(SCENARIO[x.scenario]) : x.scenario.replace(/_/g, " ")}</td><td>{decision(x.expected)}</td><td>{decision(x.got)}</td></tr>)}</tbody></table></div>}
     </div>
@@ -63,7 +67,7 @@ function RunOutcome({ last }: { last: AiLastRun }) {
   const kind = last.stopped ? "warn" : last.errors ? "warn" : "ok";
   const notReached = last.picked - last.attempted;
   return (
-    <div className={`notice ${kind} col`} style={{ gap: 6 }}>
+    <div className={`notice ${kind} col gap-1`}>
       <b className="outcome">{[t("{done} of {n} evaluated", { done: last.evaluated, n: last.picked }), t("{n} errors", { n: last.errors }),
         ...(notReached ? [t("{n} not reached", { n: notReached })] : [])].reduce((a, b) => t("{a}, {b}", { a, b }))}</b>
       <span className="small">
@@ -74,7 +78,7 @@ function RunOutcome({ last }: { last: AiLastRun }) {
         {" "}<span className="small" dir="auto">({last.stopped.message})</span></span>}
       {last.error_rows.length > 0 && <>
         <span><button className="btn small" onClick={() => setShow(!show)}>{show ? t("Hide errors") : t("Show errors")}</button></span>
-        {show && <ul className="small" style={{ margin: 0, paddingInlineStart: 18 }}>{last.error_rows.map((e) => <li key={e.id}><bdi dir="ltr">{e.file}</bdi>: <span dir="auto">{e.error}</span></li>)}</ul>}
+        {show && <ul className="small plain-list">{last.error_rows.map((e) => <li key={e.id}><bdi dir="ltr">{e.file}</bdi>: <span dir="auto">{e.error}</span></li>)}</ul>}
       </>}
       <span className="small">{t("Errors are left out of every percentage below.")}</span>
     </div>
@@ -142,8 +146,8 @@ export default function Evaluation() {
         {admin && <button className="btn primary" disabled={!!running} onClick={() => run("rules")}>{running === "rules" ? t("Running…") : t("Run with built-in rules")}</button>}
       </Head>
       <Err msg={error || err} />
-      <div className="notice" style={{ marginBottom: 14 }}>{t("The invoices are synthetic and follow formats the rule-based reader was written against, so its scores are optimistic. Treat them as a way to compare changes, not as a claim about real-world accuracy. Running with an AI model sends the chosen invoices to the provider you picked, using your key.")}</div>
-      <div className="col" style={{ gap: 16 }}>
+      <div className="notice mb">{t("The invoices are synthetic and follow formats the rule-based reader was written against, so its scores are optimistic. Treat them as a way to compare changes, not as a claim about real-world accuracy. Running with an AI model sends the chosen invoices to the provider you picked, using your key.")}</div>
+      <div className="col gap-4">
         {data?.rules && <Metrics r={data.rules} title={t("Built-in rules")} />}
         {admin && <AiRunForm running={!!running} onRun={(o) => run("ai", o)} />}
         {running === "ai" && job && job.total != null && (

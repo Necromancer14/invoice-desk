@@ -38,20 +38,21 @@ export default function Rules() {
       <Head title={t("Rules")} sub={t("These rules decide whether an invoice is approved, sent to a person or rejected. Change them here and the next invoice follows the new rule. No deployment needed.")}>
         {admin && <button className="btn primary" onClick={() => setEdit("new")}>{t("Add rule")}</button>}
       </Head>
-      {!admin && <div className="notice warn" style={{ marginBottom: 14 }}>{t("Only admins can change rules. You can read them and the history.")}</div>}
+      <p className="page-note">{t("These include checks against ZATCA e-invoicing fields: VAT number, VAT amounts, dates (Hijri too), the QR code and UBL XML. Signatures are not verified and nothing is sent to Fatoora.")} {t("The vendor rules compare the invoice with your vendor master and purchase orders; they skip while the vendor master is empty.")}</p>
+      {!admin && <div className="notice warn mb">{t("Only admins can change rules. You can read them and the history.")}</div>}
       <Err msg={rules.error || types.error} />
       <div className="grid g2">
-        <div className="col">
+        <div className="panel flush rule-list">
           {rules.data?.rules.map((r, i) => (
             <div key={r.key} className={`rulecard ${r.enabled ? "" : "off"}`}>
-              <div className="col" style={{ gap: 0 }}>
+              <div className="rule-move">
                 <button className="btn ghost small" disabled={!admin || i === 0} aria-label={t("Move {name} up", { name: t(r.name) })} onClick={() => move(i, -1)}>▲</button>
                 <button className="btn ghost small" disabled={!admin || i === rules.data!.rules.length - 1} aria-label={t("Move {name} down", { name: t(r.name) })} onClick={() => move(i, 1)}>▼</button>
               </div>
-              <div style={{ minWidth: 0 }}>
+              <div className="rule-body">
                 <b>{t(r.name)}</b>
-                <div className="row wrap small muted" style={{ gap: 8, marginTop: 3 }}>
-                  <span className={`pill ${sevClass[r.severity]}`} style={{ padding: "0 8px" }}>{t(SEV[r.severity])}</span>
+                <div className="rule-meta">
+                  <span className={`pill ${sevClass[r.severity]}`}>{t(SEV[r.severity])}</span>
                   <span>{t(types.data?.types[r.type]?.label ?? r.type)}</span>
                 </div>
               </div>
@@ -63,12 +64,12 @@ export default function Rules() {
           ))}
           {rules.data && !rules.data.rules.length && <Empty title={t("No rules")} hint={t("With no rules every invoice is approved. Add one to get started.")} />}
         </div>
-        <div className="panel" style={{ alignSelf: "start" }}>
+        <div className="panel">
           <h2>{t("Version history")}</h2>
-          <div className="col" style={{ gap: 0 }}>
+          <div className="vh">
             {versions.data?.map((v, i) => (
-              <div key={v.version} className="row" style={{ padding: "8px 0", borderBottom: "1px solid var(--line)" }}>
-                <div className="grow"><b>{t("Version {v}", { v: v.version })}</b>{i === 0 && <span className="tag" style={{ marginInlineStart: 8 }}>{t("current")}</span>}
+              <div key={v.version} className="vh-row">
+                <div className="grow"><b>{t("Version {v}", { v: v.version })}</b>{i === 0 && <span className="tag vh-current">{t("current")}</span>}
                   {/* history notes and authors are recorded text, shown as written */}
                   <div className="small muted"><bdi>{v.note}</bdi> · <bdi dir="ltr">{v.author}</bdi> · {when(v.created_at)}</div></div>
                 {admin && i > 0 && <button className="btn small" onClick={() => rollback(v.version)}>{t("Restore")}</button>}

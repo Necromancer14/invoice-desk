@@ -20,7 +20,7 @@ from .desk import MAX_BYTES, Desk, DeskError
 from .evaluation import ai_history, evaluate, evaluate_ai, evaluated_ids, save_ai_rows
 from .providers import ProviderError, build_extractor, public_providers
 from .rules import HELP_FUNCS, RULE_TYPES
-from .samples import list_samples, sample_bytes
+from .samples import DEMO_SET, list_samples, sample_bytes
 from .schema import FIELDS
 
 WEB_DIST = Path(__file__).resolve().parents[2] / "web" / "dist"
@@ -49,6 +49,15 @@ class Review(BaseModel):
     decision: str
     note: str = ""
     edits: dict = {}
+
+
+class VendorIn(BaseModel):
+    name_en: str = ""
+    name_ar: str = ""
+    vat: str = ""
+    iban: str = ""
+    currency: str = "SAR"
+    status: str = "approved"
 
 
 class RuleIn(BaseModel):
@@ -82,7 +91,7 @@ def _int(body: dict, key: str, default: int, lo: int, hi: int) -> int:
 
 def create_app(desk: Desk | None = None, auth: Auth | None = None, rate_limit: int = 40, eval_transport=None) -> FastAPI:
     """eval_transport: an httpx transport for the AI evaluation's provider calls (tests use a fake one)."""
-    desk = desk or Desk(os.environ.get("INVOICE_DESK_DB", ":memory:"))
+    desk = desk or Desk(os.environ.get("INVOICE_DESK_DB", ":memory:"), seed_vendors=True)
     auth = auth or Auth()
     limiter = RateLimiter(rate_limit)
     app = FastAPI(title="invoice-desk", version=__version__,
@@ -108,7 +117,7 @@ def create_app(desk: Desk | None = None, auth: Auth | None = None, rate_limit: i
     # ---------------------------------------------------------------- session
     @app.get("/api/health")
     def health():
-        return dict(ok=True, version=__version__, demo=auth.demo)
+        return dict(ok=True, version=__version__, demo=auth.demo, in_memory=desk.db.in_memory)
 
     @app.post("/api/auth/demo")
     def demo_login(body: dict):
@@ -150,8 +159,9 @@ def create_app(desk: Desk | None = None, auth: Auth | None = None, rate_limit: i
         return dict(ids=ids)
 
     @app.get("/api/runs")
-    def runs(status: str | None = None, q: str | None = None, limit: int = 50, offset: int = 0, user=Depends(need("viewer"))):
-        return desk.list_runs(status, (q or "")[:200] or None, max(1, min(limit, 200)), max(0, offset))
+    def runs(status: str | None = None, q: str | None = None, limit: int = 50, offset: int = 0, source: str | None = None,
+             user=Depends(need("viewer"))):
+        return desk.list_runs(status, (q or "")[:200] or None, max(1, min(limit, 200)), max(0, offset), source)
 
     @app.get("/api/runs/{rid}")
     def run(rid: int, user=Depends(need("viewer"))):
@@ -163,6 +173,10 @@ def create_app(desk: Desk | None = None, auth: Auth | None = None, rate_limit: i
         return Response(blob, media_type=ctype, headers={"Content-Disposition": f'inline; filename="{name}"',
                                                          "X-Content-Type-Options": "nosniff"})
 
+    @app.get("/api/runs/{rid}/invoice")
+    def run_invoice(rid: int, user=Depends(need("viewer"))):
+        return desk.invoice_view(rid)
+
     @app.post("/api/runs/{rid}/review")
     def review(rid: int, body: Review, user=Depends(need("reviewer"))):
         return desk.review(rid, body.decision, user["sub"], body.edits, body.note)
@@ -171,6 +185,54 @@ def create_app(desk: Desk | None = None, auth: Auth | None = None, rate_limit: i
     def reprocess(rid: int, request: Request, user=Depends(need("reviewer"))):
         desk.reprocess(rid, user["sub"], llm_from(request))
         return dict(ok=True)
+
+    # ------------------------------------------------------- vendors and purchase orders
+    async def _csv_text(file: UploadFile) -> str:
+        blob = await file.read(1024 * 1024 + 1)
+        if len(blob) > 1024 * 1024:
+            raise HTTPException(413, "a CSV file can be at most 1 MB")
+        try:
+            return blob.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            raise HTTPException(400, "the CSV must be saved as UTF-8") from None
+
+    @app.get("/api/vendors")
+    def vendors(user=Depends(need("viewer"))):
+        return desk.list_vendors()
+
+    @app.post("/api/vendors")
+    def vendor_add(body: VendorIn, user=Depends(need("admin"))):
+        return desk.save_vendor(body.model_dump(), user["sub"])
+
+    @app.put("/api/vendors/{vid}")
+    def vendor_edit(vid: int, body: VendorIn, user=Depends(need("admin"))):
+        return desk.save_vendor(body.model_dump(), user["sub"], vid)
+
+    @app.delete("/api/vendors/{vid}")
+    def vendor_delete(vid: int, user=Depends(need("admin"))):
+        desk.delete_vendor(vid, user["sub"])
+        return dict(ok=True)
+
+    @app.post("/api/vendors/import")
+    async def vendor_import(file: UploadFile = File(...), user=Depends(need("admin"))):
+        return desk.import_vendors(await _csv_text(file), user["sub"])
+
+    @app.get("/api/purchase-orders")
+    def pos(user=Depends(need("viewer"))):
+        return desk.list_pos()
+
+    @app.post("/api/purchase-orders/import")
+    async def po_import(file: UploadFile = File(...), user=Depends(need("admin"))):
+        return desk.import_pos(await _csv_text(file), user["sub"])
+
+    @app.delete("/api/purchase-orders/{pid}")
+    def po_delete(pid: int, user=Depends(need("admin"))):
+        desk.delete_po(pid, user["sub"])
+        return dict(ok=True)
+
+    @app.post("/api/runs/{rid}/link-vendor")
+    def link_vendor(rid: int, body: dict, user=Depends(need("reviewer"))):
+        return desk.link_vendor(rid, _int(body, "vendor_id", 0, 1, 10**9), user["sub"])
 
     @app.get("/api/review/next")
     def review_next(user=Depends(need("viewer"))):
@@ -181,8 +243,11 @@ def create_app(desk: Desk | None = None, auth: Auth | None = None, rate_limit: i
         return desk.review_queue()
 
     @app.get("/api/stats")
-    def stats(user=Depends(need("viewer"))):
-        return desk.stats()
+    def stats(source: str = "upload", user=Depends(need("viewer"))):
+        """source: upload (default), evaluation or all."""
+        if source not in ("upload", "evaluation", "all"):
+            raise HTTPException(400, "source must be upload, evaluation or all")
+        return desk.stats(source)
 
     # ------------------------------------------------------------------ rules
     @app.get("/api/rules")
@@ -266,7 +331,15 @@ def create_app(desk: Desk | None = None, auth: Auth | None = None, rate_limit: i
         for name in files:
             if name not in known:
                 raise HTTPException(404, f"unknown sample {name}")
-            ids.append(desk.submit(name, sample_bytes(name), None, user["sub"], body.get("mode") or mode, llm, source="sample"))
+            ids.append(desk.submit(name, sample_bytes(name), None, user["sub"], body.get("mode") or mode, llm, source="upload"))
+        return dict(ids=ids)
+
+    @app.post("/api/samples/demo")
+    def samples_demo(request: Request, user=Depends(need("reviewer"))):
+        """The welcome set: 20 samples through the built-in reader, a realistic mix of approved, review and rejected."""
+        limiter.check(request.client.host if request.client else "local")
+        ids = [desk.submit(name, sample_bytes(name), None, user["sub"], "rules", None, source="upload") for name in DEMO_SET]
+        desk.audit(user["sub"], "demo.samples", "", f"{len(ids)} sample invoices loaded")
         return dict(ids=ids)
 
     @app.get("/api/samples/{name}")
@@ -286,6 +359,7 @@ def create_app(desk: Desk | None = None, auth: Auth | None = None, rate_limit: i
             skip = evaluated_ids(desk.db, llm["provider"], model) if opts["only_new"] else []
             res = evaluate_ai(llm, desk.rules(), sample_size=opts["sample_size"], seed=opts["seed"], rpm=opts["rpm"],
                               skip_ids=skip, transport=eval_transport, progress=job.update)
+            desk.record_evaluation_runs(res.pop("_runs", []))
             version = desk.rules_version()
             save_ai_rows(desk.db, res["provider"], res["model"], version, res["rows"])
             last = {k: res[k] for k in ("provider", "model", "seed", "sample_size", "attempted", "evaluated", "errors", "stopped")}
@@ -301,6 +375,7 @@ def create_app(desk: Desk | None = None, auth: Auth | None = None, rate_limit: i
     def _run_eval(job_id: str, mode: str, llm: dict | None):
         try:
             res = evaluate(mode=mode, llm=llm, rules=desk.rules())
+            desk.record_evaluation_runs(res.pop("_runs", []))
             res["provider"] = (llm or {}).get("provider")
             res["rules_version"] = desk.rules_version()
             res["ran_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -330,6 +405,7 @@ def create_app(desk: Desk | None = None, auth: Auth | None = None, rate_limit: i
             raise HTTPException(400, "mode must be rules or ai")
         job = f"job{len(jobs) + 1}"
         jobs[job] = dict(status="running", mode=mode)
+        desk.clear_evaluation_runs()  # only the most recent evaluation's runs are kept
         desk.audit(user["sub"], "evaluation.run", mode if mode == "rules" else f"ai {llm['provider']} n={opts['sample_size']} rpm={opts['rpm']}")
         if mode == "ai":
             threading.Thread(target=_run_eval_ai, args=(job, llm, opts), daemon=True).start()

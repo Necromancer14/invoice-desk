@@ -2,7 +2,7 @@
 
 ## Short version (LinkedIn Featured description)
 
-Saudi e-invoice intake desk. Invoices (text, PDF, photo, Arabic or English) are read by a free built-in reader or an AI model of the user's choice (Gemini, Groq, OpenRouter, Ollama, Claude, OpenAI), checked against rules stored in a database, auto-approved when clean, and routed to a person when not. Rules are edited in the portal with a dry run and version rollback, so policy changes need no deployment. React and TypeScript front end, FastAPI back end, 162 tests, evaluation harness, MCP server. Synthetic data, not ZATCA-certified.
+Saudi e-invoice intake desk. Invoices (text, PDF, photo, Arabic or English) are read by a free built-in reader or an AI model of the user's choice (Gemini, Groq, OpenRouter, Ollama, Claude, OpenAI), checked against rules stored in a database, auto-approved when clean, and routed to a person when not. Rules are edited in the portal with a dry run and version rollback, so policy changes need no deployment. React and TypeScript front end, FastAPI back end, 162 tests, evaluation harness, MCP server. Checks against ZATCA e-invoicing fields; synthetic data; no ZATCA approval and no Fatoora connection.
 
 ## Long version
 
@@ -18,7 +18,7 @@ Saudi e-invoice intake desk. Invoices (text, PDF, photo, Arabic or English) are 
 
 **Stack.** Python, FastAPI, SQLite, provider adapters for Gemini, OpenAI-compatible APIs and Anthropic (JSON output, PDF and image input), React, TypeScript, Vite, Docker, GitHub Actions, MCP.
 
-**Limits.** Not ZATCA-certified. Synthetic data only. AI-model accuracy figures come from whoever runs it with their own key.
+**Limits.** No ZATCA approval and no Fatoora connection. Synthetic data only. AI-model accuracy figures come from whoever runs it with their own key.
 
 ## Post draft (optional, after you have run an AI model)
 

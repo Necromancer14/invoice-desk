@@ -16,6 +16,8 @@ from invoice_desk.providers import DailyQuotaReached, GeminiExtractor, ProviderE
 from conftest import GOOD, TODAY
 
 ITEMS = load_answers()["invoices"]
+# XML is read directly, with no AI call, so tests that count calls leave it out
+NO_XML = [i["id"] for i in ITEMS if i["format"] == "xml"]
 ANSWER = {"invoice_number": "A-1", "issue_date": "2026-10-01", "seller_name": "Acme", "seller_vat": "300000000000003", "currency": "SAR",
           "subtotal": 1000, "vat_amount": 150, "total": 1150, "field_confidence": {"total": 0.9}, "line_items": [], "notes": []}
 LLM = {"provider": "gemini", "key": "k", "model": "gemini-3.5-flash-lite"}
@@ -106,20 +108,26 @@ def test_pick_is_deterministic_and_covers_everything():
     p = stratified_pick(ITEMS, 20, seed=1)
     assert len(p) == 20 and [i["id"] for i in p] == [i["id"] for i in stratified_pick(ITEMS, 20, seed=1)]
     assert [i["id"] for i in p] != [i["id"] for i in stratified_pick(ITEMS, 20, seed=2)]
-    assert {i["format"] for i in p} == {"txt", "pdf", "png"}
+    assert {i["format"] for i in p} == {i["format"] for i in ITEMS}
     assert {i["lang"] for i in p} == {i["lang"] for i in ITEMS}
-    assert {i["scenario"] for i in p} == {i["scenario"] for i in ITEMS}  # every defect, duplicate and the injection sample
-    assert sum(i["scenario"] == "prompt_injection" for i in p) == 1
+    assert sum(i["scenario"] == "prompt_injection" for i in p) == 1 and any(i["scenario"] == "duplicate" for i in p)
+    # the kinds of sample do not all fit in 20 alongside the rest; at 30 every kind is in
+    assert len({i["scenario"] for i in p}) >= 17
+    assert {i["scenario"] for i in stratified_pick(ITEMS, 30, seed=1)} == {i["scenario"] for i in ITEMS}
 
 
 def test_pick_is_proportional():
-    for n in (20, 30):
+    """File types stay near their share at any size; clean invoices too once every kind of check is covered (40)."""
+    for n in (20, 40):
         p = stratified_pick(ITEMS, n, seed=1)
         fmt, full = Counter(i["format"] for i in p), Counter(i["format"] for i in ITEMS)
         for f in full:
-            assert abs(fmt[f] - n * full[f] / len(ITEMS)) <= 1.5, (n, f, fmt)
-        clean = sum(i["scenario"] == "clean" for i in p)
-        assert abs(clean - n * 31 / 60) <= 2, (n, clean)
+            # covering every kind of check first (most are text files) pulls it a little, more at 20 than at 40
+            assert abs(fmt[f] - n * full[f] / len(ITEMS)) <= (3 if n < 40 else 2), (n, f, fmt)
+        if n >= 40:
+            clean = sum(i["scenario"] == "clean" for i in p)
+            share = sum(i["scenario"] == "clean" for i in ITEMS) / len(ITEMS)
+            assert abs(clean - n * share) <= 3, (n, clean)
 
 
 def test_pick_skips_what_is_already_done():
@@ -127,7 +135,7 @@ def test_pick_skips_what_is_already_done():
     rest = [i for i in ITEMS if i["id"] not in first]
     second = stratified_pick(rest, 20, seed=1)
     assert len(second) == 20 and not first & {i["id"] for i in second}
-    assert len(stratified_pick(ITEMS, 100)) == 60 and stratified_pick(ITEMS, 0) == []
+    assert len(stratified_pick(ITEMS, 100)) == len(ITEMS) and stratified_pick(ITEMS, 0) == []
 
 
 # ------------------------------------------------------------------------------- the run
@@ -139,7 +147,7 @@ def test_failed_calls_are_errors_never_a_silent_fallback():
         n["calls"] += 1
         return httpx.Response(500, json={"error": {"message": "boom"}}) if n["calls"] % 3 == 0 else ok_response()
     fc = FakeClock()
-    r = evaluate_ai(LLM, sample_size=9, rpm=60, transport=httpx.MockTransport(handler), sleep=fc.sleep, clock=fc.clock)
+    r = evaluate_ai(LLM, sample_size=9, rpm=60, skip_ids=NO_XML, transport=httpx.MockTransport(handler), sleep=fc.sleep, clock=fc.clock)
     errors = [x for x in r["rows"] if x["outcome"] == "error"]
     assert (r["attempted"], r["evaluated"], r["errors"]) == (9, 6, 3) and len(errors) == 3
     assert all("500" in x["error"] and "fields_ok" not in x for x in errors)
@@ -150,7 +158,7 @@ def test_failed_calls_are_errors_never_a_silent_fallback():
 def test_all_calls_failing_gives_no_accuracy_at_all():
     fc = FakeClock()
     t = httpx.MockTransport(lambda req: httpx.Response(500))
-    r = evaluate_ai(LLM, sample_size=4, rpm=60, transport=t, sleep=fc.sleep, clock=fc.clock)
+    r = evaluate_ai(LLM, sample_size=4, rpm=60, skip_ids=NO_XML, transport=t, sleep=fc.sleep, clock=fc.clock)
     assert (r["evaluated"], r["errors"]) == (0, 4)
     from invoice_desk.evaluation import summarize_rows
     s = summarize_rows(r["rows"])
@@ -165,7 +173,7 @@ def test_daily_quota_stops_the_run_and_keeps_what_was_done():
         calls["n"] += 1
         return ok_response() if calls["n"] <= 3 else httpx.Response(429, json=quota)
     fc = FakeClock()
-    r = evaluate_ai(LLM, sample_size=20, rpm=60, transport=httpx.MockTransport(handler), sleep=fc.sleep, clock=fc.clock)
+    r = evaluate_ai(LLM, sample_size=20, rpm=60, skip_ids=NO_XML, transport=httpx.MockTransport(handler), sleep=fc.sleep, clock=fc.clock)
     assert r["stopped"]["reason"] == "quota" and "daily request quota" in r["stopped"]["message"]
     assert (r["attempted"], r["evaluated"], r["errors"]) == (3, 3, 0) and len(r["picked"]) == 20 and calls["n"] == 4
 
@@ -177,7 +185,7 @@ def test_pacing_spaces_the_calls():
     def handler(req):
         times.append(fc.now)
         return ok_response()
-    evaluate_ai(LLM, sample_size=4, rpm=4, transport=httpx.MockTransport(handler), sleep=fc.sleep, clock=fc.clock)
+    evaluate_ai(LLM, sample_size=4, rpm=4, skip_ids=NO_XML, transport=httpx.MockTransport(handler), sleep=fc.sleep, clock=fc.clock)
     assert [round(b - a) for a, b in zip(times, times[1:])] == [15, 15, 15]
 
 
@@ -244,3 +252,16 @@ def test_api_runs_an_ai_evaluation_and_reports_totals(auth):
             break
         time.sleep(0.1)
     assert c.get("/api/evaluation", headers=a).json()["ai_models"][0]["count"] == 4
+
+
+def test_xml_in_the_sample_needs_no_ai_call_and_no_waiting():
+    xml = [i["id"] for i in ITEMS if i["format"] == "xml"]
+    calls = {"n": 0}
+
+    def handler(req):
+        calls["n"] += 1
+        return ok_response()
+    fc = FakeClock()
+    others = [i["id"] for i in ITEMS if i["format"] != "xml"]
+    r = evaluate_ai(LLM, sample_size=len(xml), rpm=1, skip_ids=others, transport=httpx.MockTransport(handler), sleep=fc.sleep, clock=fc.clock)
+    assert calls["n"] == 0 and fc.sleeps == [] and r["evaluated"] == len(xml) and all(x["agree"] for x in r["rows"])

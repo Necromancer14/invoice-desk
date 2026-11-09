@@ -45,10 +45,11 @@ class Extractor(Protocol):
 
 def guess_type(filename: str, declared: str | None) -> str:
     if declared and declared != "application/octet-stream":
-        return declared.split(";")[0].strip().lower()
+        declared = declared.split(";")[0].strip().lower()
+        return "application/xml" if declared == "text/xml" else declared
     ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
     return {"pdf": "application/pdf", "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg",
-            "webp": "image/webp", "gif": "image/gif", "txt": "text/plain"}.get(ext, "application/octet-stream")
+            "webp": "image/webp", "gif": "image/gif", "txt": "text/plain", "xml": "application/xml"}.get(ext, "application/octet-stream")
 
 
 def _overall(fields: dict, fc: dict) -> float:
@@ -62,6 +63,8 @@ def _overall(fields: dict, fc: dict) -> float:
 _AR_VAT = r"(?:ضريبة\s*القيمة\s*المضافة|الضريبة)"
 LABELS = {
     "invoice_number": r"(?:invoice\s*(?:no|number|num|#)\.?|رقم\s*الفاتورة)",
+    "iban": r"(?:iban|رقم\s*(?:الآيبان|الايبان|الحساب\s*الدولي)|الآيبان|الايبان|آيبان|ايبان)",
+    "po_number": r"(?:p\.?\s*o\.?\s*(?:no|number|#)\.?|purchase\s*order(?:\s*(?:no|number|#))?\.?|رقم\s*أمر\s*الشراء|أمر\s*الشراء)",
     "issue_date": r"(?:issue\s*date|invoice\s*date|date\s*of\s*issue|تاريخ\s*(?:الإصدار|الاصدار|الفاتورة))",
     "due_date": r"(?:due\s*date|payment\s*due|تاريخ\s*الاستحقاق)",
     "seller_name": r"(?:seller|supplier|vendor|البائع|المورد|اسم\s*البائع)(?:\s*name)?",
@@ -73,10 +76,25 @@ LABELS = {
     "vat_amount": r"(?:total\s*vat|vat\s*amount|vat(?:\s*\(\s*\d+(?:\.\d+)?\s*%\s*\))?|" + _AR_VAT + r"(?:\s*\(?\s*\d+\s*%\s*\)?)?|مجموع\s*الضريبة|قيمة\s*الضريبة)",
     "total": r"(?:total\s*\(?\s*incl\w*\.?\s*(?:of\s*)?vat\s*\)?|total\s*(?:amount|due)(?:\s*payable)?|grand\s*total|amount\s*due|الإجمالي\s*شامل\s*" + _AR_VAT + r"|الإجمالي\s*المستحق|إجمالي\s*الفاتورة|المبلغ\s*المستحق|total(?!\s*\(?\s*(?:excl|before|vat)))",
 }
-_ORDER = ["seller_vat", "buyer_vat", "invoice_number", "issue_date", "due_date", "seller_name", "buyer_name",
+_ORDER = ["iban", "po_number", "seller_vat", "buyer_vat", "invoice_number", "issue_date", "due_date", "seller_name", "buyer_name",
           "currency", "subtotal", "vat_amount", "total"]
 _COMPILED = {k: re.compile(r"^\W*" + LABELS[k] + r"\s*[:：]\s*(.+?)\s*$", re.I | re.U) for k in LABELS}
 _LINE = re.compile(r"^\s*(?:\d+[.)]\s+)?(\D\S*(?:\s+\S+)*?)\s+(\d[\d.,]*)\s+(\d[\d.,]*)\s+(\d[\d.,]*)\s*$")
+# a line marked as zero-rated, exempt or out of scope, in English or Arabic, e.g. "Export freight (zero-rated)"
+_LINE_CATEGORY = [
+    (re.compile(r"\s*[(\[]\s*(?:zero[\s-]*rated|0\s*%\s*vat|vat\s*0\s*%|خاضع(?:ة)?\s*للنسبة\s*الصفرية|نسبة\s*صفرية)\s*[)\]]", re.I), "Z"),
+    (re.compile(r"\s*[(\[]\s*(?:(?:vat[\s-]*)?exempt|(?:معفاة|معفى|معفي)(?:\s*من\s*الضريبة)?)\s*[)\]]", re.I), "E"),
+    (re.compile(r"\s*[(\[]\s*(?:out\s*of\s*scope|خارج\s*نطاق\s*الضريبة)\s*[)\]]", re.I), "O"),
+]
+
+
+def _line_category(description: str) -> tuple[str, str | None]:
+    for pattern, code in _LINE_CATEGORY:
+        if pattern.search(description):
+            return pattern.sub("", description).strip(), code
+    return description, None
+
+
 _QR = re.compile(r"(?:qr[^:\n]*:|رمز\s*الاستجابة[^:\n]*:)\s*([A-Za-z0-9+/=]{20,})", re.I)
 _CURRENCY = [(r"SAR|SR|ر\.?\s?س|ريال", "SAR"), (r"USD|US\$|\$", "USD"), (r"EUR|€", "EUR"), (r"AED|درهم", "AED")]
 
@@ -133,9 +151,11 @@ class RuleBasedExtractor:
                     raw[key] = m.group(1)
                     used.add(n)
                     break
-        for key in ("invoice_number", "seller_name", "buyer_name"):
+        for key in ("invoice_number", "seller_name", "buyer_name", "po_number"):
             if key in raw:
                 out[key] = raw[key].strip()
+        if "iban" in raw:
+            out["iban"] = re.sub(r"[\s\-.]", "", raw["iban"]).upper() or None
         for key in ("issue_date", "due_date"):
             if key in raw:
                 out[key] = parse_date(raw[key])
@@ -146,6 +166,11 @@ class RuleBasedExtractor:
             if key in raw:
                 out[key] = to_number(raw[key])
         out["currency"] = _currency(raw.get("currency")) or _currency(raw.get("total")) or _currency(raw.get("subtotal"))
+        head = "\n".join(lines[:4])
+        if re.search(r"simplified\s+tax\s+invoice|فاتورة\s+ضريبية\s+مبسطة", head, re.I):
+            out["invoice_type"] = "simplified"
+        elif re.search(r"tax\s+invoice|فاتورة\s+ضريبية", head, re.I):
+            out["invoice_type"] = "standard"
         m = _QR.search(text)
         out["qr_payload"] = m.group(1) if m else None
         for n, line in enumerate(lines):
@@ -153,9 +178,16 @@ class RuleBasedExtractor:
                 continue
             m = _LINE.match(line)
             if m:
-                out["line_items"].append(dict(description=m.group(1).strip(), quantity=to_number(m.group(2)),
-                                              unit_price=to_number(m.group(3)), line_total=to_number(m.group(4))))
-        notes = [f"could not find {k}" for k in REQUIRED if out.get(k) in (None, "")]
+                desc, category = _line_category(m.group(1).strip())
+                item = dict(description=desc, quantity=to_number(m.group(2)), unit_price=to_number(m.group(3)), line_total=to_number(m.group(4)))
+                if category:
+                    item["vat_category"] = category
+                out["line_items"].append(item)
+        notes = []
+        if not out["currency"] and any(out.get(k) is not None for k in ("subtotal", "vat_amount", "total")):
+            out["currency"] = "SAR"
+            notes.append("No currency is printed, so SAR is assumed")
+        notes += [f"could not find {k}" for k in REQUIRED if out.get(k) in (None, "")]
         return out, notes
 
 
@@ -190,10 +222,18 @@ def normalise(data: dict) -> tuple[dict, dict, list]:
         fields[k] = to_number(data.get(k))
     cur = data.get("currency")
     fields["currency"] = (_currency(str(cur)) or str(cur).upper()) if cur else None
+    for k in ("iban", "po_number"):
+        v = re.sub(r"\s", "", normalize(str(data.get(k) or ""))) if k == "iban" else str(data.get(k) or "").strip()
+        fields[k] = (v.upper() if k == "iban" else v) or None
+    kind = str(data.get("invoice_type") or "").strip().lower()
+    fields["invoice_type"] = kind if kind in ("standard", "simplified") else None
     for it in data.get("line_items") or []:
         if isinstance(it, dict):
-            fields["line_items"].append(dict(description=str(it.get("description", "")), quantity=to_number(it.get("quantity")),
-                                             unit_price=to_number(it.get("unit_price")), line_total=to_number(it.get("line_total"))))
+            item = dict(description=str(it.get("description", "")), quantity=to_number(it.get("quantity")),
+                        unit_price=to_number(it.get("unit_price")), line_total=to_number(it.get("line_total")))
+            if str(it.get("vat_category") or "").strip()[:1].upper() in ("S", "Z", "E", "O"):
+                item["vat_category"] = str(it["vat_category"]).strip()[:1].upper()
+            fields["line_items"].append(item)
     fc = {k: float(v) for k, v in (data.get("field_confidence") or {}).items() if isinstance(v, (int, float))}
     notes = [str(n) for n in (data.get("notes") or [])]
     return fields, fc, notes

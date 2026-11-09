@@ -10,6 +10,7 @@ import Review from "./views/Review";
 import Rules from "./views/Rules";
 import Evaluation from "./views/Evaluation";
 import Audit from "./views/Audit";
+import Vendors from "./views/Vendors";
 import Settings from "./views/Settings";
 
 const TABS: { id: string; label: string; icon: string }[] = [
@@ -18,6 +19,7 @@ const TABS: { id: string; label: string; icon: string }[] = [
   { id: "runs", label: tk("Runs"), icon: "M4 6h16M4 12h16M4 18h10" },
   { id: "review", label: tk("Review queue"), icon: "M5 12l4 4 10-10" },
   { id: "rules", label: tk("Rules"), icon: "M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M8 14v6" },
+  { id: "vendors", label: tk("Vendors"), icon: "M3 21h18M5 21V8l7-4 7 4v13M9 21v-6h6v6M9 11h.01M15 11h.01" },
   { id: "evaluation", label: tk("Evaluation"), icon: "M4 20V10m6 10V4m6 16v-7m4 7H2" },
   { id: "audit", label: tk("Audit log"), icon: "M7 3h8l4 4v14H7zM15 3v4h4M10 12h6M10 16h6" },
   { id: "settings", label: tk("Settings"), icon: "M12 15a3 3 0 100-6 3 3 0 000 6zM19 12a7 7 0 00-.1-1.2l2-1.5-2-3.4-2.3.9a7 7 0 00-2-1.2L14 3h-4l-.6 2.6a7 7 0 00-2 1.2l-2.3-.9-2 3.4 2 1.5a7 7 0 000 2.4l-2 1.5 2 3.4 2.3-.9a7 7 0 002 1.2L10 21h4l.6-2.6a7 7 0 002-1.2l2.3.9 2-3.4-2-1.5c.1-.4.1-.8.1-1.2z" },
@@ -25,8 +27,9 @@ const TABS: { id: string; label: string; icon: string }[] = [
 
 const ROLE_LABEL: Record<Role, string> = { admin: tk("Admin"), reviewer: tk("Reviewer"), viewer: tk("Viewer") };
 
-const LogoMark = () => (
-  <svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#19ac60" /><stop offset="1" stopColor="#006c35" /></linearGradient></defs><rect width="32" height="32" rx="10" fill="url(#lg)" /><path d="M9 7.5h10l4.5 4.5v12.5H9z" fill="none" stroke="#fff" strokeWidth="2" strokeLinejoin="round" /><path d="M13 17.5l3 3 5-6" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+/** The mark: a page with a tick, in the brand green of the active theme. */
+const LogoMark = ({ size = 28 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true" style={{ flex: "none" }}><rect width="32" height="32" rx="7" fill="var(--brand)" /><path d="M9 7.5h10l4.5 4.5v12.5H9z" fill="none" stroke="var(--on-brand)" strokeWidth="2" strokeLinejoin="round" /><path d="M13 17.5l3 3 5-6" fill="none" stroke="var(--on-brand)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
 );
 
 function parseHash(): { tab: string; arg?: string } {
@@ -46,7 +49,7 @@ const WAKE_SAY_SO_MS = 3_000;
  * browser also waits for this page itself, before any of this code runs.
  */
 function useHealth(attempt: number) {
-  const [health, setHealth] = useState<{ demo: boolean } | null>(null);
+  const [health, setHealth] = useState<{ demo: boolean; inMemory: boolean } | null>(null);
   const [state, setState] = useState<"checking" | "waking" | "failed">("checking");
   const [waited, setWaited] = useState(0);
   useEffect(() => {
@@ -64,7 +67,7 @@ function useHealth(attempt: number) {
         const cut = window.setTimeout(() => ctrl.abort(), 15_000);
         try {
           const r = await fetch("/api/health", { signal: ctrl.signal, cache: "no-store" });
-          if (r.ok) { const h = await r.json(); if (!stop) { setHealth({ demo: !!h.demo }); } return; }
+          if (r.ok) { const h = await r.json(); if (!stop) { setHealth({ demo: !!h.demo, inMemory: !!h.in_memory }); } return; }
         } catch { /* asleep, starting or offline: ask again */ } finally { window.clearTimeout(cut); }
         if (Date.now() - started >= WAKE_GIVE_UP_MS) { if (!stop) setState("failed"); return; }
         await new Promise((res) => setTimeout(res, 3000));
@@ -78,7 +81,7 @@ function useHealth(attempt: number) {
 function Waking({ t, lang, setLang, failed, waited, retry }: { t: T; lang: Lang; setLang: (l: Lang) => void; failed: boolean; waited: number; retry: () => void }) {
   return (
     <main className="login"><div className="panel" role={failed ? "alert" : "status"} aria-live="polite">
-      <div className="row" style={{ gap: 12 }}><svg width="40" height="40" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#006c35" /><path d="M9 7.5h10l4.5 4.5v12.5H9z" fill="none" stroke="#fff" strokeWidth="2" strokeLinejoin="round" /><path d="M13 17.5l3 3 5-6" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg><div className="grow"><h1>invoice-desk</h1></div>
+      <div className="row" style={{ gap: 12 }}><LogoMark size={36} /><div className="grow"><h1>invoice-desk</h1></div>
         <button className="chip" style={{ alignSelf: "start" }} onClick={() => setLang(lang === "en" ? "ar" : "en")} aria-label={t("Switch language")}>{lang === "en" ? "العربية" : "English"}</button></div>
       {failed ? <>
         <h2>{t("The demo did not wake up")}</h2>
@@ -105,7 +108,7 @@ function Login({ onIn, t, lang, setLang, demo }: { onIn: (r: Role, name: string)
   }
   return (
     <main className="login"><div className="panel">
-      <div className="row" style={{ gap: 12 }}><svg width="40" height="40" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#006c35" /><path d="M9 7.5h10l4.5 4.5v12.5H9z" fill="none" stroke="#fff" strokeWidth="2" strokeLinejoin="round" /><path d="M13 17.5l3 3 5-6" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg><div className="grow"><h1>invoice-desk</h1><p className="muted">{t("Saudi e-invoice intake with human review")}</p></div>
+      <div className="row" style={{ gap: 12 }}><LogoMark size={36} /><div className="grow"><h1>invoice-desk</h1><p className="muted">{t("Saudi e-invoice intake with human review")}</p></div>
         <button className="chip" style={{ alignSelf: "start" }} onClick={() => setLang(lang === "en" ? "ar" : "en")} aria-label={t("Switch language")}>{lang === "en" ? "العربية" : "English"}</button></div>
       <Err msg={err} />
       {demo && <div className="roles" role="group" aria-label={t("Sign in as")}>
@@ -182,6 +185,7 @@ export default function App() {
       case "runs": return <Runs openId={route.arg ? Number(route.arg) : undefined} />;
       case "review": return <Review openId={route.arg ? Number(route.arg) : undefined} />;
       case "rules": return <Rules />;
+      case "vendors": return <Vendors />;
       case "evaluation": return <Evaluation />;
       case "audit": return <Audit />;
       case "settings": return <Settings theme={theme} setTheme={setTheme} lang={lang} setLang={setLang} />;
@@ -212,7 +216,11 @@ export default function App() {
             </div>
           </div>
         </aside>
-        <main className="main" id="main">{view}</main>
+        <main className="main" id="main">
+          {/* "Resets on restart" is only true when the database lives in memory */}
+          {health.demo && <p className="demo-note" role="note">{health.inMemory ? t("Demo with sample data. Resets on restart. Do not upload real invoices.") : t("Demo with sample data. Do not upload real invoices.")}</p>}
+          {view}
+        </main>
       </div>
       {toastMsg && <div className={`toast notice ${toastMsg.kind === "err" ? "err" : "ok"}`} role="status">{t(toastMsg.msg)}</div>}
     </AppCtx.Provider>

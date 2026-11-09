@@ -16,4 +16,4 @@ def test_mcp_read_then_check():
 
 
 def test_mcp_lists_rules():
-    assert len(m.explain_rules()) == len(m._RULES) == 14 and "total" in m.list_fields()
+    assert len(m.explain_rules()) == len(m._RULES) == 20 and "total" in m.list_fields()

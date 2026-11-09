@@ -12,7 +12,7 @@ from __future__ import annotations
 import ast
 import re
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Callable
 
 from . import qr
@@ -27,6 +27,8 @@ class Ctx:
     today: date = field(default_factory=date.today)
     confidence: float = 1.0
     is_duplicate: Callable[[str, str], bool] = lambda vat, number: False
+    vendors: object = None                                  # a vendors.VendorBook, or None when there is no vendor master
+    po_for: Callable[[str], dict | None] = lambda number: None
 
 
 def _f(fields: dict, name: str):
@@ -63,11 +65,32 @@ def r_vat_number(p, f, ctx):
     return ("pass", "valid format") if ok else ("fail", f"{name} '{v}' must be 15 digits starting and ending with 3")
 
 
+# UBL tax category codes for lines that carry no VAT: zero-rated, exempt, out of scope
+NO_VAT_CATEGORIES = {"Z", "E", "O"}
+
+
+def line_category(item: dict) -> str:
+    """S (standard rate) unless the line says it is zero-rated (Z), exempt (E) or out of scope (O)."""
+    c = str(item.get("vat_category") or "S").strip().upper()[:1]
+    return c if c in NO_VAT_CATEGORIES else "S"
+
+
 def r_vat_rate(p, f, ctx):
     sub, vat = _f(f, "subtotal"), _f(f, "vat_amount")
+    rate, tol = float(p.get("rate", 0.15)), float(p.get("tolerance", 0.05))
+    items = f.get("line_items") or []
+    if vat is not None and any(line_category(i) in NO_VAT_CATEGORIES for i in items):
+        # zero-rated and exempt lines carry no VAT: only the standard-rated lines are taxable
+        amounts = [to_number(i.get("line_total")) for i in items if line_category(i) == "S"]
+        if None in amounts:
+            return "skip", "a standard-rated line has no amount"
+        taxable = sum(amounts)
+        exp = taxable * rate
+        if _close(vat, exp, tol):
+            return "pass", f"VAT {vat:.2f} is {rate * 100:g}% of the standard-rated {taxable:.2f}; zero-rated and exempt lines carry none"
+        return "fail", f"VAT is {vat:.2f} but {rate * 100:g}% of the standard-rated {taxable:.2f} is {exp:.2f} (zero-rated and exempt lines carry no VAT)"
     if sub is None or vat is None:
         return "skip", "subtotal or VAT amount missing"
-    rate, tol = float(p.get("rate", 0.15)), float(p.get("tolerance", 0.05))
     exp = sub * rate
     if _close(vat, exp, tol):
         return "pass", f"VAT {vat:.2f} is {rate * 100:g}% of {sub:.2f}"
@@ -151,8 +174,12 @@ def r_qr_match(p, f, ctx):
     if not q:
         return "fail", "QR payload is not valid TLV base64"
     problems = []
-    if vat_key(q.get("seller_vat")) != vat_key(f.get("seller_vat")):
+    # compare only what is printed: a field the reader could not find is the required-fields rule's business
+    if f.get("seller_vat") and vat_key(q.get("seller_vat")) != vat_key(f.get("seller_vat")):
         problems.append(f"QR VAT {q.get('seller_vat')} vs printed {f.get('seller_vat')}")
+    stamped, printed = _qr_day(q.get("timestamp")), parse_date(f.get("issue_date"))
+    if stamped and printed and stamped != printed:
+        problems.append(f"QR date {stamped} vs printed issue date {printed}")
     for key, name in (("total", "total"), ("vat_amount", "vat_amount")):
         a, b = to_number(q.get(key)), _f(f, name)
         if a is not None and b is not None and not _close(a, b, 0.01):
@@ -163,6 +190,98 @@ def r_qr_match(p, f, ctx):
     if sn and qn and has_ar(sn) == has_ar(qn) and qn not in sn and sn not in qn:
         problems.append("QR seller name differs from printed name")
     return ("fail", "; ".join(problems)) if problems else ("pass", "QR agrees with printed values")
+
+
+def _qr_day(stamp: str | None) -> str | None:
+    """The calendar day of a QR timestamp in Saudi time (UTC+3), e.g. "2026-10-01T22:30:00Z" is 2026-10-02."""
+    if not stamp:
+        return None
+    try:
+        t = datetime.fromisoformat(stamp.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return parse_date(stamp)
+    if t.tzinfo is not None:
+        t = t.astimezone(timezone(timedelta(hours=3)))
+    return t.date().isoformat()
+
+
+def r_qr_present(p, f, ctx):
+    if p.get("simplified_only") and f.get("invoice_type") != "simplified":
+        return "pass", "not a simplified tax invoice"
+    if f.get("qr_payload"):
+        return "pass", "QR code found"
+    return "fail", "no QR code found (on a photo taken at an angle a QR code may be present but unreadable)"
+
+
+def _vendor_match(p, f, ctx):
+    """None when the vendor rules cannot apply: no vendor master yet, or no seller name or VAT number to go on."""
+    if not ctx.vendors or not (f.get("seller_name") or f.get("seller_vat")):
+        return None
+    return ctx.vendors.match(f, float(p.get("min_score", 0.85)))
+
+
+def r_vendor_known(p, f, ctx):
+    if not ctx.vendors:
+        return "skip", "no vendors in the vendor master yet"
+    m = _vendor_match(p, f, ctx)
+    if m is None:
+        return "skip", "seller name and VAT number missing"
+    return ("pass", m["why"]) if m["vendor"] else ("fail", m["why"])
+
+
+def r_vendor_blocked(p, f, ctx):
+    m = _vendor_match(p, f, ctx)
+    if not m or not m["vendor"]:
+        return "skip", "vendor not identified"
+    v = m["vendor"]
+    if v.get("status") == "blocked":
+        return "fail", f"{v.get('name_en') or v.get('name_ar')} is blocked in the vendor master"
+    return "pass", "vendor is approved"
+
+
+def r_vendor_vat(p, f, ctx):
+    m = _vendor_match(p, f, ctx)
+    if not m or not m["vendor"]:
+        return "skip", "vendor not identified"
+    v, vat = m["vendor"], f.get("seller_vat")
+    if not vat or not v.get("vat"):
+        return "skip", "no VAT number to compare"
+    if vat_key(vat) != vat_key(v["vat"]):
+        return "fail", f"the invoice says {vat_key(vat)}, the vendor master says {v['vat']}"
+    return "pass", "VAT number matches the vendor master"
+
+
+def r_vendor_iban(p, f, ctx):
+    from .vendors import iban_key, iban_problem
+    iban = f.get("iban")
+    if not iban:
+        return "skip", "no IBAN on the invoice"
+    problem = iban_problem(iban)
+    if problem:
+        return "fail", f"High risk: the IBAN on the invoice is not valid ({problem})"
+    m = _vendor_match(p, f, ctx)
+    if not m or not m["vendor"] or not m["vendor"].get("iban"):
+        return "skip", "no IBAN in the vendor master to compare"
+    if iban_key(iban) != iban_key(m["vendor"]["iban"]):
+        return "fail", (f"High risk: the invoice asks for payment to {iban_key(iban)}, but the vendor master has "
+                        f"{m['vendor']['iban']}. A changed bank account is a common fraud pattern: confirm it with the "
+                        "vendor using contact details you already hold, not ones on this invoice.")
+    return "pass", "IBAN matches the vendor master"
+
+
+def r_po_amount(p, f, ctx):
+    from .vendors import po_match
+    number = (f.get("po_number") or "").strip()
+    if not number:
+        return "skip", "no PO number on the invoice"
+    po = ctx.po_for(number)
+    if not po:
+        return "skip", f"PO {number} is not among the purchase orders"
+    m = _vendor_match(p, f, ctx)
+    res = po_match(f, po, m["vendor"] if m else None, float(p.get("tolerance", 0.01)), p.get("field", "total"))
+    if res["status"] == "over":
+        return "fail", res["detail"]
+    return ("pass" if res["status"] in ("matched", "closed") else "skip"), res["detail"]
 
 
 def r_duplicate(p, f, ctx):
@@ -290,7 +409,7 @@ RULE_TYPES: dict[str, dict] = {
                   params=[dict(name="field", kind="field", default="invoice_number"), dict(name="pattern", kind="text", default=r"[A-Z0-9\-/]{3,30}")]),
     "vat_number": dict(fn=r_vat_number, label="VAT number format", description="15 digits, starting and ending with 3.",
                        params=[dict(name="field", kind="field", default="seller_vat"), dict(name="optional", kind="bool", default=False)]),
-    "vat_rate": dict(fn=r_vat_rate, label="VAT rate", description="VAT amount must equal the rate times the subtotal.",
+    "vat_rate": dict(fn=r_vat_rate, label="VAT rate", description="VAT amount must equal the rate times the taxable amount. Zero-rated and exempt lines carry no VAT.",
                      params=[dict(name="rate", kind="number", default=0.15), dict(name="tolerance", kind="number", default=0.05)]),
     "totals": dict(fn=r_totals, label="Totals add up", description="Line items sum to the subtotal and subtotal plus VAT equals the total.",
                    params=[dict(name="tolerance", kind="number", default=0.05)]),
@@ -306,11 +425,24 @@ RULE_TYPES: dict[str, dict] = {
                          params=[dict(name="field", kind="field", default="total"),
                                  dict(name="min", kind="number", default=None, optional=True, help="leave empty for no lower limit"),
                                  dict(name="max", kind="number", default=50000, optional=True, help="leave empty for no upper limit")]),
-    "qr_match": dict(fn=r_qr_match, label="QR code agrees", description="The QR payload must match the printed VAT number, total and VAT.",
+    "qr_match": dict(fn=r_qr_match, label="QR code agrees", description="The QR code's seller, VAT number, date, total and VAT must match the printed invoice.",
                      params=[dict(name="required", kind="bool", default=False)]),
+    "qr_present": dict(fn=r_qr_present, label="QR code present", description="The invoice should carry a QR code. With the option on, only simplified tax invoices are checked.",
+                       params=[dict(name="simplified_only", kind="bool", default=False)]),
     "duplicate": dict(fn=r_duplicate, label="Duplicate invoice", description="The same seller VAT number and invoice number must not be received twice.", params=[]),
     "min_confidence": dict(fn=r_min_confidence, label="Extraction confidence", description="Overall confidence of the extraction must reach a threshold.",
                            params=[dict(name="threshold", kind="number", default=0.85)]),
+    "vendor_known": dict(fn=r_vendor_known, label="Known vendor", description="The seller must be in the vendor master, by name (English, Arabic or a linked name) or VAT number.",
+                         params=[dict(name="min_score", kind="number", default=0.85, help="0 to 1; how close a name must be")]),
+    "vendor_blocked": dict(fn=r_vendor_blocked, label="Vendor not blocked", description="The matched vendor must not be blocked in the vendor master.",
+                           params=[dict(name="min_score", kind="number", default=0.85, help="0 to 1; how close a name must be")]),
+    "vendor_vat": dict(fn=r_vendor_vat, label="VAT number matches vendor master", description="The seller VAT number must be the one held for the matched vendor.",
+                       params=[dict(name="min_score", kind="number", default=0.85, help="0 to 1; how close a name must be")]),
+    "vendor_iban": dict(fn=r_vendor_iban, label="IBAN matches vendor master", risk="high",
+                        description="The IBAN on the invoice must be valid and the one held for the matched vendor. A failure is marked high risk.",
+                        params=[dict(name="min_score", kind="number", default=0.85, help="0 to 1; how close a name must be")]),
+    "po_amount": dict(fn=r_po_amount, label="Within the purchase order", description="The invoice amount must not be above its purchase order's amount, allowing a tolerance.",
+                      params=[dict(name="field", kind="field", default="total"), dict(name="tolerance", kind="number", default=0.01, help="share of the PO amount, 0.01 is 1%")]),
     "expression": dict(fn=r_expression, label="Custom expression", description="Write your own condition. It must be true for the invoice to pass.",
                        params=[dict(name="expr", kind="text", default="total <= 100000 and item_count > 0")]),
 }
@@ -364,6 +496,8 @@ def run_rules(rules: list[dict], fields: dict, ctx: Ctx) -> list[dict]:
         if status == "fail" and r.get("message"):
             detail = f"{r['message']} ({detail})"
         out.append(dict(key=r["key"], name=r["name"], severity=r["severity"], status=status, detail=detail))
+        if status == "fail" and RULE_TYPES[r["type"]].get("risk"):
+            out[-1]["risk"] = RULE_TYPES[r["type"]]["risk"]
     return out
 
 

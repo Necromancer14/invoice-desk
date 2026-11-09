@@ -1,0 +1,19 @@
+TAX INVOICE
+Invoice No: ZSS-2026-0165
+Issue Date: 2026-09-24
+Due Date: 2026-10-24
+Seller: Zaman Software Solutions
+Seller VAT No: 346457663551003
+Buyer: Harbor Retail Group
+Buyer VAT No: 362945965818453
+Currency: SAR
+
+Description   Qty   Unit price   Total
+1. Office furniture   10   2,054.85   20,548.50
+2. Maintenance contract   1   2,911.61   2,911.61
+3. Export freight (zero-rated)   1   1,006.08   1,006.08
+
+Subtotal: 24,466.19 SAR
+VAT (15%): 3,669.93 SAR
+Total (including VAT): 28,136.12 SAR
+QR: ARhaYW1hbiBTb2Z0d2FyZSBTb2x1dGlvbnMCDzM0NjQ1NzY2MzU1MTAwMwMUMjAyNi0wOS0yNFQwOTozMDowMFoECDI4MTM2LjEyBQczNjY5Ljkz

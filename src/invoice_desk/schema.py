@@ -6,7 +6,8 @@ import math
 SCALARS = ["invoice_number", "issue_date", "due_date", "seller_name", "seller_vat", "buyer_name",
            "buyer_vat", "currency", "subtotal", "vat_amount", "total", "qr_payload"]
 NUMERIC = {"subtotal", "vat_amount", "total"}
-FIELDS = SCALARS + ["line_items"]
+# invoice_type ("standard" or "simplified") is read but not scored by the evaluation, so its figures stay comparable
+FIELDS = SCALARS + ["invoice_type", "iban", "po_number", "line_items"]
 # What a reviewer must be able to rely on before an invoice is auto-approved.
 REQUIRED = ["invoice_number", "issue_date", "seller_name", "seller_vat", "currency",
             "subtotal", "vat_amount", "total"]
@@ -26,6 +27,9 @@ INVOICE_SCHEMA = {
         "vat_amount": {"type": ["number", "null"]},
         "total": {"type": ["number", "null"], "description": "Total including VAT"},
         "qr_payload": {"type": ["string", "null"], "description": "Base64 text printed next to the QR code, if any"},
+        "invoice_type": {"type": ["string", "null"], "description": "standard (tax invoice) or simplified (simplified tax invoice); null if not stated"},
+        "iban": {"type": ["string", "null"], "description": "The seller's bank account IBAN printed for payment, without spaces"},
+        "po_number": {"type": ["string", "null"], "description": "The buyer's purchase order number the invoice refers to"},
         "line_items": {
             "type": "array",
             "items": {
@@ -35,6 +39,8 @@ INVOICE_SCHEMA = {
                     "quantity": {"type": ["number", "null"]},
                     "unit_price": {"type": ["number", "null"]},
                     "line_total": {"type": ["number", "null"]},
+                    "vat_category": {"type": ["string", "null"],
+                                     "description": "S standard rate, Z zero-rated, E exempt, O out of scope. Null if not shown."},
                 },
                 "required": ["description"],
             },
@@ -53,6 +59,7 @@ INVOICE_SCHEMA = {
 
 def empty_fields() -> dict:
     d = {k: None for k in SCALARS}
+    d["invoice_type"] = d["iban"] = d["po_number"] = None
     d["line_items"] = []
     return d
 

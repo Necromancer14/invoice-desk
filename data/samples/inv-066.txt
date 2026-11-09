@@ -1,0 +1,19 @@
+TAX INVOICE
+Invoice No: NOS-2026-0166
+Issue Date: 19/03/1448 هـ
+Due Date: 20/04/1448 هـ
+Seller: Najd Office Supplies Co.
+Seller VAT No: 322916926427953
+Buyer: Bayan Construction
+Currency: SAR
+
+Description   Qty   Unit price   Total
+1. Printing and delivery   1   220.94   220.94
+2. Cleaning service   1   551.67   551.67
+3. Maintenance contract   1   4,067.29   4,067.29
+4. Training session   1   1,732.76   1,732.76
+
+Subtotal: 6,572.66 SAR
+VAT (15%): 985.90 SAR
+Total (including VAT): 7,558.56 SAR
+QR: ARhOYWpkIE9mZmljZSBTdXBwbGllcyBDby4CDzMyMjkxNjkyNjQyNzk1MwMUMjAyNi0wOS0wMVQwOTozMDowMFoEBzc1NTguNTYFBjk4NS45MA==

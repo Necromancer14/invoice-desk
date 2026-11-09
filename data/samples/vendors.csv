@@ -1,0 +1,14 @@
+name_en,name_ar,vat_number,iban,currency,status
+"Najd Office Supplies Co.","شركة نجد للمستلزمات المكتبية",322916926427953,SA5920461887149069111748,SAR,approved
+"Red Sea Logistics","البحر الأحمر للخدمات اللوجستية",322044507179273,SA1415215513005504100034,SAR,approved
+"Al Waha Technology","الواحة للتقنية",328617486089703,SA2160634713415932832393,SAR,approved
+"Hejaz Catering Services","حجاز لخدمات التموين",377695923130983,SA0645332459210329401352,SAR,approved
+"Tuwaiq Engineering","طويق للهندسة",303816460278483,SA0520952131115334178589,SAR,approved
+"Desert Rose Printing","وردة الصحراء للطباعة",345946419931163,SA9410955906622009750747,SAR,approved
+"Jabal Medical Equipment","جبل للمعدات الطبية",303219475264013,SA0445966054827265960708,SAR,approved
+"Gulf Horizon Consulting","أفق الخليج للاستشارات",325006057695133,SA6210491614118433385479,SAR,approved
+"Al Qasr Cleaning Co.","القصر للنظافة",376910299427483,SA9510595586522765211659,SAR,approved
+"Zaman Software Solutions","زمان لحلول البرمجيات",346457663551003,SA5620156546127997748381,SAR,approved
+"Sahara Fleet Rentals","الصحراء لتأجير المركبات",382689849788753,SA9820083834078753144140,SAR,approved
+"Madar Training Institute","مدار للتدريب",303895844204933,SA6480474292000053668564,SAR,approved
+"Falcon Star Trading","نجمة الصقر للتجارة",396702943318413,SA6415531937827745689150,SAR,blocked

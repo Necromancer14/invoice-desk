@@ -86,7 +86,8 @@ def test_login_and_demo_off(auth):
 def test_samples_and_csv(client):
     r = H(client, "reviewer")
     lst = client.get("/api/samples", headers=r).json()
-    assert len(lst) == 60 and client.get(f"/api/samples/{lst[2]['file']}", headers=r).status_code == 200
+    from invoice_desk.evaluation import load_answers
+    assert len(lst) == len(load_answers()["invoices"]) and client.get(f"/api/samples/{lst[2]['file']}", headers=r).status_code == 200
     assert client.get("/api/samples/..%2Fsecret", headers=r).status_code == 404
     ids = client.post("/api/samples/submit", json={"files": [x["file"] for x in lst if x["format"] == "txt"][:3]}, headers=r).json()["ids"]
     assert len(ids) == 3 and "text/csv" in client.get("/api/export.csv", headers=r).headers["content-type"]
@@ -140,7 +141,7 @@ def test_review_queue_lists_waiting_runs_oldest_first(client):
     q = client.get("/api/review/queue", headers=r).json()
     assert [x["id"] for x in q] == waiting
     first = q[0]
-    assert set(first) == {"id", "filename", "created_at", "seller", "invoice_number", "total", "currency", "failed_checks"}
+    assert set(first) == {"id", "filename", "created_at", "seller", "invoice_number", "total", "currency", "failed_checks", "high_risk"}
     assert first["filename"] == "w0.txt" and first["seller"] == "Acme Trading" and first["invoice_number"] is None
     assert first["total"] == 1150.0 and first["currency"] == "SAR" and first["failed_checks"] == 2  # required fields + low confidence
 

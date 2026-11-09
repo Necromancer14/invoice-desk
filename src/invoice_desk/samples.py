@@ -8,7 +8,29 @@ LABELS = {"clean": "Clean invoice", "prompt_injection": "Hidden instruction insi
           "vat_rate": "Wrong VAT rate", "totals": "Totals do not add up", "future_date": "Issue date in the future",
           "duplicate": "Duplicate of an earlier invoice", "qr_mismatch": "QR code disagrees with printed total",
           "non_sar": "Foreign currency", "over_limit": "High value invoice", "missing_vat": "Seller VAT number missing",
-          "due_before_issue": "Due date before issue date"}
+          "due_before_issue": "Due date before issue date",
+          # checks against ZATCA e-invoicing fields
+          "vat_digits_spaced": "VAT number in Arabic digits, grouped with spaces",
+          "arabic_decimals": "Arabic-Indic digits and decimal separators",
+          "zero_rated": "Zero-rated line, VAT on the rest only",
+          "exempt": "Exempt line, VAT on the rest only",
+          "zero_rated_wrong": "VAT charged on a zero-rated line",
+          "hijri_date": "Hijri issue date",
+          "hijri_future": "Hijri issue date in the future",
+          "qr_missing": "No QR code on the invoice",
+          "simplified": "Simplified tax invoice",
+          # vendor master and purchase orders
+          "vendor_ok": "Known vendor, IBAN and PO agree", "vendor_fuzzy": "Vendor name written differently",
+          "iban_changed": "IBAN differs from the vendor master", "blocked_vendor": "Blocked vendor",
+          "unknown_vendor": "Vendor not in the vendor master", "vendor_vat_mismatch": "VAT number differs from the vendor master",
+          "po_over": "Invoice above its purchase order"}
+
+
+# The welcome set for a first visit: samples the built-in reader reads as the answer key expects, so the dashboard shows
+# 11 approved, 6 sent to review and 3 rejected across text, PDF and XML, English and Arabic. No duplicates, no images.
+DEMO_SET = ["inv-003.txt", "inv-004.pdf", "inv-016.pdf", "inv-017.pdf", "inv-022.pdf", "inv-035.pdf", "inv-061.txt", "inv-062.txt",
+            "inv-063.txt", "inv-064.txt", "inv-067.txt", "inv-071.pdf", "inv-074.xml", "inv-091.pdf", "inv-092.pdf", "inv-078.xml",
+            "inv-081.xml", "inv-082.txt", "inv-090.pdf", "inv-089.txt"]
 
 
 def list_samples(root: Path = SAMPLES) -> list[dict]:

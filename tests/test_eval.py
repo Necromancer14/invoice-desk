@@ -4,7 +4,8 @@ from invoice_desk.extractors import RuleBasedExtractor
 
 def test_rule_based_eval_numbers_are_sane_and_safe():
     r = evaluate(mode="rules")
-    assert r["count"] == 60
+    from invoice_desk.evaluation import load_answers
+    assert r["count"] == len(load_answers()["invoices"])
     assert r["unsafe_auto_approvals"] == 0 and r["false_rejections"] == 0
     assert r["by_format"]["txt"]["agree"] / r["by_format"]["txt"]["n"] >= 0.85
     assert r["by_format"]["png"]["agree"] / r["by_format"]["png"]["n"] <= 0.3  # images genuinely need Claude

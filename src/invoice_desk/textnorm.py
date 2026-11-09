@@ -54,20 +54,28 @@ def to_number(value) -> float | None:
 
 _ISO = re.compile(r"(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})")
 _DMY = re.compile(r"(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})")
+# a year from 1300 to 1600 can only be Hijri on an invoice; هـ / AH / H marks it too
+_HIJRI_YEARS = range(1300, 1601)
 
 
 def parse_date(value) -> str | None:
-    """Return an ISO date. Day-first for DD/MM/YYYY, which is how Saudi invoices write it."""
+    """Return an ISO (Gregorian) date. Day-first for DD/MM/YYYY, which is how Saudi invoices write it.
+    Hijri dates such as 15/04/1448 هـ or ١٤٤٨-٠٤-١٥ are converted with the Umm al-Qura calendar."""
     if not value:
         return None
     t = normalize(str(value))
-    try:
-        m = _ISO.search(t)
-        if m:
-            return date(int(m[1]), int(m[2]), int(m[3])).isoformat()
+    m = _ISO.search(t)
+    ymd = (int(m[1]), int(m[2]), int(m[3])) if m else None
+    if not ymd:
         m = _DMY.search(t)
-        if m:
-            return date(int(m[3]), int(m[2]), int(m[1])).isoformat()
+        ymd = (int(m[3]), int(m[2]), int(m[1])) if m else None
+    if not ymd:
+        return None
+    if ymd[0] in _HIJRI_YEARS:
+        from .hijri import to_gregorian
+        g = to_gregorian(*ymd)
+        return g.isoformat() if g else None
+    try:
+        return date(*ymd).isoformat()
     except ValueError:
         return None
-    return None

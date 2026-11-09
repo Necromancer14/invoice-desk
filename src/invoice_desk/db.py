@@ -17,6 +17,12 @@ CREATE TABLE IF NOT EXISTS rules(key TEXT PRIMARY KEY, position INTEGER, name TE
 CREATE TABLE IF NOT EXISTS rule_versions(version INTEGER PRIMARY KEY AUTOINCREMENT, snapshot TEXT, author TEXT, note TEXT, created_at TEXT);
 CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, actor TEXT, action TEXT, target TEXT, detail TEXT);
 CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT);
+CREATE TABLE IF NOT EXISTS vendors(id INTEGER PRIMARY KEY AUTOINCREMENT, name_en TEXT, name_ar TEXT, vat TEXT, iban TEXT,
+  currency TEXT, status TEXT, created_at TEXT, updated_at TEXT);
+CREATE TABLE IF NOT EXISTS vendor_aliases(id INTEGER PRIMARY KEY AUTOINCREMENT, vendor_id INTEGER, alias TEXT, key TEXT UNIQUE,
+  created_by TEXT, created_at TEXT);
+CREATE TABLE IF NOT EXISTS purchase_orders(id INTEGER PRIMARY KEY AUTOINCREMENT, po_number TEXT UNIQUE, vendor_id INTEGER,
+  vendor_name TEXT, amount REAL, currency TEXT, status TEXT, created_at TEXT);
 CREATE TABLE IF NOT EXISTS eval_results(provider TEXT, model TEXT, sample_id TEXT, outcome TEXT, evaluated_at TEXT,
   rules_version INTEGER, row TEXT, PRIMARY KEY(provider, model, sample_id));
 """
@@ -25,6 +31,8 @@ CREATE TABLE IF NOT EXISTS eval_results(provider TEXT, model TEXT, sample_id TEX
 class DB:
     def __init__(self, path: str = ":memory:"):
         self.lock = threading.RLock()
+        self.path = path
+        self.in_memory = path == ":memory:" or path.startswith("file::memory:")
         self.conn = sqlite3.connect(path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         if path != ":memory:":

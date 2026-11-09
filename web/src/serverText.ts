@@ -1,7 +1,8 @@
 /**
  * Fixed English texts the server sends that the portal shows. Listing them with tk() lets
  * tools/check_i18n.mjs insist on an Arabic entry for each; views translate them with t(value).
- * Anything not listed here (a rule an admin named, a check's detail line) is shown as sent.
+ * Anything not listed here (a rule an admin named) is shown as sent. Check reasons and vendor match explanations
+ * are sentences built from templates; those templates live in reasons.ts.
  * Keep in step with rules.py RULE_TYPES, providers.py PROVIDERS, samples.py LABELS,
  * default_rules.py and the trace step names in desk.py.
  */
@@ -12,7 +13,7 @@ export const SERVER_TEXT = [
   tk("Required fields"), tk("Every listed field must have a value."), tk("Field names"),
   tk("Field matches a pattern"), tk("A field must fully match a regular expression."),
   tk("VAT number format"), tk("15 digits, starting and ending with 3."),
-  tk("VAT rate"), tk("VAT amount must equal the rate times the subtotal."),
+  tk("VAT rate"), tk("VAT amount must equal the rate times the taxable amount. Zero-rated and exempt lines carry no VAT."),
   tk("Totals add up"), tk("Line items sum to the subtotal and subtotal plus VAT equals the total."),
   tk("Line arithmetic"), tk("Quantity times unit price equals each line total."),
   tk("Date is valid"), tk("A real date, optionally not in the future and not too old."),
@@ -20,10 +21,17 @@ export const SERVER_TEXT = [
   tk("Allowed currencies"), tk("Currency must be one of the listed codes."),
   tk("Amount limit"), tk("A numeric field must stay at or above a minimum and at or below a maximum."),
   tk("leave empty for no lower limit"), tk("leave empty for no upper limit"),
-  tk("QR code agrees"), tk("The QR payload must match the printed VAT number, total and VAT."),
+  tk("QR code agrees"), tk("The QR code's seller, VAT number, date, total and VAT must match the printed invoice."),
+  tk("QR code present"), tk("The invoice should carry a QR code. With the option on, only simplified tax invoices are checked."), tk("simplified only"),
   tk("Duplicate invoice"), tk("The same seller VAT number and invoice number must not be received twice."),
   tk("Extraction confidence"), tk("Overall confidence of the extraction must reach a threshold."),
   tk("Custom expression"), tk("Write your own condition. It must be true for the invoice to pass."),
+  tk("Known vendor"), tk("The seller must be in the vendor master, by name (English, Arabic or a linked name) or VAT number."),
+  tk("Vendor not blocked"), tk("The matched vendor must not be blocked in the vendor master."),
+  tk("VAT number matches vendor master"), tk("The seller VAT number must be the one held for the matched vendor."),
+  tk("IBAN matches vendor master"), tk("The IBAN on the invoice must be valid and the one held for the matched vendor. A failure is marked high risk."),
+  tk("Within the purchase order"), tk("The invoice amount must not be above its purchase order's amount, allowing a tolerance."),
+  tk("min score"), tk("0 to 1; how close a name must be"), tk("share of the PO amount, 0.01 is 1%"),
   tk("fields"), tk("field"), tk("pattern"), tk("optional"), tk("rate"), tk("tolerance"), tk("not future"), tk("max age days"),
   tk("first"), tk("second"), tk("allowed"), tk("min"), tk("max"), tk("required"), tk("threshold"), tk("expr"),
 
@@ -32,6 +40,8 @@ export const SERVER_TEXT = [
   tk("Line quantity times price"), tk("Issue date is real and not in the future"), tk("Due date is not before issue date"),
   tk("Currency is SAR"), tk("Total above 50,000 needs a second look"), tk("QR code agrees with printed values"),
   tk("Not a duplicate"), tk("Extraction confidence is high enough"), tk("Total is not negative"),
+  tk("Vendor is in the vendor master"), tk("Vendor is not blocked"), tk("Seller VAT number matches the vendor master"),
+  tk("IBAN matches the vendor master"), tk("Invoice is within the purchase order"),
 
   // AI providers
   tk("Ollama (on this computer)"),
@@ -46,6 +56,9 @@ export const SERVER_TEXT = [
   tk("Clean invoice"), tk("Hidden instruction inside the invoice"), tk("Malformed seller VAT number"), tk("Wrong VAT rate"),
   tk("Totals do not add up"), tk("Issue date in the future"), tk("Duplicate of an earlier invoice"), tk("QR code disagrees with printed total"),
   tk("Foreign currency"), tk("High value invoice"), tk("Seller VAT number missing"), tk("Due date before issue date"),
+  tk("VAT number in Arabic digits, grouped with spaces"), tk("Arabic-Indic digits and decimal separators"), tk("Zero-rated line, VAT on the rest only"), tk("Exempt line, VAT on the rest only"), tk("VAT charged on a zero-rated line"), tk("Hijri issue date"), tk("Hijri issue date in the future"), tk("No QR code on the invoice"), tk("Simplified tax invoice"),
+  tk("Known vendor, IBAN and PO agree"), tk("Vendor name written differently"), tk("IBAN differs from the vendor master"), tk("Blocked vendor"),
+  tk("Vendor not in the vendor master"), tk("VAT number differs from the vendor master"), tk("Invoice above its purchase order"),
 
   // AI connection test (api.py llm_test)
   tk("Connected and read the test invoice correctly."), tk("Connected, but the test invoice was not read as expected. Try another model."),
@@ -56,7 +69,9 @@ export const SERVER_TEXT = [
   // processing outcomes and notes (desk.py)
   tk("This PDF could not be opened. It may be damaged or not really a PDF."),
   tk("The AI call failed, so the built-in reader was used instead"),
+  // dashboard rejection reasons that are not rule names (desk.py stats)
+  tk("Rejected by a reviewer"), tk("Could not be processed"), tk("No currency is printed, so SAR is assumed"),
 
   // processing trace steps
-  tk("ingest"), tk("extract"), tk("validate"), tk("route"), tk("human review"), tk("error"),
+  tk("ingest"), tk("extract"), tk("qr"), tk("validate"), tk("route"), tk("human review"), tk("error"),
 ];
