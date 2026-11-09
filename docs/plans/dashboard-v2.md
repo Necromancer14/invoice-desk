@@ -7,7 +7,7 @@ patterns are borrowed from the Lumelle reference.
 
 - "Load sample invoices" now loads two groups, in date order, through the normal pipeline (built-in reader):
   - **History**: every text, PDF or XML sample that is not in the welcome set, not a planned duplicate and not the
-    original of a PDF copy in the welcome set. Spread over days 8 to 30 before today. The ones that land in review
+    original of a PDF copy in the welcome set. Spread over days 2 to 29 before today, so the last week has decisions by a person too. The ones that land in review
     are decided by two made-up reviewers (`noura`, `faisal`): approved, or rejected with the scenario as the note.
   - **Welcome set**: the same 20 as before (11 approved, 6 to review, 3 rejected), spread over the last 7 days, with
     the 6 waiting for review in the last 2 days.

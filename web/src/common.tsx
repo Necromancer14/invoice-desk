@@ -27,6 +27,13 @@ export const when = (iso: string | null | undefined) => (iso ? new Date(iso).toL
 /** A calendar date. Plain YYYY-MM-DD values are read as that day, not as UTC midnight shifted into local time. */
 export const day = (iso: string | null | undefined) =>
   iso ? new Date(iso).toLocaleDateString(loc(), { dateStyle: "medium", ...(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? { timeZone: "UTC" } : {}) }) : "–";
+/** A large amount in short form, "1.38M SAR", for a figure tile. The full amount goes in a title or nearby text. */
+export const compactMoney = (n: number, cur: string) =>
+  `${n.toLocaleString(loc(), { notation: "compact", maximumFractionDigits: n >= 1e6 ? 2 : 1 })} ${cur}`;
+/** "Monday 9 November", in the active language. */
+export const longDay = (d: Date = new Date()) => d.toLocaleDateString(loc(), { weekday: "long", day: "numeric", month: "long" });
+/** True while the page is laid out right to left. */
+export const isRtl = () => fmtLang === "ar";
 export const pct = (n: number | null | undefined, d = 0) =>
   n == null ? "–" : n.toLocaleString(loc(), { style: "percent", minimumFractionDigits: d, maximumFractionDigits: d });
 const unit = (n: number, u: "second" | "minute" | "hour") => n.toLocaleString(loc(), { style: "unit", unit: u, unitDisplay: "short", maximumFractionDigits: 1 });

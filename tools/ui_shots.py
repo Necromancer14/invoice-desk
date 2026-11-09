@@ -2,8 +2,9 @@
 
     py tools/ui_shots.py OUT_DIR [base_url]      (default http://127.0.0.1:8000; start the server with an empty database)
 
-Resets the demo data, loads the 20 welcome samples and runs the built-in evaluation, then saves
-OUT_DIR/<nn>-<page>-<lang>-<theme>.jpg. Used for docs/ui/before and docs/ui/after.
+Resets the demo data, loads the sample invoices (the 20 welcome samples and the 30-day history) and runs the built-in
+evaluation, then saves OUT_DIR/<nn>-<page>-<lang>-<theme>.jpg. Used for docs/ui/before and docs/ui/after.
+Headless Chromium has no PDF viewer, so a PDF original shows as a blank pane in these shots; in a browser it renders.
 """
 import sys
 from pathlib import Path
@@ -62,15 +63,21 @@ with sync_playwright() as pw:
         page.wait_for_selector(".welcome")
         shot(page, "01-welcome", lang, theme)
     api(page, "POST", "/samples/demo", {})
-    page.wait_for_function("""async () => { const r = await fetch('/api/stats', { headers: { Authorization: 'Bearer ' + localStorage.getItem('id-token') } });
-        const s = await r.json(); return s.total > 0 && s.by_status.queued + s.by_status.processing === 0; }""", timeout=30000, polling=1000)
+    # Polled from here: wait_for_function treats the promise an async predicate returns as true and would not wait.
+    for _ in range(240):  # the sample history is read one invoice at a time
+        s = api(page, "GET", "/stats", None)
+        if s["total"] > 0 and s["by_status"]["queued"] + s["by_status"]["processing"] == 0:
+            break
+        page.wait_for_timeout(500)
     job = api(page, "POST", "/evaluation/run", {"mode": "rules"})["job"]
-    page.wait_for_function("""async (j) => { const r = await fetch('/api/evaluation/jobs/' + j, { headers: { Authorization: 'Bearer ' + localStorage.getItem('id-token') } });
-        return (await r.json()).status !== 'running'; }""", arg=job, timeout=120000, polling=1000)
+    for _ in range(240):
+        if api(page, "GET", f"/evaluation/jobs/{job}", None)["status"] != "running":
+            break
+        page.wait_for_timeout(500)
     for lang, theme in COMBOS:
         prefs(page, lang, theme)
         page.wait_for_selector(".nav")
-        go(page, "dashboard"); page.wait_for_selector(".strip"); shot(page, "02-dashboard", lang, theme)
+        go(page, "dashboard"); page.wait_for_selector(".oc-plot"); page.wait_for_timeout(500); shot(page, "02-dashboard", lang, theme)
         go(page, "intake"); shot(page, "03-intake", lang, theme)
         go(page, "runs"); page.wait_for_selector("tbody tr"); shot(page, "04-runs", lang, theme)
         page.locator("tbody tr", has=page.locator(".s-needs_review")).first.click()

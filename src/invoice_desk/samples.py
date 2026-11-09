@@ -55,7 +55,7 @@ def history_set(root: Path = SAMPLES) -> list[dict]:
 
 
 def demo_plan(end: datetime, now: datetime, history: bool = True, seed: int = 7, root: Path = SAMPLES) -> list[dict]:
-    """The demo load in date order: history spread over days 8 to 29 before `end`, then the welcome set over the last 7
+    """The demo load in date order: history spread over days 2 to 29 before `end`, and the welcome set over the last 7
     days with the invoices that go to review in the last 2. Each item: file, at (UTC), and for history a decision a
     demo reviewer takes if the invoice lands in review (an invoice the reader could not read is never approved).
     Nothing is later than `now`."""
@@ -74,7 +74,7 @@ def demo_plan(end: datetime, now: datetime, history: bool = True, seed: int = 7,
         rng.shuffle(hist)
         first = HISTORY_DAYS - 1  # day 29 before today is the first day of a 30-day window that ends today
         for n, item in enumerate(hist):
-            back = first - round(n * (first - 8) / max(1, len(hist) - 1))
+            back = first - round(n * (first - 2) / max(1, len(hist) - 1))
             reject = item["scenario"] in REJECT_SCENARIOS
             plan.append(dict(file=item["file"], at=at(back), decide=dict(
                 decision="reject" if reject else "approve", actor=DEMO_REVIEWERS[n % 2],

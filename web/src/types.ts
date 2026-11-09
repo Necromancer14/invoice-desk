@@ -46,6 +46,24 @@ export interface Stats {
   avg_extract_ms: number | null; avg_time_to_review_s: number | null; tokens_in: number; tokens_out: number; cost: number | null;
   ai_runs: number; top_failing: { rule: string; count: number }[]; series: { day: string; count: number }[]; rules_version: number;
   top_rejections: { reason: string; count: number }[]; source: "upload" | "evaluation" | "all"; uploads: number;
+  period?: Period;
+}
+/** Figures for one window of days. Values are SAR only; invoices in other currencies are counted, not converted. */
+export interface PeriodFigures {
+  received: number; approved: number; approved_human: number; waiting: number; rejected: number;
+  auto_approve_rate: number | null; avg_time_to_review_s: number | null;
+  value: { approved: number; waiting: number; rejected: number }; other_currency: number;
+}
+export interface PeriodDay { day: string; auto: number; person: number; review: number; rejected: number; value: number }
+export interface Period {
+  days: number; start: string; end: string; current: PeriodFigures; previous: PeriodFigures; series: PeriodDay[];
+  top_failing: { rule: string; count: number }[]; top_rejections: { reason: string; count: number }[];
+  insight: { rule: string; current: number; previous: number } | null;
+  waiting: QueueItem[]; waiting_count: number; waiting_value: number; high_risk: number;
+  due_soon: { count: number; value: number; other_currency: number };
+}
+export interface Activity extends AuditRow {
+  run: { seller_name: string | null; invoice_number: string | null; total: number | null; currency: string | null; filename: string } | null;
 }
 export interface Rule {
   key: string; name: string; type: string; params: Record<string, unknown>; severity: Severity; enabled: boolean; message: string;

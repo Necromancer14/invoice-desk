@@ -157,21 +157,38 @@ def reasons_in_arabic(page: Page) -> None:
 
 
 def dashboard_layout(page: Page) -> None:
-    """Dashboard: one headline figure before the status bar; a single busy day draws as one bar with its count,
-    the empty days as faint ticks, on a scale whose halfway mark is a whole number."""
+    """Dashboard: a greeting that says what needs a person; four figures; the headline share before the status bar;
+    invoices per day as stacked areas whose legend hides a series and whose columns show a day; a single busy day on a
+    scale with a whole-number halfway mark; the period switch changes the window and is remembered."""
     sign_in(page)
     load_samples(page, ["inv-003.txt", "inv-016.pdf", "inv-089.txt"])
-    page.evaluate("location.hash = '#/dashboard'; location.reload()")
-    page.wait_for_selector(".dc-plot")
+    page.evaluate("localStorage.setItem('id-period', '7'); location.hash = '#/dashboard'; location.reload()")
+    page.wait_for_selector(".oc-plot")
+    check("dashboard: greeting names the signed-in user", "demo-admin" in page.locator(".greet h1").inner_text())
+    line = page.locator(".greet-line").inner_text()
+    check("dashboard: greeting says what needs a person", "need" in line or "Nothing is waiting" in line, line)
+    check("dashboard: four figure tiles", page.locator(".tile").count() == 4)
     order = page.evaluate("""() => { const h = document.querySelector('.headline'), s = document.querySelector('.strip');
         return !!h && !!s && (h.compareDocumentPosition(s) & Node.DOCUMENT_POSITION_FOLLOWING) > 0; }""")
     check("dashboard: headline figure comes before the status bar", order)
-    check("dashboard: one bar for the one busy day", page.locator(".dc-bar").count() == 1)
-    val = page.locator(".dc-val").inner_text().strip()
-    check("dashboard: the busy day is labelled with its count", val == "3", val)
-    check("dashboard: empty days drawn as ticks", page.locator(".dc-col.zero").count() == 13)
+    check("dashboard: one area per outcome", page.locator(".oc-area").count() == 4)
     top, mid = page.locator(".dc-tick.top").inner_text(), page.locator(".dc-tick.mid").inner_text()
     check("dashboard: scale has a whole-number halfway mark", top == "4" and mid == "2", f"{top} / {mid}")
+    page.locator(".oc-key").first.click()
+    check("dashboard: the legend hides a series", page.locator(".oc-area").count() == 3
+          and page.locator(".oc-key").first.get_attribute("aria-pressed") == "false")
+    page.locator(".oc-key").first.click()
+    page.locator(".oc-cols > div").last.hover()
+    expect(page.locator(".oc-tip")).to_be_visible()
+    check("dashboard: a day shows its counts", "Approved automatically" in page.locator(".oc-tip").inner_text())
+    check("dashboard: 7 days drawn", page.locator(".oc-cols > div").count() == 7)
+    page.locator(".page-head .seg").first.locator("button").nth(1).click()
+    expect(page.locator(".oc-cols > div")).to_have_count(30)
+    check("dashboard: period is remembered", page.evaluate("localStorage.getItem('id-period')") == "30")
+    check("dashboard: waiting list opens an invoice", page.locator(".wl li").count() >= 1)
+    page.locator(".wl li .btn").first.click()
+    expect(page.locator(".rq")).to_be_visible()
+    check("dashboard: Open goes to the review queue", page.evaluate("location.hash").startswith("#/review/"))
 
 
 def runs_sorting(page: Page) -> None:
@@ -402,11 +419,18 @@ def demo_start(page: Page) -> None:
     page.get_by_role("button", name="تحميل فواتير نموذجية").click()
     expect(page.locator(".strip")).to_be_visible(timeout=20000)
     page.wait_for_function("document.querySelectorAll('.hbar.bad').length > 0", timeout=20000)
-    s = api(page, "GET", "/stats", None)["body"]
+    for _ in range(120):  # the sample history is read one invoice at a time
+        s = api(page, "GET", "/stats", None)["body"]
+        if s["by_status"]["queued"] + s["by_status"]["processing"] == 0:
+            break
+        time.sleep(0.5)
     b = s["by_status"]
-    check("Sample set is a mix", (b["approved"], b["needs_review"], b["rejected"]) == (11, 6, 3), b)
+    check("Sample set is a mix with a history", b["needs_review"] == 6 and b["approved"] > 11 and b["approved_human"] > 0
+          and b["rejected"] + b["rejected_human"] > 3, b)
+    check("Sample history covers 30 days", api(page, "GET", "/stats?days=30", None)["body"]["period"]["current"]["received"] == s["total"])
     check("Top rejection reasons are listed", page.locator(".hbar.bad").count() >= 2)
-    page.locator(".page-head .seg button").nth(1).click()
+    check("Activity feed lists what people did", page.locator(".feed li").count() >= 2)
+    page.locator(".page-head .seg").last.locator("button").nth(1).click()
     expect(page.locator("main .empty h3")).to_contain_text("لا توجد عمليات تقييم", timeout=10000)
     check("Evaluation source starts empty", page.locator(".strip").count() == 0)
     page.evaluate("location.hash = '#/settings'")

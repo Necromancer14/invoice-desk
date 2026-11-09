@@ -18,5 +18,12 @@
   "{done} of {n} invoices evaluated": {"one": "{done} of {n} invoice evaluated", "other": "{done} of {n} invoices evaluated"},
   "{n} not reached": {"one": "{n} not reached", "other": "{n} not reached"},
   "Waiting for {n} seconds": {"one": "Waiting for {n} second", "other": "Waiting for {n} seconds"},
-  "{n} rows were not imported": {"one": "{n} row was not imported", "other": "{n} rows were not imported"}
+  "{n} rows were not imported": {"one": "{n} row was not imported", "other": "{n} rows were not imported"},
+  "{n} invoices need a person": {"one": "{n} invoice needs a person", "other": "{n} invoices need a person"},
+  "{n} marked high risk": {"one": "{n} marked high risk", "other": "{n} marked high risk"},
+  "{n} pts": {"one": "{n} pt", "other": "{n} pts"},
+  "{n} waiting in all": {"one": "{n} waiting in all", "other": "{n} waiting in all"},
+  "plus {n} invoices in other currencies": {"one": "plus {n} invoice in another currency", "other": "plus {n} invoices in other currencies"},
+  "Reading {n} invoices…": {"one": "Reading {n} invoice…", "other": "Reading {n} invoices…"},
+  "“{rule}” failed {n} times in this period, against {m} in the period before.": {"one": "“{rule}” failed once in this period, against {m} in the period before.", "other": "“{rule}” failed {n} times in this period, against {m} in the period before."}
 }

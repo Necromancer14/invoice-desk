@@ -44,7 +44,7 @@ def test_plan_is_in_date_order_inside_30_days_and_never_in_the_future():
     waiting = [p for p in welcome if ANSWERS[p["file"]]["expected_status"] == "needs_review"]
     assert all((END.date() - p["at"].date()).days <= 1 for p in waiting)
     history = [p for p in plan if p["file"] not in DEMO_SET]
-    assert all(8 <= (END.date() - p["at"].date()).days <= 29 for p in history)
+    assert all(2 <= (END.date() - p["at"].date()).days <= 29 for p in history)
     assert {p["decide"]["actor"] for p in history} == set(DEMO_REVIEWERS)
     assert demo_plan(END, NOW) == plan                                   # the same every time
     assert len(demo_plan(END, NOW, history=False)) == 20
@@ -104,7 +104,10 @@ def test_period_figures_and_previous_window(demo):
     assert by["rejected"] == c["rejected"] and sum(by.values()) == c["received"]
     assert c["avg_time_to_review_s"] and c["avg_time_to_review_s"] > 0
     p7 = d.stats("upload", 7)["period"]
-    assert p7["current"]["received"] == 20 and p7["previous"]["received"] > 0
+    week = sum(1 for p in plan if (END.date() - p["at"].date()).days < 7)
+    assert week > 20 and p7["current"]["received"] == week and p7["previous"]["received"] > 0
+    assert p7["current"]["approved_human"] + p7["current"]["rejected"] > 0       # the last week has decisions too
+    assert p7["current"]["avg_time_to_review_s"] is not None
     assert p7["waiting_count"] == 6 and len(p7["waiting"]) == 5
     assert [w["id"] for w in p7["waiting"]] == sorted(w["id"] for w in p7["waiting"])
     assert p7["waiting"][0]["created_at"] <= p7["waiting"][-1]["created_at"]
@@ -134,7 +137,11 @@ def test_insight_names_the_rule_that_rose_most(desk):
     bad = GOOD.replace("VAT (15%): 150.00 SAR", "VAT (15%): 100.00 SAR").replace("1,150.00", "1,100.00")
     for n in range(3):
         desk.submit(f"v{n}.txt", bad.replace("ACM-2026-0001", f"ACM-2026-01{n}").encode(), "text/plain", "r")
+    assert desk.stats("upload", 7)["period"]["insight"] is None           # nothing before to compare with
+    old = desk.submit("old.txt", GOOD.replace("ACM-2026-0001", "ACM-2026-0900").encode(), "text/plain", "r")
+    desk._backdate(old, datetime(2026, 10, 25, 9, tzinfo=timezone.utc))
     p = desk.stats("upload", 7)["period"]
+    assert p["previous"]["received"] == 1
     assert p["insight"] and p["insight"]["current"] - p["insight"]["previous"] >= 2
     assert p["insight"]["rule"] in {f["rule"] for f in p["top_failing"]}
     one = Desk(":memory:", today=TODAY, sync=True)
@@ -158,7 +165,7 @@ def test_activity_shows_what_people_did_newest_first(demo, auth):
     assert rows and all(a["action"] in Desk.ACTIVITY for a in rows)
     assert [a["ts"] for a in rows] == sorted((a["ts"] for a in rows), reverse=True)
     reviews = [a for a in rows if a["action"].startswith("review.")]
-    assert reviews and all(a["run"] and "seller_name" in a["run"] for a in reviews)
+    assert reviews and all(a["run"] and "seller_name" in a["run"] and a["run"]["filename"] for a in reviews)
     assert len(d.activity(3)) == 3
     c = TestClient(create_app(d, auth))
     v = {"Authorization": "Bearer " + c.post("/api/auth/demo", json={"role": "viewer"}).json()["token"]}

@@ -897,7 +897,8 @@ class Desk:
             b["value"] += self._sar(r) or 0.0
         now_f, then_f = self._fails(cur), self._fails(prev)
         rising = sorted(((k, n, then_f.get(k, 0)) for k, n in now_f.items()), key=lambda x: (x[2] - x[1], x[0]))
-        insight = next((dict(rule=k, current=n, previous=p) for k, n, p in rising if n - p >= 2), None)
+        # only against a window that had invoices: a rise from an empty window says nothing about the rule
+        insight = next((dict(rule=k, current=n, previous=p) for k, n, p in rising if n - p >= 2), None) if prev else None
         reasons: Counter = Counter()
         for r in cur:
             if r["status"] == "rejected_human":
@@ -940,10 +941,10 @@ class Desk:
         for a in rows:
             a["run"] = None
             if a["action"].startswith("review.") and a["target"].isdigit():
-                r = self.db.one("SELECT fields, final_fields FROM runs WHERE id=?", (int(a["target"]),))
+                r = self.db.one("SELECT filename, fields, final_fields FROM runs WHERE id=?", (int(a["target"]),))
                 if r:
                     f = self._current_fields(r) or {}
-                    a["run"] = {k: f.get(k) for k in ("seller_name", "invoice_number", "total", "currency")}
+                    a["run"] = dict({k: f.get(k) for k in ("seller_name", "invoice_number", "total", "currency")}, filename=r["filename"])
         return rows
 
     def audit_log(self, limit: int = 200, actor: str | None = None, action: str | None = None) -> list[dict]:
