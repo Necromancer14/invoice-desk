@@ -1,0 +1,178 @@
+"""Demo history (sample invoices dated over 30 days), period figures for the dashboard, and the activity feed."""
+from collections import Counter
+from datetime import date, datetime, timedelta, timezone
+
+import pytest
+from fastapi.testclient import TestClient
+
+from invoice_desk.api import create_app
+from invoice_desk.desk import Desk, DeskError
+from invoice_desk.samples import DEMO_REVIEWERS, DEMO_SET, demo_plan, history_set, load_answers, sample_bytes
+from conftest import GOOD, TODAY
+
+END = datetime(2026, 11, 5, tzinfo=timezone.utc)
+NOW = datetime(2026, 11, 5, 15, 0, tzinfo=timezone.utc)
+ANSWERS = {i["file"]: i for i in load_answers()["invoices"]}
+
+
+@pytest.fixture(scope="module")
+def demo():
+    d = Desk(":memory:", today=TODAY, sync=True, seed_vendors=True)
+    plan = demo_plan(END, NOW)
+    ids = d.load_demo("demo-admin", plan, sample_bytes)
+    return d, plan, ids
+
+
+def test_history_set_cannot_turn_a_welcome_invoice_into_a_duplicate():
+    hist = history_set()
+    files = {i["file"] for i in hist}
+    assert len(hist) > 40 and not files & set(DEMO_SET)
+    assert not any(i["vision_only"] or i["scenario"] == "duplicate" for i in hist)
+    copied = {ANSWERS[f].get("copy_of") for f in DEMO_SET} - {None}
+    assert copied and not copied & {i["id"] for i in hist}
+
+
+def test_plan_is_in_date_order_inside_30_days_and_never_in_the_future():
+    plan = demo_plan(END, NOW)
+    ats = [p["at"] for p in plan]
+    assert ats == sorted(ats) and max(ats) <= NOW
+    first_day = (END - timedelta(days=29)).date()
+    assert min(ats).date() >= first_day
+    welcome = [p for p in plan if p["file"] in DEMO_SET]
+    assert len(welcome) == 20 and all(p["decide"] is None for p in welcome)
+    assert all((END.date() - p["at"].date()).days <= 6 for p in welcome)
+    waiting = [p for p in welcome if ANSWERS[p["file"]]["expected_status"] == "needs_review"]
+    assert all((END.date() - p["at"].date()).days <= 1 for p in waiting)
+    history = [p for p in plan if p["file"] not in DEMO_SET]
+    assert all(8 <= (END.date() - p["at"].date()).days <= 29 for p in history)
+    assert {p["decide"]["actor"] for p in history} == set(DEMO_REVIEWERS)
+    assert demo_plan(END, NOW) == plan                                   # the same every time
+    assert len(demo_plan(END, NOW, history=False)) == 20
+
+
+def test_plan_stays_before_now_early_in_the_day():
+    early = END + timedelta(hours=1)                                     # 04:00 in Riyadh, before working hours
+    assert max(p["at"] for p in demo_plan(END, early)) <= early
+
+
+def test_demo_load_keeps_the_welcome_mix_and_decides_the_history(demo):
+    d, plan, ids = demo
+    runs = {i: d.get_run(i) for i in ids}
+    welcome = Counter(runs[i]["status"] for i, p in zip(ids, plan) if p["file"] in DEMO_SET)
+    assert welcome == {"approved": 11, "needs_review": 6, "rejected": 3}
+    history = [runs[i] for i, p in zip(ids, plan) if p["file"] not in DEMO_SET]
+    assert not any(r["status"] in ("needs_review", "queued", "processing") for r in history)
+    people = [r for r in history if r["status"] in ("approved_human", "rejected_human")]
+    assert people and {r["decision_by"] for r in people} <= set(DEMO_REVIEWERS)
+    assert all(r["decision_note"] for r in people if r["status"] == "rejected_human")
+    for r in people:                                                     # a person never approves an unreadable invoice
+        if r["status"] == "approved_human":
+            assert r["fields"]["seller_name"] and r["fields"]["total"] is not None
+    assert len(d.review_queue()) == 6
+
+
+def test_demo_runs_carry_their_planned_dates(demo):
+    d, plan, ids = demo
+    created = []
+    for rid, p in zip(ids, plan):
+        r = d.get_run(rid)
+        assert r["created_at"] == p["at"].isoformat(timespec="seconds")
+        assert r["trace"][0]["at"] == r["created_at"]
+        if r["status"] in ("approved_human", "rejected_human"):
+            assert r["created_at"] < r["decided_at"] and r["trace"][-1]["at"] == r["decided_at"]
+        elif r["decided_at"]:
+            assert r["decided_at"][:10] == r["created_at"][:10]
+        created.append(r["created_at"])
+    assert created == sorted(created)                                    # ids follow dates
+    reviews = [a for a in d.audit_log(1000) if a["action"].startswith("review.")]
+    assert reviews and all(a["ts"] == d.get_run(int(a["target"]))["decided_at"] for a in reviews)
+    submits = [a for a in d.audit_log(1000) if a["action"] == "run.submit"]
+    assert all(a["ts"] == d.get_run(int(a["target"]))["created_at"] for a in submits)
+
+
+def test_period_figures_and_previous_window(demo):
+    d, plan, ids = demo
+    p30 = d.stats("upload", 30)["period"]
+    assert (p30["days"], p30["start"], p30["end"]) == (30, "2026-10-07", "2026-11-05")
+    assert p30["current"]["received"] == len(ids) and p30["previous"]["received"] == 0
+    assert len(p30["series"]) == 30 and p30["series"][-1]["day"] == "2026-11-05"
+    by = Counter()
+    for x in p30["series"]:
+        by.update({k: x[k] for k in ("auto", "person", "review", "rejected")})
+    c = p30["current"]
+    assert by["auto"] == c["approved"] and by["person"] == c["approved_human"] and by["review"] == c["waiting"] == 6
+    assert by["rejected"] == c["rejected"] and sum(by.values()) == c["received"]
+    assert c["avg_time_to_review_s"] and c["avg_time_to_review_s"] > 0
+    p7 = d.stats("upload", 7)["period"]
+    assert p7["current"]["received"] == 20 and p7["previous"]["received"] > 0
+    assert p7["waiting_count"] == 6 and len(p7["waiting"]) == 5
+    assert [w["id"] for w in p7["waiting"]] == sorted(w["id"] for w in p7["waiting"])
+    assert p7["waiting"][0]["created_at"] <= p7["waiting"][-1]["created_at"]
+    assert p7["waiting_value"] == round(sum(w["total"] for w in d.review_queue() if w["currency"] == "SAR"), 2)
+    assert p7["high_risk"] == sum(1 for w in d.review_queue() if w["high_risk"])
+
+
+def test_money_is_summed_in_sar_and_other_currencies_are_counted(desk):
+    desk.submit("a.txt", GOOD.encode(), "text/plain", "r")
+    usd = GOOD.replace("ACM-2026-0001", "ACM-2026-0002").replace("Currency: SAR", "Currency: USD").replace(" SAR", " USD")
+    desk.submit("b.txt", usd.encode(), "text/plain", "r")
+    p = desk.stats("upload", 7)["period"]
+    assert p["current"]["value"]["approved"] == 1150.0
+    assert p["current"]["other_currency"] == 1
+
+
+def test_due_soon_counts_approved_invoices_due_within_a_week(desk):
+    soon = GOOD.replace("Due Date: 2026-11-01", "Due Date: 2026-11-09")
+    late = GOOD.replace("ACM-2026-0001", "ACM-2026-0003").replace("Due Date: 2026-11-01", "Due Date: 2026-12-20")
+    desk.submit("a.txt", soon.encode(), "text/plain", "r")
+    desk.submit("b.txt", late.encode(), "text/plain", "r")
+    due = desk.stats("upload", 30)["period"]["due_soon"]
+    assert due == {"count": 1, "value": 1150.0, "other_currency": 0}
+
+
+def test_insight_names_the_rule_that_rose_most(desk):
+    bad = GOOD.replace("VAT (15%): 150.00 SAR", "VAT (15%): 100.00 SAR").replace("1,150.00", "1,100.00")
+    for n in range(3):
+        desk.submit(f"v{n}.txt", bad.replace("ACM-2026-0001", f"ACM-2026-01{n}").encode(), "text/plain", "r")
+    p = desk.stats("upload", 7)["period"]
+    assert p["insight"] and p["insight"]["current"] - p["insight"]["previous"] >= 2
+    assert p["insight"]["rule"] in {f["rule"] for f in p["top_failing"]}
+    one = Desk(":memory:", today=TODAY, sync=True)
+    one.submit("a.txt", GOOD.encode(), "text/plain", "r")
+    assert one.stats("upload", 7)["period"]["insight"] is None
+
+
+def test_period_must_be_7_30_or_90(desk, auth):
+    with pytest.raises(DeskError):
+        desk.stats("upload", 14)
+    assert "period" not in desk.stats("upload")
+    c = TestClient(create_app(desk, auth))
+    v = {"Authorization": "Bearer " + c.post("/api/auth/demo", json={"role": "viewer"}).json()["token"]}
+    assert c.get("/api/stats?days=14", headers=v).status_code == 400
+    assert c.get("/api/stats?days=90", headers=v).json()["period"]["days"] == 90
+
+
+def test_activity_shows_what_people_did_newest_first(demo, auth):
+    d, _, _ = demo
+    rows = d.activity(50)
+    assert rows and all(a["action"] in Desk.ACTIVITY for a in rows)
+    assert [a["ts"] for a in rows] == sorted((a["ts"] for a in rows), reverse=True)
+    reviews = [a for a in rows if a["action"].startswith("review.")]
+    assert reviews and all(a["run"] and "seller_name" in a["run"] for a in reviews)
+    assert len(d.activity(3)) == 3
+    c = TestClient(create_app(d, auth))
+    v = {"Authorization": "Bearer " + c.post("/api/auth/demo", json={"role": "viewer"}).json()["token"]}
+    assert len(c.get("/api/activity?limit=4", headers=v).json()) == 4
+    assert c.get("/api/activity").status_code == 401
+
+
+def test_api_demo_load_with_history(auth):
+    d = Desk(":memory:", today=TODAY, sync=True, seed_vendors=True)
+    c = TestClient(create_app(d, auth, rate_limit=1000))
+    r = {"Authorization": "Bearer " + c.post("/api/auth/demo", json={"role": "reviewer"}).json()["token"]}
+    body = c.post("/api/samples/demo", headers=r).json()
+    assert len(body["welcome"]) == 20 and len(body["ids"]) == 20 + len(history_set())
+    assert set(body["welcome"]) <= set(body["ids"])
+    assert d.stats("upload")["review_queue"] == 6
+    assert d.activity(1)[0]["action"] == "demo.samples"
+    assert date.fromisoformat(d.list_runs(limit=1)["items"][0]["created_at"][:10]) <= TODAY

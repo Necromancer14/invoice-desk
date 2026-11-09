@@ -442,7 +442,8 @@ class Desk:
 
     # ----------------------------------------------------------------- intake
     def submit(self, filename: str, blob: bytes, content_type: str | None, actor: str, mode: str | None = None,
-               llm: dict | None = None, source: str = "upload") -> int:
+               llm: dict | None = None, source: str = "upload", defer: bool = False) -> int:
+        """defer: store the run as queued and leave processing to the caller (the demo loader does, in date order)."""
         filename = clean_filename(filename)
         ctype = guess_type(filename, content_type)
         if ctype not in ALLOWED_TYPES:
@@ -471,6 +472,8 @@ class Desk:
                           " VALUES(?,?,?,?,?,?,?,?,?,?,?)", (filename, ctype, blob, source, len(blob), "queued", mode, t, t, actor, "[]"))
         rid = cur.lastrowid
         self.audit(actor, "run.submit", str(rid), f"{filename} ({mode})")
+        if defer:
+            return rid
         if self.sync:
             self.process(rid, llm)
         else:
@@ -701,6 +704,61 @@ class Desk:
         else:
             self.pool.submit(self.process, rid, llm)
 
+    # ------------------------------------------------------------- demo load
+    def load_demo(self, actor: str, plan: list[dict], read) -> list[int]:
+        """Load sample invoices with a history. plan: items in date order (see samples.demo_plan), read(file) -> bytes.
+        Every run is stored first, then one job reads them in order through the built-in reader, takes the demo
+        reviewer's decision where a history invoice lands in review, and moves the run's timestamps to its planned
+        date. In date order the duplicate check sees the same invoices it would have seen on those days."""
+        ids = [self.submit(p["file"], read(p["file"]), None, actor, "rules", None, source="upload", defer=True) for p in plan]
+
+        def work() -> None:
+            for rid, p in zip(ids, plan):
+                self.process(rid)  # handles its own errors: a run that cannot be read ends as failed
+                d = p.get("decide")
+                after = None
+                row = self.db.one("SELECT status FROM runs WHERE id=?", (rid,))
+                if not row:  # the demo was reset while loading
+                    continue
+                try:
+                    if d and row["status"] == "needs_review":
+                        decision, note = d["decision"], d.get("note", "")
+                        f = self.get_run(rid)["fields"] or {}
+                        if decision == "approve" and not (f.get("seller_name") and f.get("total") is not None):
+                            decision, note = "reject", d.get("unreadable_note") or "Could not be read"
+                        self.review(rid, decision, d["actor"], note=note)
+                        after = d["after"]
+                    self._backdate(rid, p["at"], after)
+                except DeskError:  # the run was reset or changed meanwhile; leave it as it is and carry on
+                    continue
+        if self.sync:
+            work()
+        else:
+            self.pool.submit(work)
+        return ids
+
+    def _backdate(self, rid: int, at: datetime, decided_after: timedelta | None = None) -> None:
+        """Move a run, its trace and its audit rows so it was received at `at`. A person's decision is put
+        `decided_after` later (never past the present); an automatic one keeps its few seconds."""
+        r = self.db.one("SELECT created_at, decided_at, trace FROM runs WHERE id=?", (rid,))
+        shift = at - datetime.fromisoformat(r["created_at"])
+
+        def moved(stamp: str | None) -> str | None:
+            return (datetime.fromisoformat(stamp) + shift).isoformat(timespec="seconds") if stamp else stamp
+        human = None
+        if decided_after is not None:
+            human = min(at + decided_after, datetime.now(timezone.utc)).isoformat(timespec="seconds")
+        trace = loads(r["trace"], []) or []
+        for step in trace:
+            step["at"] = human if human and step.get("step") == "human review" else moved(step.get("at"))
+        decided = human or moved(r["decided_at"])
+        self.db.run("UPDATE runs SET created_at=?, updated_at=?, decided_at=?, trace=? WHERE id=?",
+                    (at.isoformat(timespec="seconds"), decided or at.isoformat(timespec="seconds"), decided, dumps(trace), rid))
+        for a in self.db.all("SELECT id, ts, action FROM audit WHERE target=? AND (action LIKE 'run.%' OR action LIKE 'review.%')",
+                             (str(rid),)):
+            ts = human if human and a["action"].startswith("review.") else moved(a["ts"])
+            self.db.run("UPDATE audit SET ts=? WHERE id=?", (ts, a["id"]))
+
     # ------------------------------------------------------------------ stats
     def clear_evaluation_runs(self) -> int:
         """Remove the runs kept from earlier evaluations; uploads are never touched."""
@@ -716,10 +774,14 @@ class Desk:
                         tuple(r.get(c) for c in cols))
         return len(runs)
 
-    def stats(self, source: str | None = None) -> dict:
-        """source: upload or evaluation; anything else counts every run. The review queue is always uploads only."""
+    def stats(self, source: str | None = None, days: int | None = None) -> dict:
+        """source: upload or evaluation; anything else counts every run. The review queue is always uploads only.
+        days: also return a `period` block for the last `days` days against the same length before (7, 30 or 90)."""
+        if days is not None and days not in self.PERIODS:
+            raise DeskError(f"days must be one of {', '.join(map(str, self.PERIODS))}")
+        period_days = days
         where = "WHERE source=?" if source in SOURCES else ""
-        rows = self.db.all(f"SELECT id,status,mode,created_at,decided_at,results,extraction,edited FROM runs {where}",
+        rows = self.db.all(f"SELECT id,status,mode,created_at,decided_at,results,extraction,edited,fields,final_fields FROM runs {where}",
                            (source,) if where else ())
         by_status = Counter(r["status"] for r in rows)
         s = self.settings()
@@ -747,7 +809,7 @@ class Desk:
             if r["status"] in ("approved_human", "rejected_human") and r["decided_at"]:
                 ttr.append((datetime.fromisoformat(r["decided_at"]) - datetime.fromisoformat(r["created_at"])).total_seconds())
         machine_done = sum(by_status[k] for k in ("approved", "rejected", "needs_review", "approved_human", "rejected_human"))
-        end = date.today()
+        end = self._today()
         series = [dict(day=(end - timedelta(days=i)).isoformat(), count=days.get((end - timedelta(days=i)).isoformat(), 0)) for i in range(13, -1, -1)]
         cost = None
         if s["price_in_per_mtok"] != "" and s["price_out_per_mtok"] != "":
@@ -764,7 +826,125 @@ class Desk:
                     tokens_in=tin, tokens_out=tout, cost=cost, ai_runs=sum(1 for r in rows if r["mode"] == "ai"),
                     top_failing=[dict(rule=k, count=v) for k, v in failing.most_common(6)],
                     top_rejections=[dict(reason=k, count=v) for k, v in reasons.most_common(6)], series=series,
-                    rules_version=self.rules_version())
+                    rules_version=self.rules_version(), **({"period": self._period(rows, period_days)} if period_days else {}))
+
+    PERIODS = (7, 30, 90)
+    _OUTCOME = {"approved": "auto", "approved_human": "person", "needs_review": "review", "rejected": "rejected",
+                "rejected_human": "rejected", "failed": "rejected"}
+    _VALUE = {"approved": "approved", "approved_human": "approved", "needs_review": "waiting", "rejected": "rejected",
+              "rejected_human": "rejected"}
+
+    def _sar(self, r: dict) -> float | None:
+        """The invoice total when it is in SAR, else None. Other currencies are counted, never converted."""
+        f = self._current_fields(r) or {}
+        total = f.get("total")
+        if (f.get("currency") or "").strip().upper() != "SAR" or isinstance(total, bool) or not isinstance(total, (int, float)):
+            return None
+        return float(total)
+
+    def _figures(self, rows: list[dict]) -> dict:
+        c = Counter(r["status"] for r in rows)
+        done = sum(c[k] for k in ("approved", "rejected", "needs_review", "approved_human", "rejected_human"))
+        value = {"approved": 0.0, "waiting": 0.0, "rejected": 0.0}
+        other = 0
+        for r in rows:
+            key = self._VALUE.get(r["status"])
+            if not key:
+                continue
+            v = self._sar(r)
+            if v is None:
+                other += 1
+            else:
+                value[key] += v
+        ttr = [(datetime.fromisoformat(r["decided_at"]) - datetime.fromisoformat(r["created_at"])).total_seconds()
+               for r in rows if r["status"] in ("approved_human", "rejected_human") and r["decided_at"]]
+        return dict(received=len(rows), approved=c["approved"], approved_human=c["approved_human"], waiting=c["needs_review"],
+                    rejected=c["rejected"] + c["rejected_human"] + c["failed"],
+                    auto_approve_rate=round(c["approved"] / done, 3) if done else None,
+                    avg_time_to_review_s=int(sum(ttr) / len(ttr)) if ttr else None,
+                    value={k: round(v, 2) for k, v in value.items()}, other_currency=other)
+
+    @staticmethod
+    def _fails(rows: list[dict]) -> Counter:
+        out: Counter = Counter()
+        for r in rows:
+            for x in loads(r["results"], []) or []:
+                if x["status"] == "fail":
+                    out[x["name"]] += 1
+        return out
+
+    def _period(self, rows: list[dict], days: int) -> dict:
+        """Figures for the last `days` days (by the day each invoice arrived, today included) and for the window of the
+        same length before it, so the portal can show the change. Amounts are summed in SAR only."""
+        end = self._today()
+        start = end - timedelta(days=days - 1)
+        before = start - timedelta(days=days)
+        cur, prev = [], []
+        for r in rows:
+            d = date.fromisoformat(r["created_at"][:10])
+            if d >= start:  # a run dated after "today" (a clock set back, a fixed test date) still counts as recent
+                cur.append(r)
+            elif before <= d < start:
+                prev.append(r)
+        series = {(start + timedelta(days=i)).isoformat(): dict(auto=0, person=0, review=0, rejected=0, value=0.0)
+                  for i in range(days)}
+        for r in cur:
+            b = series.get(r["created_at"][:10])
+            if b is None:
+                continue
+            if r["status"] in self._OUTCOME:
+                b[self._OUTCOME[r["status"]]] += 1
+            b["value"] += self._sar(r) or 0.0
+        now_f, then_f = self._fails(cur), self._fails(prev)
+        rising = sorted(((k, n, then_f.get(k, 0)) for k, n in now_f.items()), key=lambda x: (x[2] - x[1], x[0]))
+        insight = next((dict(rule=k, current=n, previous=p) for k, n, p in rising if n - p >= 2), None)
+        reasons: Counter = Counter()
+        for r in cur:
+            if r["status"] == "rejected_human":
+                reasons["Rejected by a reviewer"] += 1
+            elif r["status"] == "failed":
+                reasons["Could not be processed"] += 1
+            elif r["status"] == "rejected":
+                for x in loads(r["results"], []) or []:
+                    if x["status"] == "fail" and x["severity"] == "reject":
+                        reasons[x["name"]] += 1
+        first, last = end.isoformat(), (end + timedelta(days=7)).isoformat()
+        due = [r for r in rows if r["status"] in ("approved", "approved_human")
+               and first <= (parse_date((self._current_fields(r) or {}).get("due_date") or "") or "") <= last]
+        due_sar = [self._sar(r) for r in due]
+        queue = self.review_queue()  # oldest first
+        return dict(days=days, start=start.isoformat(), end=first, current=self._figures(cur), previous=self._figures(prev),
+                    series=[dict(day=k, **{**v, "value": round(v["value"], 2)}) for k, v in series.items()],
+                    top_failing=[dict(rule=k, count=v) for k, v in now_f.most_common(6)],
+                    top_rejections=[dict(reason=k, count=v) for k, v in reasons.most_common(6)],
+                    insight=insight, waiting=queue[:5], waiting_count=len(queue),
+                    waiting_value=round(sum(v for v in (self._sar_q(q) for q in queue) if v is not None), 2),
+                    high_risk=sum(1 for q in queue if q["high_risk"]),
+                    due_soon=dict(count=len(due), value=round(sum(v for v in due_sar if v is not None), 2),
+                                  other_currency=sum(1 for v in due_sar if v is None)))
+
+    @staticmethod
+    def _sar_q(q: dict) -> float | None:
+        t = q.get("total")
+        return float(t) if (q.get("currency") or "").upper() == "SAR" and isinstance(t, (int, float)) and not isinstance(t, bool) else None
+
+    # Audit actions a person did, or would want to hear about: the dashboard's activity feed.
+    ACTIVITY = ("review.approve", "review.reject", "run.reprocess", "vendor.link", "vendor.create", "vendor.update",
+                "vendor.delete", "vendor.import", "po.import", "po.delete", "rule.update", "rule.delete", "rule.reorder",
+                "rule.rollback", "settings.update", "demo.samples", "demo.reset")
+
+    def activity(self, limit: int = 8) -> list[dict]:
+        """Recent audit rows from ACTIVITY, newest first. Review rows carry the invoice's seller, number and total."""
+        rows = self.db.all(f"SELECT * FROM audit WHERE action IN ({','.join('?' * len(self.ACTIVITY))}) "
+                           "ORDER BY ts DESC, id DESC LIMIT ?", (*self.ACTIVITY, max(1, min(limit, 50))))
+        for a in rows:
+            a["run"] = None
+            if a["action"].startswith("review.") and a["target"].isdigit():
+                r = self.db.one("SELECT fields, final_fields FROM runs WHERE id=?", (int(a["target"]),))
+                if r:
+                    f = self._current_fields(r) or {}
+                    a["run"] = {k: f.get(k) for k in ("seller_name", "invoice_number", "total", "currency")}
+        return rows
 
     def audit_log(self, limit: int = 200, actor: str | None = None, action: str | None = None) -> list[dict]:
         where, args = [], []
@@ -775,7 +955,7 @@ class Desk:
             where.append("action LIKE ?")
             args.append(action + "%")
         w = ("WHERE " + " AND ".join(where)) if where else ""
-        return self.db.all(f"SELECT * FROM audit {w} ORDER BY id DESC LIMIT ?", args + [min(limit, 1000)])
+        return self.db.all(f"SELECT * FROM audit {w} ORDER BY ts DESC, id DESC LIMIT ?", args + [min(limit, 1000)])
 
     # ----------------------------------------------------------------- export
     def export_csv(self) -> str:

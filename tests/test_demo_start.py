@@ -88,7 +88,7 @@ def test_api_welcome_set_stats_and_reset(auth):
     tok = lambda role: {"Authorization": "Bearer " + c.post("/api/auth/demo", json={"role": role}).json()["token"]}  # noqa: E731
     v, r, a = tok("viewer"), tok("reviewer"), tok("admin")
     assert c.post("/api/samples/demo", headers=v).status_code == 403
-    ids = c.post("/api/samples/demo", headers=r).json()["ids"]
+    ids = c.post("/api/samples/demo", json={"history": False}, headers=r).json()["ids"]
     assert len(ids) == 20
     got = Counter(c.get(f"/api/runs/{i}", headers=v).json()["status"] for i in ids)
     assert got == {"approved": 11, "needs_review": 6, "rejected": 3}            # the reader agrees with the answer key

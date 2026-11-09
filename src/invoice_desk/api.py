@@ -5,7 +5,7 @@ import os
 import threading
 import time
 from collections import defaultdict, deque
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
@@ -20,7 +20,7 @@ from .desk import MAX_BYTES, Desk, DeskError
 from .evaluation import ai_history, evaluate, evaluate_ai, evaluated_ids, save_ai_rows
 from .providers import ProviderError, build_extractor, public_providers
 from .rules import HELP_FUNCS, RULE_TYPES
-from .samples import DEMO_SET, list_samples, sample_bytes
+from .samples import DEMO_SET, demo_plan, list_samples, sample_bytes
 from .schema import FIELDS
 
 WEB_DIST = Path(__file__).resolve().parents[2] / "web" / "dist"
@@ -243,11 +243,15 @@ def create_app(desk: Desk | None = None, auth: Auth | None = None, rate_limit: i
         return desk.review_queue()
 
     @app.get("/api/stats")
-    def stats(source: str = "upload", user=Depends(need("viewer"))):
-        """source: upload (default), evaluation or all."""
+    def stats(source: str = "upload", days: int | None = None, user=Depends(need("viewer"))):
+        """source: upload (default), evaluation or all. days (7, 30 or 90): add figures for that period."""
         if source not in ("upload", "evaluation", "all"):
             raise HTTPException(400, "source must be upload, evaluation or all")
-        return desk.stats(source)
+        return desk.stats(source, days)
+
+    @app.get("/api/activity")
+    def activity(limit: int = 8, user=Depends(need("viewer"))):
+        return desk.activity(limit)
 
     # ------------------------------------------------------------------ rules
     @app.get("/api/rules")
@@ -335,12 +339,16 @@ def create_app(desk: Desk | None = None, auth: Auth | None = None, rate_limit: i
         return dict(ids=ids)
 
     @app.post("/api/samples/demo")
-    def samples_demo(request: Request, user=Depends(need("reviewer"))):
-        """The welcome set: 20 samples through the built-in reader, a realistic mix of approved, review and rejected."""
+    def samples_demo(request: Request, body: dict | None = None, user=Depends(need("reviewer"))):
+        """The welcome set (20 samples through the built-in reader: a realistic mix of approved, review and rejected,
+        dated over the last 7 days) and, unless body says history: false, a sample history over the 30 days before."""
         limiter.check(request.client.host if request.client else "local")
-        ids = [desk.submit(name, sample_bytes(name), None, user["sub"], "rules", None, source="upload") for name in DEMO_SET]
+        history = (body or {}).get("history", True) is not False
+        plan = demo_plan(datetime.combine(desk._today(), datetime.min.time(), tzinfo=timezone.utc), datetime.now(timezone.utc), history)
+        ids = desk.load_demo(user["sub"], plan, sample_bytes)
+        welcome = [rid for rid, p in zip(ids, plan) if p["file"] in DEMO_SET]
         desk.audit(user["sub"], "demo.samples", "", f"{len(ids)} sample invoices loaded")
-        return dict(ids=ids)
+        return dict(ids=ids, welcome=welcome)
 
     @app.get("/api/samples/{name}")
     def sample_file(name: str, user=Depends(need("viewer"))):
