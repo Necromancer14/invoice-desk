@@ -210,3 +210,17 @@ worded as measured on synthetic samples only.
 3. **Agent provider scope:** start tool calling with Anthropic and Gemini only (Gemini has a free key), or all
    providers at once?
 4. **Bulk approve:** include it at all? It speeds review but is the feature most likely to worry an auditor.
+
+### Owner decisions (10 Nov 2026)
+
+1. **Look:** keep the ledger style. Borrow Lumelle's layout and motion only. No glass, no "Showcase" theme.
+2. **Demo history:** approved. Sample invoices are dated over the last 30 days by the demo loader, and the demo note
+   says so. `answers.json` is not touched.
+3. **Agent provider scope:** tool calling starts with Gemini plus a rule-based mode that needs no key. Other
+   providers come later.
+4. **Bulk approve:** not built. Phase E drops it.
+
+Build order agreed: Phase A, then a trimmed Phase C (greeting with real counts, period switch Today / 7 / 30 / 90 days
+with change against the previous period, SAR totals for approved, waiting and rejected, stacked area chart by
+outcome, "Oldest waiting" with Open buttons, activity feed; count-up and bar motion honour reduced motion), then from
+Phase D only the per-invoice timeline in run detail.
