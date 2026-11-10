@@ -415,6 +415,7 @@ def demo_start(page: Page) -> None:
     page.reload()
     expect(page.locator(".welcome")).to_be_visible()
     check("Demo note is shown", page.locator(".demo-note").count() == 1)
+    check("Demo note says the history is spread over 30 days", "30" in page.locator(".demo-note").inner_text())
     check("Welcome card reads right-to-left", page.locator(".welcome").evaluate("e => getComputedStyle(e).direction") == "rtl")
     page.get_by_role("button", name="تحميل فواتير نموذجية").click()
     expect(page.locator(".strip")).to_be_visible(timeout=20000)

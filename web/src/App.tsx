@@ -218,7 +218,7 @@ export default function App() {
         </aside>
         <main className="main" id="main">
           {/* "Resets on restart" is only true when the database lives in memory */}
-          {health.demo && <p className="demo-note" role="note">{health.inMemory ? t("Demo with sample data. Resets on restart. Do not upload real invoices.") : t("Demo with sample data. Do not upload real invoices.")}</p>}
+          {health.demo && <p className="demo-note" role="note">{health.inMemory ? t("Demo with sample data, sample history spread over 30 days. Resets on restart. Do not upload real invoices.") : t("Demo with sample data, sample history spread over 30 days. Do not upload real invoices.")}</p>}
           {view}
         </main>
       </div>
