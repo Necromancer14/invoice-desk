@@ -1,8 +1,8 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api } from "../api";
 import type { Activity, Period, PeriodDay, Stats } from "../types";
 import {
-  Empty, Err, Head, SourceFilter, type Source, ago, can, compactMoney, day, dur, isRtl, longDay, money, num, pct, tk, useApp, useLoad,
+  Empty, Err, Head, SourceFilter, type Source, ago, can, clock, compactMoney, day, dur, isRtl, longDay, money, num, pct, tk, useApp, useLoad,
 } from "../common";
 
 /** First visit on an empty database: what this is, and two ways to see it work. */
@@ -36,9 +36,36 @@ function Welcome({ onLoaded }: { onLoaded: () => void }) {
  *  day reads as one busy day rather than a broken chart. */
 export const niceMax = (n: number) => { const m = Math.max(4, n); const p = 10 ** Math.floor(Math.log10(m)); return [1, 2, 4, 10].map((k) => k * p).find((v) => v >= m && v % 2 === 0)!; };
 
-const PERIODS = [7, 30, 90] as const;
+const PERIODS = [1, 7, 30, 90] as const;
 type Days = (typeof PERIODS)[number];
-const PERIOD_LABEL: Record<Days, string> = { 7: tk("7 days"), 30: tk("30 days"), 90: tk("90 days") };
+const PERIOD_LABEL: Record<Days, string> = { 1: tk("Today"), 7: tk("7 days"), 30: tk("30 days"), 90: tk("90 days") };
+
+/** A chart point: a calendar day, or for Today an hour, shown in local time. */
+const pointLabel = (iso: string) => (iso.length > 10 ? clock(iso) : day(iso));
+
+const reducedMotion = () => { try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { return true; } };
+
+/** Count a figure up to its value over a moment, from wherever it stood. With reduced motion it just shows the value. */
+function useCountUp(target: number | null, ms = 650): number | null {
+  const [v, setV] = useState<number | null>(() => (target == null || reducedMotion() ? target : 0));
+  const from = useRef(0);
+  useEffect(() => {
+    if (target == null || reducedMotion()) { setV(target); return; }
+    const start = performance.now(), a = from.current;
+    let id = 0;
+    const step = (now: number) => {
+      const k = Math.min(1, (now - start) / ms);
+      setV(a + (target - a) * (1 - (1 - k) ** 3));
+      if (k < 1) id = requestAnimationFrame(step);
+    };
+    id = requestAnimationFrame(step);
+    return () => { cancelAnimationFrame(id); from.current = target; };
+  }, [target, ms]);
+  return v;
+}
+function CountUp({ value, fmt }: { value: number | null; fmt: (n: number | null) => ReactNode }) {
+  return <>{fmt(useCountUp(value))}</>;
+}
 
 /** The outcome series, bottom to top, in the status colours. */
 const SERIES = [
@@ -79,7 +106,7 @@ function Greeting({ p, children }: { p: Period; children: ReactNode }) {
   }
   if (p.due_soon.value > 0) {
     const amount = money(p.due_soon.value, "SAR");
-    parts.push(<span key="d">{stress(t("{amount} approved and due in the next 7 days", { amount }), amount, (s) => <b><bdi dir="ltr" className="num">{s}</bdi></b>)}</span>);
+    parts.push(<button key="d" className="linkish" onClick={() => go("runs")}>{stress(t("{amount} approved and due in the next 7 days", { amount }), amount, (s) => <b><bdi dir="ltr" className="num">{s}</bdi></b>)}</button>);
   }
   return (
     <div className="page-head greet">
@@ -194,15 +221,15 @@ function OutcomeChart({ series }: { series: PeriodDay[] }) {
         </div>
         {h && (
           <div className={`oc-tip${hover! > n / 2 ? " flip" : ""}`} style={{ insetInlineStart: `${(hover! / Math.max(1, n - 1)) * 100}%` }}>
-            <b>{day(h.day)}</b>
+            <b>{pointLabel(h.day)}</b>
             {SERIES.map((s) => <span key={s.k}><i className={s.cls} />{t(s.label)} <b className="num">{num(h[s.k])}</b></span>)}
             {h.value > 0 && <span className="muted"><bdi dir="ltr" className="num">{money(h.value, "SAR")}</bdi></span>}
           </div>
         )}
       </div>
-      <div className="dc-axis small muted"><span>{day(series[0].day)}</span><span>{day(series[series.length - 1].day)}</span></div>
-      <figcaption className="sr-only">{t("Invoices received per day, by outcome")}
-        <ul>{series.map((d) => <li key={d.day}>{day(d.day)}: {SERIES.map((s) => `${t(s.label)} ${num(d[s.k])}`).join(", ")}</li>)}</ul>
+      <div className="dc-axis small muted"><span>{pointLabel(series[0].day)}</span><span>{pointLabel(series[series.length - 1].day)}</span></div>
+      <figcaption className="sr-only">{series[0].day.length > 10 ? t("Invoices received per hour today, by outcome") : t("Invoices received per day, by outcome")}
+        <ul>{series.map((d) => <li key={d.day}>{pointLabel(d.day)}: {SERIES.map((s) => `${t(s.label)} ${num(d[s.k])}`).join(", ")}</li>)}</ul>
       </figcaption>
     </figure>
   );
@@ -213,7 +240,7 @@ function Waiting({ p }: { p: Period }) {
   const { t, go } = useApp();
   return (
     <div className="panel">
-      <div className="row panel-head"><h2 className="grow">{t("Waiting longest")}</h2>
+      <div className="row panel-head"><h2 className="grow">{t("Oldest waiting")}</h2>
         {p.waiting_count > 0 && <button className="btn ghost small" onClick={() => go("review")}>{t("Open the review queue")}</button>}</div>
       {p.waiting.length === 0 ? <p className="muted">{t("Nothing is waiting. The review queue is clear.")}</p> : (
         <ul className="wl">
@@ -280,7 +307,7 @@ function Feed({ rows }: { rows: Activity[] }) {
 }
 
 export default function Dashboard() {
-  const { t, go } = useApp();
+  const { t } = useApp();
   const [source, setSource] = useState<Source>("upload");
   const [days, setDaysState] = useState<Days>(savedPeriod);
   const setDays = (d: Days) => { setDaysState(d); try { localStorage.setItem("id-period", String(d)); } catch { /* private window */ } };
@@ -318,8 +345,9 @@ export default function Dashboard() {
   const maxFail = Math.max(1, ...p.top_failing.map((f) => f.count));
   const maxReason = Math.max(1, ...p.top_rejections.map((f) => f.count));
   const daily = (f: (d: PeriodDay) => number) => p.series.map(f);
-  const sar = (v: number) => <bdi dir="ltr">{compactMoney(v, "SAR")}</bdi>;
+  const sar = (v: number) => <CountUp value={v} fmt={(x) => <bdi dir="ltr">{compactMoney(x ?? 0, "SAR")}</bdi>} />;
   const otherFoot = c.other_currency ? t("plus {n} invoices in other currencies", { n: c.other_currency }) : undefined;
+  const count = (v: number | null) => <CountUp value={v} fmt={(x) => num(x == null ? null : Math.round(x))} />;
   return (
     <>
       <Greeting p={p}>{controls}</Greeting>
@@ -327,24 +355,25 @@ export default function Dashboard() {
       {busy > 0 && <div className="notice row" role="status"><span className="spinner" aria-hidden="true" />{t("Reading {n} invoices…", { n: busy })}</div>}
       <div className="col dash">
         <div className="grid g4 tiles">
-          <Tile label={t("Invoices received")} value={num(c.received)} delta={<Delta now={c.received} before={b.received} good="none" />}
-            spark={daily((d) => d.auto + d.person + d.review + d.rejected)} />
+          <Tile label={t("Invoices received")} value={count(c.received)} delta={<Delta now={c.received} before={b.received} good="none" />}
+            spark={daily((d) => d.auto + d.person + d.review + d.rejected)} foot={otherFoot} />
           <Tile label={t("Approved value")} value={sar(c.value.approved)} title={money(c.value.approved, "SAR")} delta={<Delta now={c.value.approved} before={b.value.approved} good="none" />}
-            spark={daily((d) => d.auto + d.person)} foot={otherFoot} />
+            spark={daily((d) => d.auto + d.person)} />
+          <Tile label={t("Waiting for review value")} value={sar(c.value.waiting)} title={money(c.value.waiting, "SAR")} delta={<Delta now={c.value.waiting} before={b.value.waiting} good="none" />}
+            spark={daily((d) => d.review)} />
           <Tile label={t("Rejected value")} value={sar(c.value.rejected)} title={money(c.value.rejected, "SAR")} delta={<Delta now={c.value.rejected} before={b.value.rejected} good="none" />}
             spark={daily((d) => d.rejected)} />
-          <Tile label={t("Average time to decide")} value={dur(c.avg_time_to_review_s)}
-            delta={<Delta now={c.avg_time_to_review_s} before={b.avg_time_to_review_s} good="down" />} spark={[]}
-            foot={t("for invoices a person decided")} />
         </div>
 
         <section className="panel hero">
           <div className="hero-top">
-            <div className="headline"><b className="num">{pct(c.auto_approve_rate)}</b><span>{t("cleared without a person")}</span>
+            <div className="headline"><b className="num"><CountUp value={c.auto_approve_rate} fmt={pct} /></b><span>{t("cleared without a person")}</span>
               <Delta now={c.auto_approve_rate} before={b.auto_approve_rate} good="up" points /></div>
             <div className="kpis">
-              <div className="kpi"><b className="num">{num(s.review_queue)}</b><span>{t("waiting in the review queue")}</span></div>
-              <div className="kpi"><b className="num">{num(s.human_corrected)}</b><span>{t("fixed by a reviewer")}</span></div>
+              <div className="kpi"><b className="num">{count(s.review_queue)}</b><span>{t("waiting in the review queue")}</span></div>
+              <div className="kpi"><b className="num">{dur(c.avg_time_to_review_s)}</b><span>{t("average time to decide")}</span>
+                <Delta now={c.avg_time_to_review_s} before={b.avg_time_to_review_s} good="down" /></div>
+              <div className="kpi"><b className="num">{count(s.human_corrected)}</b><span>{t("fixed by a reviewer")}</span></div>
             </div>
           </div>
           {sum > 0 && <div className="strip" role="img" aria-label={parts.map((x) => `${t(x.label)}: ${num(x.n)}`).join("، ")}>
@@ -352,15 +381,6 @@ export default function Dashboard() {
           </div>}
           <OutcomeChart series={p.series} />
         </section>
-
-        {p.insight && (
-          <section className="panel insight">
-            <span className="insight-tag">{t("Worth a look")}</span>
-            <p>{t("“{rule}” failed {n} times in this period, against {m} in the period before.", { rule: t(p.insight.rule), n: p.insight.current, m: p.insight.previous })}</p>
-            <p className="muted small">{t("Check whether the rule or the vendors behind it changed. A dry run on the Rules page shows what an edit would do before you save it.")}</p>
-            <div><button className="btn small" onClick={() => go("rules")}>{t("Open the rules")}</button></div>
-          </section>
-        )}
 
         <div className="grid g2">
           <Waiting p={p} />

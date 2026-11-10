@@ -30,6 +30,8 @@ export const day = (iso: string | null | undefined) =>
 /** A large amount in short form, "1.38M SAR", for a figure tile. The full amount goes in a title or nearby text. */
 export const compactMoney = (n: number, cur: string) =>
   `${n.toLocaleString(loc(), { notation: "compact", maximumFractionDigits: n >= 1e6 ? 2 : 1 })} ${cur}`;
+/** "09:00", the time of day in the active language. */
+export const clock = (iso: string) => new Date(iso).toLocaleTimeString(loc(), { hour: "2-digit", minute: "2-digit" });
 /** "Monday 9 November", in the active language. */
 export const longDay = (d: Date = new Date()) => d.toLocaleDateString(loc(), { weekday: "long", day: "numeric", month: "long" });
 /** True while the page is laid out right to left. */

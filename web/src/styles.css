@@ -276,9 +276,11 @@ th[aria-sort] { color: var(--ink); }
 .oc-tip.flip { transform: translateX(calc(-100% - 8px)); }
 [dir="rtl"] .oc-tip { transform: translateX(-8px); } [dir="rtl"] .oc-tip.flip { transform: translateX(calc(100% + 8px)); }
 .oc-tip span { display: flex; align-items: center; gap: 6px; } .oc-tip span b { margin-inline-start: auto; }
-/* insight */
-.insight { border-inline-start: 3px solid var(--brand); display: flex; flex-direction: column; gap: var(--s2); }
-.insight-tag { font-size: var(--t-xs); font-weight: 600; color: var(--brand-ink); }
+.kpi .delta-wrap { margin-top: 2px; }
+/* bars grow from the inline start; the reduced-motion rule at the end of this file switches this off */
+.strip > div, .hbar .t i { animation: grow .7s cubic-bezier(.2, .7, .2, 1) both; transform-origin: left center; }
+[dir="rtl"] .strip > div, [dir="rtl"] .hbar .t i { transform-origin: right center; }
+@keyframes grow { from { transform: scaleX(0); } to { transform: none; } }
 /* waiting longest, recent activity */
 .panel-head { margin-bottom: var(--s3); } .panel-head h2 { margin: 0; }
 .wl, .feed { list-style: none; margin: 0; padding: 0; }

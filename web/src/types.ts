@@ -58,7 +58,6 @@ export interface PeriodDay { day: string; auto: number; person: number; review: 
 export interface Period {
   days: number; start: string; end: string; current: PeriodFigures; previous: PeriodFigures; series: PeriodDay[];
   top_failing: { rule: string; count: number }[]; top_rejections: { reason: string; count: number }[];
-  insight: { rule: string; current: number; previous: number } | null;
   waiting: QueueItem[]; waiting_count: number; waiting_value: number; high_risk: number;
   due_soon: { count: number; value: number; other_currency: number };
 }

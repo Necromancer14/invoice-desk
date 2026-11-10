@@ -828,7 +828,7 @@ class Desk:
                     top_rejections=[dict(reason=k, count=v) for k, v in reasons.most_common(6)], series=series,
                     rules_version=self.rules_version(), **({"period": self._period(rows, period_days)} if period_days else {}))
 
-    PERIODS = (7, 30, 90)
+    PERIODS = (1, 7, 30, 90)  # 1 is "Today", drawn by the hour
     _OUTCOME = {"approved": "auto", "approved_human": "person", "needs_review": "review", "rejected": "rejected",
                 "rejected_human": "rejected", "failed": "rejected"}
     _VALUE = {"approved": "approved", "approved_human": "approved", "needs_review": "waiting", "rejected": "rejected",
@@ -886,19 +886,24 @@ class Desk:
                 cur.append(r)
             elif before <= d < start:
                 prev.append(r)
-        series = {(start + timedelta(days=i)).isoformat(): dict(auto=0, person=0, review=0, rejected=0, value=0.0)
-                  for i in range(days)}
+        # one point a day, or for Today one an hour (UTC, as stored; the portal shows local time)
+        if days == 1:
+            keys = [f"{end.isoformat()}T{h:02d}" for h in range(24)]
+            label = lambda k: f"{k}:00:00+00:00"  # noqa: E731
+            width = 13
+        else:
+            keys = [(start + timedelta(days=i)).isoformat() for i in range(days)]
+            label = lambda k: k  # noqa: E731
+            width = 10
+        series = {k: dict(auto=0, person=0, review=0, rejected=0, value=0.0) for k in keys}
         for r in cur:
-            b = series.get(r["created_at"][:10])
+            b = series.get(r["created_at"][:width])
             if b is None:
                 continue
             if r["status"] in self._OUTCOME:
                 b[self._OUTCOME[r["status"]]] += 1
             b["value"] += self._sar(r) or 0.0
-        now_f, then_f = self._fails(cur), self._fails(prev)
-        rising = sorted(((k, n, then_f.get(k, 0)) for k, n in now_f.items()), key=lambda x: (x[2] - x[1], x[0]))
-        # only against a window that had invoices: a rise from an empty window says nothing about the rule
-        insight = next((dict(rule=k, current=n, previous=p) for k, n, p in rising if n - p >= 2), None) if prev else None
+        now_f = self._fails(cur)
         reasons: Counter = Counter()
         for r in cur:
             if r["status"] == "rejected_human":
@@ -915,10 +920,10 @@ class Desk:
         due_sar = [self._sar(r) for r in due]
         queue = self.review_queue()  # oldest first
         return dict(days=days, start=start.isoformat(), end=first, current=self._figures(cur), previous=self._figures(prev),
-                    series=[dict(day=k, **{**v, "value": round(v["value"], 2)}) for k, v in series.items()],
+                    series=[dict(day=label(k), **{**v, "value": round(v["value"], 2)}) for k, v in series.items()],
                     top_failing=[dict(rule=k, count=v) for k, v in now_f.most_common(6)],
                     top_rejections=[dict(reason=k, count=v) for k, v in reasons.most_common(6)],
-                    insight=insight, waiting=queue[:5], waiting_count=len(queue),
+                    waiting=queue[:5], waiting_count=len(queue),
                     waiting_value=round(sum(v for v in (self._sar_q(q) for q in queue) if v is not None), 2),
                     high_risk=sum(1 for q in queue if q["high_risk"]),
                     due_soon=dict(count=len(due), value=round(sum(v for v in due_sar if v is not None), 2),

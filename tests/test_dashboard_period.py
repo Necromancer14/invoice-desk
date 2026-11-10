@@ -133,23 +133,26 @@ def test_due_soon_counts_approved_invoices_due_within_a_week(desk):
     assert due == {"count": 1, "value": 1150.0, "other_currency": 0}
 
 
-def test_insight_names_the_rule_that_rose_most(desk):
-    bad = GOOD.replace("VAT (15%): 150.00 SAR", "VAT (15%): 100.00 SAR").replace("1,150.00", "1,100.00")
-    for n in range(3):
-        desk.submit(f"v{n}.txt", bad.replace("ACM-2026-0001", f"ACM-2026-01{n}").encode(), "text/plain", "r")
-    assert desk.stats("upload", 7)["period"]["insight"] is None           # nothing before to compare with
-    old = desk.submit("old.txt", GOOD.replace("ACM-2026-0001", "ACM-2026-0900").encode(), "text/plain", "r")
-    desk._backdate(old, datetime(2026, 10, 25, 9, tzinfo=timezone.utc))
-    p = desk.stats("upload", 7)["period"]
-    assert p["previous"]["received"] == 1
-    assert p["insight"] and p["insight"]["current"] - p["insight"]["previous"] >= 2
-    assert p["insight"]["rule"] in {f["rule"] for f in p["top_failing"]}
-    one = Desk(":memory:", today=TODAY, sync=True)
-    one.submit("a.txt", GOOD.encode(), "text/plain", "r")
-    assert one.stats("upload", 7)["period"]["insight"] is None
+def test_today_is_drawn_by_the_hour_against_yesterday(desk):
+    today = desk.submit("a.txt", GOOD.encode(), "text/plain", "r")
+    desk._backdate(today, datetime(2026, 11, 5, 9, 30, tzinfo=timezone.utc))
+    yesterday = desk.submit("b.txt", GOOD.replace("ACM-2026-0001", "ACM-2026-0002").encode(), "text/plain", "r")
+    desk._backdate(yesterday, datetime(2026, 11, 4, 15, 0, tzinfo=timezone.utc))
+    p = desk.stats("upload", 1)["period"]
+    assert (p["days"], p["start"], p["end"]) == (1, "2026-11-05", "2026-11-05")
+    assert p["current"]["received"] == 1 and p["previous"]["received"] == 1
+    assert len(p["series"]) == 24 and p["series"][0]["day"] == "2026-11-05T00:00:00+00:00"
+    hour = {x["day"]: x for x in p["series"]}["2026-11-05T09:00:00+00:00"]
+    assert hour["auto"] == 1 and hour["value"] == 1150.0
+    assert sum(x["auto"] for x in p["series"]) == 1
 
 
-def test_period_must_be_7_30_or_90(desk, auth):
+def test_period_has_no_insight_block(desk):
+    desk.submit("a.txt", GOOD.encode(), "text/plain", "r")
+    assert "insight" not in desk.stats("upload", 7)["period"]
+
+
+def test_period_must_be_today_7_30_or_90(desk, auth):
     with pytest.raises(DeskError):
         desk.stats("upload", 14)
     assert "period" not in desk.stats("upload")
@@ -157,6 +160,7 @@ def test_period_must_be_7_30_or_90(desk, auth):
     v = {"Authorization": "Bearer " + c.post("/api/auth/demo", json={"role": "viewer"}).json()["token"]}
     assert c.get("/api/stats?days=14", headers=v).status_code == 400
     assert c.get("/api/stats?days=90", headers=v).json()["period"]["days"] == 90
+    assert c.get("/api/stats?days=1", headers=v).json()["period"]["days"] == 1
 
 
 def test_activity_shows_what_people_did_newest_first(demo, auth):
