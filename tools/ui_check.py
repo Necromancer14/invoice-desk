@@ -449,8 +449,38 @@ def demo_start(page: Page) -> None:
     expect(page.locator(".welcome")).to_be_visible()
 
 
+def run_timeline(page: Page) -> None:
+    """Run detail: a timeline from received to the reviewer's decision, with the corrected field named, in both languages;
+    the technical trace folds away."""
+    sign_in(page)
+    load_samples(page, ["inv-003.txt", "inv-013.txt", "inv-016.pdf", "inv-089.txt"])
+    waiting = api(page, "GET", "/runs?status=needs_review")["body"]["items"]
+    check("timeline: a sample waits for review", bool(waiting))
+    if not waiting:
+        return
+    rid = waiting[0]["id"]
+    api(page, "POST", f"/runs/{rid}/review", {"decision": "approve", "note": "checked by phone", "edits": {"invoice_number": "UI-CHECK-1"}})
+    page.evaluate(f"location.hash = '#/runs/{rid}'; location.reload()")
+    page.wait_for_selector(".tl li")
+    items = page.locator(".tl li")
+    # names sit in direction isolates (U+2068 ... U+2069); drop them to compare the words
+    text = [items.nth(i).inner_text().replace("⁨", "").replace("⁩", "") for i in range(items.count())]
+    check("timeline: starts with received and ends with the reviewer", text[0].startswith("Received from") and "Approved by demo-admin" in text[-1], str(text))
+    check("timeline: says which reader and which rules version", any("Read by" in x for x in text) and any("rules version" in x for x in text), str(text))
+    check("timeline: names the corrected field", "Corrected: Invoice number" in text[-1], text[-1])
+    check("timeline: steps carry a time", page.locator(".tl li time[datetime]").count() == items.count())
+    check("timeline: the technical trace is folded", page.locator("details.trace-more").get_attribute("open") is None)
+    page.evaluate(f"localStorage.setItem('id-lang', 'ar'); location.hash = '#/runs/{rid}'; location.reload()")
+    page.wait_for_selector(".tl li")
+    rail = page.evaluate("""() => { const l = document.querySelector('.tl li'), s = getComputedStyle(l, '::before');
+        return [getComputedStyle(l).direction, parseFloat(s.right), parseFloat(s.left)]; }""")
+    check("timeline: right to left in Arabic, rail on the right", rail[0] == "rtl" and rail[1] < 0, str(rail))
+    last = page.locator(".tl li").last.inner_text()
+    check("timeline: Arabic wording", "اعتمدها" in last and "رقم الفاتورة" in last, last)
+
+
 CHECKS = [mixed_direction, reasons_in_arabic, review_badge, waking_screen, rule_with_open_limit, error_messages, damaged_file, provider_failure, xml_reads_as_an_invoice,
-          vendors_and_risk, demo_start, review_layout, dashboard_layout, runs_sorting]
+          vendors_and_risk, demo_start, review_layout, dashboard_layout, runs_sorting, run_timeline]
 
 if __name__ == "__main__":
     with sync_playwright() as pw:

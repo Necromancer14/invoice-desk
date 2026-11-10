@@ -589,6 +589,55 @@ class Desk:
         number = (fields.get("po_number") or "").strip()
         out["po_match"] = po_match(fields, self.po_by_number(number) if number else None,
                                    (out["vendor_match"] or {}).get("vendor"), float(params.get("tolerance", 0.01)), params.get("field", "total"))
+        out["timeline"] = self.timeline(r)
+        return out
+
+    _EDITED = re.compile(r"\s*\[edited: ([a-z_, ]+)\]$")
+
+    def timeline(self, r: dict) -> list[dict]:
+        """What happened to one invoice, oldest first, from its audit rows and its own fields.
+
+        Each processing ends in a run.decision or run.failed audit row. Only the latest processing still has its trace,
+        so only that one says which reader read it and which rules version checked it; an earlier one (before a
+        "read again") shows its outcome alone."""
+        rid = str(r["id"])
+        rows = self.db.all("SELECT ts, actor, action, detail FROM audit WHERE target=? AND "
+                           "(action IN ('run.decision', 'run.failed', 'run.reprocess', 'vendor.link') OR action LIKE 'review.%') "
+                           "ORDER BY ts, id", (rid,))
+        trace = {s["step"]: s for s in loads(r["trace"], [])}
+        ex = loads(r["extraction"], {}) or {}
+        results = loads(r["results"], [])
+        last = max((i for i, a in enumerate(rows) if a["action"] in ("run.decision", "run.failed")), default=-1)
+        out: list[dict] = [dict(kind="received", at=r["created_at"], actor=r["submitted_by"], mode=r["mode"])]
+        for i, a in enumerate(rows):
+            if i == last:
+                if "extract" in trace:
+                    s = trace["extract"]
+                    out.append(dict(kind="read", at=s["at"], ok=bool(s["ok"]), reader=ex.get("extractor"), model=ex.get("model"),
+                                    confidence=ex.get("confidence"), fell_back="falling back" in (s.get("detail") or "")))
+                if "validate" in trace:
+                    # the run's results may have been worked out again since (after a review or a vendor link); the
+                    # count at intake is in the trace step, the version is the one stored with the run
+                    m = re.match(r"(\d+) rules, (\d+) failed", trace["validate"].get("detail") or "")
+                    out.append(dict(kind="checked", at=trace["validate"]["at"], rules_version=r["rules_version"],
+                                    checks=int(m[1]) if m else len(results), failed=int(m[2]) if m else None))
+            act = a["action"]
+            if act == "run.decision":
+                route = (trace.get("route") or {}).get("detail", "") if i == last else ""
+                out.append(dict(kind="routed", at=a["ts"], outcome=a["detail"], auto_approve_off=route.startswith("auto-approve is switched off")))
+            elif act == "run.failed":
+                out.append(dict(kind="failed", at=a["ts"]))
+            elif act == "run.reprocess":
+                out.append(dict(kind="reprocess", at=a["ts"], actor=a["actor"]))
+            elif act == "vendor.link":
+                out.append(dict(kind="vendor_link", at=a["ts"], actor=a["actor"]))
+            elif act in ("review.approve", "review.reject"):
+                note, edited = a["detail"] or "", []
+                m = self._EDITED.search(note)
+                if m:
+                    edited = [f for f in (x.strip() for x in m[1].split(",")) if f in FIELDS]
+                    note = note[:m.start()]
+                out.append(dict(kind="reviewed", at=a["ts"], actor=a["actor"], decision=act.split(".")[1], note=note.strip(), edited=edited))
         return out
 
     def get_blob(self, rid: int) -> tuple[bytes, str, str]:

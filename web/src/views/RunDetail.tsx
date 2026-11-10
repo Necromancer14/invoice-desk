@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { api, fileBlobUrl } from "../api";
-import type { Fields, PoStatus, RunDetail as Run } from "../types";
+import type { Fields, PoStatus, RunDetail as Run, TimelineEvent } from "../types";
 import { reason } from "../reasons";
 import { CheckMark, Err, FIELD_LABEL, StatusPill, can, money, num, pct, tk, useApp, when } from "../common";
 
@@ -275,6 +275,47 @@ export function CheckList({ run }: { run: Run }) {
   );
 }
 
+/** A name inside a translated sentence keeps its own direction (U+2068 first strong isolate, U+2069 pop). */
+const own = (s: string) => `⁨${s}⁩`;
+/** The reader's name for a sentence: the two built-in readers by what they are, an AI provider by its own name. */
+const READER: Record<string, string> = { "rule-based": tk("the built-in reader"), "ubl-xml": tk("the XML reader") };
+const readerName = (t: (s: string) => string, r: string | null | undefined) => (r && !READER[r] ? own(r) : t(READER[r || "rule-based"]));
+const ROUTED = { approved: tk("Approved automatically"), needs_review: tk("Sent to a person for review"), rejected: tk("Rejected automatically") };
+
+/** What happened to the invoice, in plain words, oldest first: received, read, checked, routed, then what people did. */
+export function Timeline({ events }: { events: TimelineEvent[] }) {
+  const { t, lang } = useApp();
+  const list = (xs: string[]) => xs.join(lang === "ar" ? "، " : ", ");
+  const item = (e: TimelineEvent): [string, ReactNode] => {
+    switch (e.kind) {
+      case "received": return ["", t("Received from {name}", { name: own(e.actor) })];
+      case "read": return e.ok
+        ? ["", <>{t("Read by {reader}", { reader: readerName(t, e.reader) })}{e.model && <> (<bdi dir="ltr">{e.model}</bdi>)</>}
+            {e.confidence != null && <span className="muted"> · {t("confidence {pct}", { pct: pct(e.confidence) })}</span>}
+            {e.fell_back && <div className="small muted">{t("The AI call failed, so the built-in reader was used instead")}</div>}</>]
+        : ["warn", t("Could not be read automatically")];
+      case "checked": return ["", <>{e.rules_version != null ? t("Checked with rules version {v}", { v: num(e.rules_version) }) : t("Checked")}
+        {e.failed != null && <span className="muted"> · {t("{n} checks failed", { n: e.failed })}</span>}</>];
+      case "routed": return [e.outcome === "approved" ? "ok" : e.outcome === "rejected" ? "x" : "warn",
+        <>{t(ROUTED[e.outcome])}{e.auto_approve_off && <div className="small muted">{t("Auto-approve is switched off, so it went to review.")}</div>}</>];
+      case "failed": return ["x", t("Processing failed")];
+      case "reprocess": return ["", t("Read again at the request of {name}", { name: own(e.actor) })];
+      case "vendor_link": return ["", t("{name} linked the seller to a vendor", { name: own(e.actor) })];
+      case "reviewed": return [e.decision === "approve" ? "h" : "x", <>
+        {e.decision === "approve" ? t("Approved by {name}", { name: own(e.actor) }) : t("Rejected by {name}", { name: own(e.actor) })}
+        {e.edited.length > 0 && <div className="small">{t("Corrected: {fields}", { fields: list(e.edited.map((f) => t(FIELD_LABEL[f] || f))) })}</div>}
+        {e.note && <div className="small muted" dir="auto">{e.note}</div>}</>];
+    }
+  };
+  return (
+    <ol className="trace tl">
+      {events.map((e, i) => { const [tone, body] = item(e); return (
+        <li key={i} className={tone}><div>{body}</div><time className="small muted" dateTime={e.at}>{when(e.at)}</time></li>
+      ); })}
+    </ol>
+  );
+}
+
 export function Evidence({ run, onChange, checks = true }: { run: Run; onChange?: (r: Run) => void; checks?: boolean }) {
   const { t } = useApp();
   const qr = decodeQr((run.final_fields ?? run.extracted)?.qr_payload);
@@ -293,17 +334,23 @@ export function Evidence({ run, onChange, checks = true }: { run: Run; onChange?
           <dl className="qr-list">{QR_TAGS.filter(([n]) => qr[n]).map(([n, label]) => <div key={n}><dt>{t(label)}</dt><dd dir="auto">{qr[n]}</dd></div>)}</dl>
         </section>
       )}
-      <section>
-        <h3 className="sec-title">{t("Trace")}</h3>
+      {run.timeline && run.timeline.length > 0 && (
+        <section>
+          <h3 className="sec-title">{t("Timeline")}</h3>
+          <Timeline events={run.timeline} />
+        </section>
+      )}
+      <details className="trace-more">
+        <summary>{t("Technical trace")}</summary>
         <div className="trace">
           {run.trace.map((s, i) => (
             <div key={i} className={s.ok ? "" : "bad"}><b>{t(s.step)}</b> <span className="muted small num">{s.ms ? t("{ms} ms", { ms: s.ms }) : ""}</span><div className="small muted" dir="auto">{s.detail}</div></div>
           ))}
         </div>
-      </section>
+      </details>
       {run.extraction?.extractor && (
         <p className="muted small">
-          {t("Read by {reader}", { reader: t(run.extraction.extractor) })}{run.extraction.model ? <> (<bdi dir="ltr">{run.extraction.model}</bdi>)</> : ""} · {t("confidence {pct}", { pct: pct(run.extraction.confidence) })}
+          {t("Read by {reader}", { reader: readerName(t, run.extraction.extractor) })}{run.extraction.model ? <> (<bdi dir="ltr">{run.extraction.model}</bdi>)</> : ""} · {t("confidence {pct}", { pct: pct(run.extraction.confidence) })}
           {run.extraction.tokens_in ? ` · ${t("{n} tokens", { n: run.extraction.tokens_in + run.extraction.tokens_out })}` : ""}
         </p>
       )}

@@ -39,8 +39,19 @@ export interface Extraction {
 }
 export interface RunDetail extends RunSummary {
   extracted: Fields | null; final_fields: Fields | null; extraction: Extraction; results: RuleResult[]; trace: TraceStep[]; decision_note: string | null;
-  vendor_match?: VendorMatch | null; po_match?: PoMatch;
+  vendor_match?: VendorMatch | null; po_match?: PoMatch; timeline?: TimelineEvent[];
 }
+/** One step in what happened to an invoice, built by the server from the audit log and the run's own fields. */
+export type TimelineEvent = { at: string } & (
+  | { kind: "received"; actor: string; mode: "rules" | "ai" }
+  | { kind: "read"; ok: boolean; reader: string | null; model: string | null; confidence: number | null; fell_back: boolean }
+  | { kind: "checked"; rules_version: number | null; checks: number; failed: number | null }
+  | { kind: "routed"; outcome: "approved" | "needs_review" | "rejected"; auto_approve_off: boolean }
+  | { kind: "failed" }
+  | { kind: "reprocess"; actor: string }
+  | { kind: "vendor_link"; actor: string }
+  | { kind: "reviewed"; actor: string; decision: "approve" | "reject"; note: string; edited: string[] }
+);
 export interface Stats {
   total: number; by_status: Record<Status, number>; review_queue: number; auto_approve_rate: number | null; human_corrected: number;
   avg_extract_ms: number | null; avg_time_to_review_s: number | null; tokens_in: number; tokens_out: number; cost: number | null;

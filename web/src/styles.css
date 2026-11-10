@@ -397,6 +397,16 @@ th[aria-sort] { color: var(--ink); }
 .trace::before { content: ""; position: absolute; inset-inline-start: 5px; top: 10px; bottom: 10px; width: 1px; background: var(--line-strong); }
 .trace > div { position: relative; padding: 4px 0; } .trace > div::before { content: ""; position: absolute; inset-inline-start: -19px; top: 10px; width: 9px; height: 9px; border-radius: 50%; background: var(--ok-solid); box-shadow: 0 0 0 3px var(--surface); }
 .trace > div.bad::before { background: var(--warn-solid); }
+/* the invoice timeline: the same rail as the trace, one dot per step, coloured by what the step meant */
+.tl { list-style: none; margin: 0; gap: 2px; }
+.tl > li { position: relative; padding: 4px 0; display: flex; gap: 4px 12px; justify-content: space-between; align-items: baseline; flex-wrap: wrap; }
+.tl > li > div { flex: 1 1 14rem; min-width: 0; }
+.tl > li > time { white-space: nowrap; }
+.tl > li::before { content: ""; position: absolute; inset-inline-start: -19px; top: 10px; width: 9px; height: 9px; border-radius: 50%; background: var(--line-strong); box-shadow: 0 0 0 3px var(--surface); }
+.tl > li.ok::before { background: var(--ok-solid); } .tl > li.h::before { background: var(--ok-human); }
+.tl > li.warn::before { background: var(--warn-solid); } .tl > li.x::before { background: var(--bad-solid); }
+.trace-more { margin-top: 4px; } .trace-more > summary { cursor: pointer; color: var(--ink-2); font-size: 13px; padding: 4px 0; }
+.trace-more > .trace { margin-top: 6px; }
 .qr-list { display: grid; gap: var(--s1); margin: 0; font-size: var(--t-md); } .qr-list > div { display: grid; grid-template-columns: minmax(120px, 30%) 1fr; gap: var(--s3); }
 .qr-list dt { color: var(--muted); } .qr-list dd { margin: 0; overflow-wrap: anywhere; }
 /* each value keeps its own direction (dir=auto) but lines up with the page, like the table names */
