@@ -10,7 +10,7 @@ OUT = Path(__file__).resolve().parent.parent / "docs" / "screens"
 OUT.mkdir(parents=True, exist_ok=True)
 
 with sync_playwright() as pw:
-    b = pw.chromium.launch()
+    b = pw.chromium.launch(channel="chromium")  # the full build: the headless shell shows PDFs as a blank frame
     page = b.new_page(viewport={"width": 1360, "height": 860}, device_scale_factor=1)
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
