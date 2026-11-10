@@ -1,12 +1,13 @@
 """Run sources, duplicates per source, dashboard filter and rejection reasons, the welcome sample set, demo reset."""
 from collections import Counter
+from datetime import datetime, timezone
 
 from fastapi.testclient import TestClient
 
 from invoice_desk.api import create_app
 from invoice_desk.desk import Desk
 from invoice_desk.evaluation import evaluate
-from invoice_desk.samples import DEMO_SET, load_answers
+from invoice_desk.samples import DEMO_SET, load_answers, sample_bytes
 from conftest import GOOD, TODAY
 
 ANSWERS = {i["file"]: i for i in load_answers()["invoices"]}
@@ -103,6 +104,37 @@ def test_api_welcome_set_stats_and_reset(auth):
     assert c.get("/api/stats", headers=v).json()["total"] == 0
     assert len(c.get("/api/vendors", headers=v).json()) == n_vendors
     assert [x["action"] for x in c.get("/api/audit", headers=a).json()] == ["demo.reset"]
+
+
+def _change_rules(d: Desk) -> None:
+    d.upsert_rule(dict(name="Over 20,000", type="amount_limit", params={"max": 20000}, severity="review"), "a")
+    d.delete_rule(d.rules()[0]["key"], "a")
+
+
+def _defaults_at_version_1(d: Desk, default_keys: list[str]) -> None:
+    assert [r["key"] for r in d.rules()] == default_keys
+    assert [v["version"] for v in d.rule_versions()] == [1] and d.rules_version() == 1
+
+
+def test_reset_and_a_fresh_demo_load_restore_the_default_rules_at_version_1(tmp_path):
+    day = lambda n: datetime(2026, 11, n, tzinfo=timezone.utc)  # noqa: E731
+    for path in (":memory:", str(tmp_path / "d.db")):
+        d = Desk(path, today=TODAY, sync=True, seed_vendors=True)
+        defaults = [r["key"] for r in d.rules()]
+        _change_rules(d)
+        d.reset("a")
+        _defaults_at_version_1(d, defaults)
+        d.upsert_rule(dict(name="Next", type="amount_limit", params={"max": 1}, severity="review"), "a")
+        assert d.rules_version() == 2                  # numbering carries on from 1, not from the old highest version
+
+        _change_rules(d)                               # a fresh demo load (no uploads yet) uses the default rules
+        rid = d.load_demo("r", [dict(file="inv-003.txt", at=day(1))], sample_bytes)[0]
+        assert d.get_run(rid)["rules_version"] == 1
+        _defaults_at_version_1(d, defaults)
+
+        _change_rules(d)                               # with uploads present, a later load keeps the admin's rules
+        d.load_demo("r", [dict(file="inv-006.txt", at=day(2))], sample_bytes)
+        assert d.rules_version() == 3
 
 
 def test_a_new_evaluation_replaces_the_previous_evaluation_runs_only(auth, tmp_path):

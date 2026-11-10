@@ -171,6 +171,16 @@ class Desk:
         self._save_rules([dict(r, enabled=True) for r in DEFAULT_RULES])
         self._snapshot("system", "Default rule set")
 
+    def _restore_default_rules(self) -> None:
+        """The default rule set as version 1 again: earlier versions go, and so does SQLite's counter for them,
+        which would otherwise carry on numbering from the highest version ever saved."""
+        with self.db.lock:
+            self.db.conn.execute("DELETE FROM rules")
+            self.db.conn.execute("DELETE FROM rule_versions")
+            self.db.conn.execute("DELETE FROM sqlite_sequence WHERE name='rule_versions'")
+            self.db.conn.commit()
+        self._seed_rules()
+
     def rule_versions(self) -> list[dict]:
         rows = self.db.all("SELECT version,author,note,created_at,snapshot FROM rule_versions ORDER BY version DESC")
         return [dict(version=r["version"], author=r["author"], note=r["note"], created_at=r["created_at"],
@@ -758,7 +768,10 @@ class Desk:
         """Load sample invoices with a history. plan: items in date order (see samples.demo_plan), read(file) -> bytes.
         Every run is stored first, then one job reads them in order through the built-in reader, takes the demo
         reviewer's decision where a history invoice lands in review, and moves the run's timestamps to its planned
-        date. In date order the duplicate check sees the same invoices it would have seen on those days."""
+        date. In date order the duplicate check sees the same invoices it would have seen on those days.
+        A fresh load (no uploads yet) checks them with the default rules, so the rules go back to version 1 first."""
+        if not self.db.one("SELECT id FROM runs WHERE source='upload' LIMIT 1"):
+            self._restore_default_rules()
         ids = [self.submit(p["file"], read(p["file"]), None, actor, "rules", None, source="upload", defer=True) for p in plan]
 
         def work() -> None:
@@ -1034,12 +1047,9 @@ class Desk:
         with self.db.lock:
             self.db.conn.execute("DELETE FROM runs")
             self.db.conn.execute("DELETE FROM audit")
-            if not keep_rules:
-                self.db.conn.execute("DELETE FROM rules")
-                self.db.conn.execute("DELETE FROM rule_versions")
             self.db.conn.commit()
         if not keep_rules:
-            self._seed_rules()
+            self._restore_default_rules()
         if self.seed_vendors:  # the demo's vendor master and POs go back to how they started
             for table in ("vendor_aliases", "purchase_orders", "vendors"):
                 self.db.run(f"DELETE FROM {table}")
