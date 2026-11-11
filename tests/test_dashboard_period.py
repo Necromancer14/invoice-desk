@@ -15,9 +15,24 @@ NOW = datetime(2026, 11, 5, 15, 0, tzinfo=timezone.utc)
 ANSWERS = {i["file"]: i for i in load_answers()["invoices"]}
 
 
+class SteppingClock:
+    """A clock that never reads the real time: it starts at a fixed moment and moves on one second at every read, so
+    two reads are always different seconds. Code that takes two readings for one event shows up here every time,
+    not once in a few hundred runs when the real clock happens to cross a second."""
+    def __init__(self, start: datetime):
+        self.moment = start
+
+    def __call__(self) -> datetime:
+        self.moment += timedelta(seconds=1)
+        return self.moment
+
+
+CLOCK_START = datetime(2026, 11, 6, 12, 0, tzinfo=timezone.utc)          # after the plan's NOW, like the real clock is
+
+
 @pytest.fixture(scope="module")
 def demo():
-    d = Desk(":memory:", today=TODAY, sync=True, seed_vendors=True)
+    d = Desk(":memory:", today=TODAY, sync=True, seed_vendors=True, clock=SteppingClock(CLOCK_START))
     plan = demo_plan(END, NOW)
     ids = d.load_demo("demo-admin", plan, sample_bytes)
     return d, plan, ids
@@ -88,6 +103,27 @@ def test_demo_runs_carry_their_planned_dates(demo):
     assert reviews and all(a["ts"] == d.get_run(int(a["target"]))["decided_at"] for a in reviews)
     submits = [a for a in d.audit_log(1000) if a["action"] == "run.submit"]
     assert all(a["ts"] == d.get_run(int(a["target"]))["created_at"] for a in submits)
+
+
+def test_one_event_is_one_moment_whatever_the_clock_does():
+    """created_at and the run.submit audit row, the outcome and its audit row, a decision and its trace step and audit row:
+    each pair is a single reading of the clock. With a clock that moves a second at every read, two readings would differ."""
+    d = Desk(":memory:", today=TODAY, sync=True, clock=SteppingClock(CLOCK_START))
+    d.update_settings({"auto_approve": "false"}, "a")                      # so a clean invoice waits for a person
+    rid = d.submit("a.txt", GOOD.encode(), "text/plain", "r")
+    run = d.get_run(rid)
+    assert run["status"] == "needs_review"
+    at = {a["action"]: a["ts"] for a in d.audit_log(100) if a["target"] == str(rid)}
+    assert run["created_at"] == at["run.submit"] and run["decided_at"] is None
+    assert run["updated_at"] == at["run.decision"]
+    done = d.review(rid, "approve", "noura", note="ok")
+    assert done["decided_at"] == done["updated_at"] == done["trace"][-1]["at"]
+    assert done["decided_at"] == next(a["ts"] for a in d.audit_log(100) if a["action"] == "review.approve")
+    d.update_settings({"auto_approve": "true"}, "a")
+    auto = d.submit("b.txt", GOOD.replace("ACM-2026-0001", "ACM-2026-0002").encode(), "text/plain", "r")
+    row = d.get_run(auto)
+    assert row["status"] == "approved" and row["decided_at"] == row["updated_at"]
+    assert row["decided_at"] == next(a["ts"] for a in d.audit_log(100) if a["target"] == str(auto) and a["action"] == "run.decision")
 
 
 def test_period_figures_and_previous_window(demo):

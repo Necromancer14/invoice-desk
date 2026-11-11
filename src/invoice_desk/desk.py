@@ -9,6 +9,7 @@ from pathlib import Path
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
+from typing import Callable
 
 from .db import DB, dumps, loads
 from .default_rules import DEFAULT_RULES
@@ -71,8 +72,9 @@ def friendly_error(exc: Exception) -> str:
     return f"{type(exc).__name__}: {exc}"[:300]
 
 
-def now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+def utc_stamp(moment: datetime | None = None) -> str:
+    """An ISO timestamp to the second: the given moment, or the real clock."""
+    return (moment or datetime.now(timezone.utc)).isoformat(timespec="seconds")
 
 
 class DeskError(Exception):
@@ -83,9 +85,12 @@ class DeskError(Exception):
 
 class Desk:
     def __init__(self, db_path: str = ":memory:", today: date | None = None, sync: bool = False, workers: int = 2,
-                 extractor_factory=None, seed_vendors: bool = False):
+                 extractor_factory=None, seed_vendors: bool = False, clock: Callable[[], datetime] | None = None):
         """seed_vendors: fill a new database (and every reset) with the demo vendors and purchase orders from
-        data/samples. The app and the evaluation do; tests start with an empty vendor master."""
+        data/samples. The app and the evaluation do; tests start with an empty vendor master.
+        clock: returns the current moment (timezone-aware UTC); the real clock when omitted. Tests pass a fixed or
+        stepping one so every stored timestamp is deterministic."""
+        self.clock = clock
         self.db = DB(db_path)
         self.today = today
         self.sync = sync
@@ -103,10 +108,18 @@ class Desk:
     def _today(self) -> date:
         return self.today or date.today()
 
-    def audit(self, actor: str, action: str, target: str = "", detail: str = "") -> None:
+    def _now_dt(self) -> datetime:
+        return self.clock() if self.clock else datetime.now(timezone.utc)
+
+    def _now(self) -> str:
+        return utc_stamp(self._now_dt())
+
+    def audit(self, actor: str, action: str, target: str = "", detail: str = "", ts: str | None = None) -> None:
+        """ts: the moment to record, when the caller already took one for the thing it is logging (a run's created_at
+        and its run.submit row are the same moment, not two clock reads that may fall either side of a second)."""
         if getattr(self, "_seeding", False):  # loading the demo vendor master is setup, not something anyone did
             return
-        self.db.run("INSERT INTO audit(ts,actor,action,target,detail) VALUES(?,?,?,?,?)", (now(), actor, action, target, detail))
+        self.db.run("INSERT INTO audit(ts,actor,action,target,detail) VALUES(?,?,?,?,?)", (ts or self._now(), actor, action, target, detail))
 
     def _default_factory(self, mode: str, llm: dict | None):
         if mode == "ai":
@@ -164,7 +177,7 @@ class Desk:
 
     def _snapshot(self, author: str, note: str) -> int:
         cur = self.db.run("INSERT INTO rule_versions(snapshot,author,note,created_at) VALUES(?,?,?,?)",
-                          (dumps(self.rules()), author, note, now()))
+                          (dumps(self.rules()), author, note, self._now()))
         return cur.lastrowid
 
     def _seed_rules(self) -> None:
@@ -303,7 +316,7 @@ class Desk:
             same = self.db.one("SELECT id FROM vendors WHERE vat=? AND id IS NOT ?", (v["vat"], vendor_id))
             if same:
                 raise DeskError(f"another vendor already has VAT number {v['vat']}")
-        t = now()
+        t = self._now()
         if vendor_id is None:
             cur = self.db.run("INSERT INTO vendors(name_en,name_ar,vat,iban,currency,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)",
                               (v["name_en"], v["name_ar"], v["vat"], v["iban"], v["currency"], v["status"], t, t))
@@ -377,7 +390,7 @@ class Desk:
                 updated += 1
             else:
                 self.db.run("INSERT INTO purchase_orders(po_number,vendor_id,vendor_name,amount,currency,status,created_at) VALUES(?,?,?,?,?,?,?)",
-                            (po["po_number"], vendor["id"] if vendor else None, po["vendor_name"], po["amount"], po["currency"], po["status"], now()))
+                            (po["po_number"], vendor["id"] if vendor else None, po["vendor_name"], po["amount"], po["currency"], po["status"], self._now()))
                 added += 1
         self.audit(actor, "po.import", "", f"{added} added, {updated} updated, {len(errors)} rows with errors")
         return dict(added=added, updated=updated, errors=errors[:50], error_count=len(errors))
@@ -404,12 +417,12 @@ class Desk:
             raise DeskError("this invoice has no seller name to link")
         self.db.run("INSERT INTO vendor_aliases(vendor_id,alias,key,created_by,created_at) VALUES(?,?,?,?,?) "
                     "ON CONFLICT(key) DO UPDATE SET vendor_id=excluded.vendor_id, alias=excluded.alias, created_by=excluded.created_by",
-                    (vendor_id, name[:150], key, actor, now()))
+                    (vendor_id, name[:150], key, actor, self._now()))
         self.audit(actor, "vendor.link", str(rid), f'"{name}" is {vendor["name_en"] or vendor["name_ar"]}')
         if r["status"] == "needs_review":  # the decision stays with the reviewer; only the checks are refreshed
             conf = (loads(r["extraction"], {}) or {}).get("confidence", 1.0)
             results = run_rules(self.rules(), fields, self._ctx(rid, 1.0 if r["edited"] else conf))
-            self.db.run("UPDATE runs SET results=?, updated_at=? WHERE id=?", (dumps(results), now(), rid))
+            self.db.run("UPDATE runs SET results=?, updated_at=? WHERE id=?", (dumps(results), self._now(), rid))
         return self.get_run(rid)
 
     def _seed_vendor_data(self) -> None:
@@ -477,11 +490,11 @@ class Desk:
                 raise DeskError("choose an AI provider and add its key in Settings")
             if self.extractor_factory == self._default_factory:
                 self._default_factory("ai", llm)  # fails early with a readable message
-        t = now()
+        t = self._now()
         cur = self.db.run("INSERT INTO runs(filename,content_type,blob,source,size,status,mode,created_at,updated_at,submitted_by,trace)"
                           " VALUES(?,?,?,?,?,?,?,?,?,?,?)", (filename, ctype, blob, source, len(blob), "queued", mode, t, t, actor, "[]"))
         rid = cur.lastrowid
-        self.audit(actor, "run.submit", str(rid), f"{filename} ({mode})")
+        self.audit(actor, "run.submit", str(rid), f"{filename} ({mode})", ts=t)    # the same moment as created_at
         if defer:
             return rid
         if self.sync:
@@ -491,14 +504,14 @@ class Desk:
         return rid
 
     def _step(self, trace: list, name: str, t0: float, detail: str = "", ok: bool = True) -> None:
-        trace.append(dict(step=name, ms=int((time.time() - t0) * 1000), ok=ok, detail=detail, at=now()))
+        trace.append(dict(step=name, ms=int((time.time() - t0) * 1000), ok=ok, detail=detail, at=self._now()))
 
     def process(self, rid: int, llm: dict | None = None) -> None:
         row = self.db.one("SELECT * FROM runs WHERE id=?", (rid,))
         if not row:
             return
         trace: list = [dict(step="ingest", ms=0, ok=True, detail=f"{row['filename']} · {row['size']} bytes · {row['content_type']}", at=row["created_at"])]
-        self.db.run("UPDATE runs SET status='processing', updated_at=? WHERE id=?", (now(), rid))
+        self.db.run("UPDATE runs SET status='processing', updated_at=? WHERE id=?", (self._now(), rid))
         s = self.settings()
         try:
             t0 = time.time()
@@ -548,16 +561,18 @@ class Desk:
                 self._step(trace, "route", time.time(), {"approved": "auto-approved", "needs_review": "sent to human review", "rejected": "rejected automatically"}[decision])
             meta = dict(confidence=ext.confidence, field_confidence=ext.field_confidence, notes=ext.notes, extractor=ext.extractor,
                         model=ext.model, tokens_in=ext.tokens_in, tokens_out=ext.tokens_out, latency_ms=ext.latency_ms)
+            done = self._now()                                # one moment for the outcome and its audit row
             self.db.run("UPDATE runs SET status=?, fields=?, extraction=?, results=?, rules_version=?, trace=?, updated_at=?, "
                         "decided_at=? WHERE id=?",
-                        (decision, dumps(fields), dumps(meta), dumps(results), self.rules_version(), dumps(trace), now(),
-                         now() if decision != "needs_review" else None, rid))
-            self.audit("system", "run.decision", str(rid), decision)
+                        (decision, dumps(fields), dumps(meta), dumps(results), self.rules_version(), dumps(trace), done,
+                         done if decision != "needs_review" else None, rid))
+            self.audit("system", "run.decision", str(rid), decision, ts=done)
         except Exception as exc:
             self._step(trace, "error", time.time(), f"{type(exc).__name__}: {exc}"[:300], ok=False)
+            failed_at = self._now()
             self.db.run("UPDATE runs SET status='failed', error=?, trace=?, updated_at=?, decided_at=? WHERE id=?",
-                        (friendly_error(exc), dumps(trace), now(), now(), rid))
-            self.audit("system", "run.failed", str(rid), str(exc)[:200])
+                        (friendly_error(exc), dumps(trace), failed_at, failed_at, rid))
+            self.audit("system", "run.failed", str(rid), str(exc)[:200], ts=failed_at)
 
     # ------------------------------------------------------------------ reads
     @staticmethod
@@ -774,7 +789,7 @@ class Desk:
                           (rid, p["mode"], p.get("model"), p["recommendation"], dumps(p.get("summary")),
                            dumps(dict(reasons=p.get("reasons") or [], context=p.get("context") or [])),
                            "[]", dumps(p.get("steps") or []), 1 if p.get("finished", True) else 0,
-                           p.get("tokens_in", 0), p.get("tokens_out", 0), p.get("requested_by"), now()))
+                           p.get("tokens_in", 0), p.get("tokens_out", 0), p.get("requested_by"), self._now()))
         return self.proposals(rid)[0] if cur.lastrowid else {}
 
     def proposals(self, rid: int, limit: int = 5) -> list[dict]:
@@ -878,13 +893,14 @@ class Desk:
         conf = (loads(r["extraction"], {}) or {}).get("confidence", 1.0)
         results = run_rules(self.rules(), final, self._ctx(rid, 1.0 if changed else conf))
         trace = loads(r["trace"], [])
-        trace.append(dict(step="human review", ms=0, ok=True, at=now(),
+        t = self._now()                                   # one moment for the decision, its trace step and its audit row
+        trace.append(dict(step="human review", ms=0, ok=True, at=t,
                           detail=f"{actor} chose {decision}" + (f", corrected {', '.join(changed)}" if changed else "")))
         status = "approved_human" if decision == "approve" else "rejected_human"
         self.db.run("UPDATE runs SET status=?, final_fields=?, results=?, edited=?, decision_by=?, decision_note=?, decided_at=?, "
                     "updated_at=?, trace=? WHERE id=?",
-                    (status, dumps(final), dumps(results), 1 if changed else 0, actor, note, now(), now(), dumps(trace), rid))
-        self.audit(actor, f"review.{decision}", str(rid), (note or "") + (f" [edited: {', '.join(changed)}]" if changed else ""))
+                    (status, dumps(final), dumps(results), 1 if changed else 0, actor, note, t, t, dumps(trace), rid))
+        self.audit(actor, f"review.{decision}", str(rid), (note or "") + (f" [edited: {', '.join(changed)}]" if changed else ""), ts=t)
         return self.get_run(rid)
 
     def reprocess(self, rid: int, actor: str, llm: dict | None = None) -> None:
@@ -948,7 +964,7 @@ class Desk:
             return (datetime.fromisoformat(stamp) + shift).isoformat(timespec="seconds") if stamp else stamp
         human = None
         if decided_after is not None:
-            human = min(at + decided_after, datetime.now(timezone.utc)).isoformat(timespec="seconds")
+            human = min(at + decided_after, self._now_dt()).isoformat(timespec="seconds")
         trace = loads(r["trace"], []) or []
         for step in trace:
             step["at"] = human if human and step.get("step") == "human review" else moved(step.get("at"))
