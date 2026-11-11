@@ -23,6 +23,10 @@ CREATE TABLE IF NOT EXISTS vendor_aliases(id INTEGER PRIMARY KEY AUTOINCREMENT, 
   created_by TEXT, created_at TEXT);
 CREATE TABLE IF NOT EXISTS purchase_orders(id INTEGER PRIMARY KEY AUTOINCREMENT, po_number TEXT UNIQUE, vendor_id INTEGER,
   vendor_name TEXT, amount REAL, currency TEXT, status TEXT, created_at TEXT);
+CREATE TABLE IF NOT EXISTS proposals(id INTEGER PRIMARY KEY AUTOINCREMENT, run_id INTEGER, mode TEXT, model TEXT,
+  recommendation TEXT, summary TEXT, findings TEXT, evidence TEXT, steps TEXT, finished INTEGER, tokens_in INTEGER,
+  tokens_out INTEGER, requested_by TEXT, created_at TEXT);
+CREATE INDEX IF NOT EXISTS proposals_run ON proposals(run_id);
 CREATE TABLE IF NOT EXISTS eval_results(provider TEXT, model TEXT, sample_id TEXT, outcome TEXT, evaluated_at TEXT,
   rules_version INTEGER, row TEXT, PRIMARY KEY(provider, model, sample_id));
 """

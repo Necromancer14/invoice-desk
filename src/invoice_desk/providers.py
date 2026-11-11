@@ -174,6 +174,65 @@ class GeminiExtractor:
                           u.get("candidatesTokenCount", 0) or 0, int((time.time() - t0) * 1000))
 
 
+@dataclass
+class ToolTurn:
+    """One model reply in a tool-calling conversation. content goes back into the conversation unchanged (Gemini
+    needs its thought signatures returned); calls are the functions it asked for, as (name, args)."""
+    content: dict
+    calls: list[tuple[str, dict]]
+    text: str
+    tokens_in: int
+    tokens_out: int
+
+
+class GeminiToolChat:
+    """Gemini function calling for the review copilot. One request per turn; the caller keeps the conversation.
+    The key goes in a header, never in the URL, and is kept only for the life of this object."""
+    name = "gemini"
+
+    def __init__(self, api_key: str, model: str, transport: httpx.BaseTransport | None = None):
+        if not re.fullmatch(r"[A-Za-z0-9._-]{1,80}", model or ""):
+            raise ProviderError("model name has characters that are not allowed")
+        self.key, self.model = api_key, model
+        self.http = httpx.Client(timeout=90, transport=transport)
+
+    def turn(self, system: str, contents: list[dict], tools: list[dict]) -> ToolTurn:
+        body = {"systemInstruction": {"parts": [{"text": system}]}, "contents": contents,
+                "tools": [{"functionDeclarations": tools}], "toolConfig": {"functionCallingConfig": {"mode": "AUTO"}},
+                "generationConfig": {"temperature": 0}}
+        r = self.http.post(f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent",
+                           headers={"x-goog-api-key": self.key}, json=body)
+        if r.status_code == 404:
+            raise ProviderError(GEMINI_MODEL_NOT_FOUND)
+        if r.status_code >= 400:
+            raise ProviderError(_clean_error(r, "Gemini"))
+        j = r.json()
+        try:
+            content = j["candidates"][0]["content"]
+            parts = content.get("parts") or []
+        except (KeyError, IndexError, TypeError):
+            raise ProviderError("Gemini returned no answer (the request may have been blocked)") from None
+        calls = [(p["functionCall"].get("name", ""), p["functionCall"].get("args") or {}) for p in parts if isinstance(p.get("functionCall"), dict)]
+        u = j.get("usageMetadata") or {}
+        return ToolTurn(dict(role="model", parts=parts), calls, "".join(p.get("text", "") for p in parts if "text" in p),
+                        u.get("promptTokenCount", 0) or 0, u.get("candidatesTokenCount", 0) or 0)
+
+
+def build_tool_chat(llm: dict, transport: httpx.BaseTransport | None = None) -> GeminiToolChat:
+    """A tool-calling model for the copilot. Gemini only for now; anything else gets a message a person can act on."""
+    pid = (llm or {}).get("provider") or ""
+    p = PROVIDERS.get(pid)
+    if not p:
+        raise ProviderError("choose an AI provider in Settings")
+    if p["kind"] != "gemini":
+        raise ProviderError(f"The copilot's AI mode works with Google Gemini only for now, not {p['label']}. "
+                            "Pick Gemini in Settings, or use the rule-based copilot.")
+    key = (llm.get("key") or "").strip()
+    if not key:
+        raise ProviderError(f"{p['label']} needs an API key (add it in Settings)")
+    return GeminiToolChat(key, (llm.get("model") or "").strip() or p["model"], transport)
+
+
 class OpenAICompatExtractor:
     """Groq, OpenRouter, OpenAI and Ollama all speak this chat-completions format."""
 

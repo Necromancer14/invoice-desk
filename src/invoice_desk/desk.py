@@ -612,7 +612,8 @@ class Desk:
         "read again") shows its outcome alone."""
         rid = str(r["id"])
         rows = self.db.all("SELECT ts, actor, action, detail FROM audit WHERE target=? AND "
-                           "(action IN ('run.decision', 'run.failed', 'run.reprocess', 'vendor.link') OR action LIKE 'review.%') "
+                           "(action IN ('run.decision', 'run.failed', 'run.reprocess', 'vendor.link', 'agent.propose') "
+                           "OR action LIKE 'review.%') "
                            "ORDER BY ts, id", (rid,))
         trace = {s["step"]: s for s in loads(r["trace"], [])}
         ex = loads(r["extraction"], {}) or {}
@@ -641,6 +642,8 @@ class Desk:
                 out.append(dict(kind="reprocess", at=a["ts"], actor=a["actor"]))
             elif act == "vendor.link":
                 out.append(dict(kind="vendor_link", at=a["ts"], actor=a["actor"]))
+            elif act == "agent.propose":  # detail: "<recommendation>" or "<recommendation> (step limit)"
+                out.append(dict(kind="copilot", at=a["ts"], actor=a["actor"], recommendation=(a["detail"] or "hold").split(" ")[0]))
             elif act in ("review.approve", "review.reject"):
                 note, edited = a["detail"] or "", []
                 m = self._EDITED.search(note)
@@ -649,6 +652,109 @@ class Desk:
                     note = note[:m.start()]
                 out.append(dict(kind="reviewed", at=a["ts"], actor=a["actor"], decision=act.split(".")[1], note=note.strip(), edited=edited))
         return out
+
+    # ------------------------------------------------- copilot reads (read-only) and proposals
+    def _earlier(self, rid: int) -> list[dict]:
+        """Runs received before this one from the same kind of source (uploads, or an evaluation with its history),
+        finished reading, newest first. What a reviewer could have looked up when this invoice arrived."""
+        row = self.db.one("SELECT source FROM runs WHERE id=?", (rid,))
+        if not row:
+            raise DeskError("run not found", 404)
+        sources = ("evaluation", "history") if row["source"] == "evaluation" else (row["source"], row["source"])
+        return self.db.all("SELECT id, filename, status, created_at, fields, final_fields FROM runs WHERE id < ? AND source IN (?,?) "
+                           "AND status NOT IN ('queued','processing') ORDER BY id DESC", (rid, *sources))
+
+    @staticmethod
+    def _brief(r: dict) -> dict:
+        f = Desk._current_fields(r) or {}
+        return dict(id=r["id"], status=r["status"], created_at=r["created_at"], invoice_number=f.get("invoice_number"),
+                    total=f.get("total"), currency=f.get("currency"), iban=f.get("iban"))
+
+    @staticmethod
+    def _vendor_brief(v: dict) -> dict:
+        return {k: v.get(k) for k in ("id", "name_en", "name_ar", "vat", "iban", "currency", "status")}
+
+    def find_vendor(self, query: str) -> dict:
+        """The vendor master entry for a seller name or VAT number, with the reason, as the intake checks see it."""
+        q = (query or "").strip()[:150]
+        book = self.vendor_book()
+        if not book:
+            return dict(vendor=None, why="The vendor master is empty.", suggestions=[])
+        m = book.match({"seller_name": q, "seller_vat": q if vat_key(q) else None})
+        return dict(vendor=self._vendor_brief(m["vendor"]) if m["vendor"] else None, score=round(m["score"], 3),
+                    matched_on=m["matched_on"], why=m["why"], suggestions=m["suggestions"])
+
+    def vendor_history(self, vendor_id: int, before_run: int, limit: int = 12) -> dict:
+        """Earlier invoices that match this vendor: counts by outcome, the usual SAR total and the latest few."""
+        v = self.db.one("SELECT * FROM vendors WHERE id=?", (vendor_id,))
+        if not v:
+            raise DeskError("vendor not found", 404)
+        book = self.vendor_book()
+        mine = []
+        for r in self._earlier(before_run):
+            f = self._current_fields(r) or {}
+            if (f.get("seller_name") or f.get("seller_vat")) and (book.match(f)["vendor"] or {}).get("id") == vendor_id:
+                mine.append(r)
+        c = Counter(self._VALUE.get(r["status"], "other") for r in mine)
+        sar = sorted(x for x in (self._sar(r) for r in mine if r["status"] in ("approved", "approved_human")) if x is not None)
+        return dict(vendor=self._vendor_brief(v), count=len(mine), approved=c["approved"], rejected=c["rejected"],
+                    waiting=c["waiting"], typical_total_sar=sar[len(sar) // 2] if sar else None,
+                    largest_total_sar=sar[-1] if sar else None, latest=[self._brief(r) for r in mine[:limit]])
+
+    def iban_history(self, vendor_id: int, before_run: int) -> dict:
+        """The vendor master's IBAN and the IBANs printed on this vendor's earlier invoices, most used first."""
+        h = self.vendor_history(vendor_id, before_run, limit=10_000)
+        used: dict[str, dict] = {}
+        for b in h["latest"]:  # newest first
+            key = re.sub(r"\s+", "", (b["iban"] or "")).upper()
+            if key:
+                u = used.setdefault(key, dict(iban=key, count=0, latest_run=b["id"]))
+                u["count"] += 1
+        master = re.sub(r"\s+", "", h["vendor"]["iban"] or "").upper() or None
+        return dict(vendor_id=vendor_id, master_iban=master, invoices=h["count"],
+                    with_iban=sum(u["count"] for u in used.values()),
+                    used=sorted(used.values(), key=lambda u: (-u["count"], u["iban"])))
+
+    def similar_invoices(self, rid: int, limit: int = 10) -> list[dict]:
+        """Earlier runs from the same seller (VAT number, or name when there is none) with the same invoice number or
+        the same total. The duplicate rule only catches the first, and only once a run is not rejected."""
+        r = self.db.one("SELECT * FROM runs WHERE id=?", (rid,))
+        if not r:
+            raise DeskError("run not found", 404)
+        f = self._current_fields(r) or {}
+        vat, name, number = vat_key(f.get("seller_vat")), name_key(f.get("seller_name")), number_key(f.get("invoice_number"))
+        total = to_number(f.get("total"))
+        if not (vat or name):
+            return []
+        out = []
+        for e in self._earlier(rid):
+            g = self._current_fields(e) or {}
+            same_seller = vat_key(g.get("seller_vat")) == vat if vat else name_key(g.get("seller_name")) == name
+            if not same_seller:
+                continue
+            why = []
+            if number and number_key(g.get("invoice_number")) == number:
+                why.append("same_number")
+            t = to_number(g.get("total"))
+            if total is not None and t is not None and abs(t - total) < 0.005:
+                why.append("same_total")
+            if why:
+                out.append(dict(self._brief(e), why=why))
+        return out[:limit]
+
+    def save_proposal(self, rid: int, p: dict) -> dict:
+        """Store what the copilot suggests. A proposal is advice: the run's status is never touched here."""
+        cur = self.db.run("INSERT INTO proposals(run_id,mode,model,recommendation,summary,findings,evidence,steps,finished,tokens_in,"
+                          "tokens_out,requested_by,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                          (rid, p["mode"], p.get("model"), p["recommendation"], dumps(p.get("summary")), dumps(p.get("findings") or []),
+                           dumps(p.get("evidence") or []), dumps(p.get("steps") or []), 1 if p.get("finished", True) else 0,
+                           p.get("tokens_in", 0), p.get("tokens_out", 0), p.get("requested_by"), now()))
+        return self.proposals(rid)[0] if cur.lastrowid else {}
+
+    def proposals(self, rid: int, limit: int = 5) -> list[dict]:
+        rows = self.db.all("SELECT * FROM proposals WHERE run_id=? ORDER BY id DESC LIMIT ?", (rid, limit))
+        return [dict(r, summary=loads(r["summary"]), findings=loads(r["findings"], []), evidence=loads(r["evidence"], []),
+                     steps=loads(r["steps"], []), finished=bool(r["finished"])) for r in rows]
 
     def get_blob(self, rid: int) -> tuple[bytes, str, str]:
         r = self.db.one("SELECT blob,content_type,filename FROM runs WHERE id=?", (rid,))
@@ -1047,6 +1153,7 @@ class Desk:
         with self.db.lock:
             self.db.conn.execute("DELETE FROM runs")
             self.db.conn.execute("DELETE FROM audit")
+            self.db.conn.execute("DELETE FROM proposals")
             self.db.conn.commit()
         if not keep_rules:
             self._restore_default_rules()

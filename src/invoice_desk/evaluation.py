@@ -83,6 +83,117 @@ def summarize_rows(rows: list[dict]) -> dict:
                 by_format=slice_("format"), by_lang=slice_("lang"), by_scenario=slice_("scenario"))
 
 
+# ------------------------------------------------------------------------------------------- copilot
+# The decision a careful reviewer should reach for a sample the answer key expects in review. Samples the key
+# expects approved or rejected keep that outcome. This table is our judgement, written down so it can be argued with.
+REVIEWER_DECISION = {
+    "clean": "approve", "over_limit": "approve", "non_sar": "approve",          # genuine invoices that need a second look
+    "iban_changed": "reject", "qr_mismatch": "reject", "due_before_issue": "reject", "future_date": "reject",
+    "hijri_future": "reject", "missing_vat": "reject", "vendor_vat_mismatch": "reject",
+    "unknown_vendor": "hold", "po_over": "hold",                                 # someone has to find something out first
+}
+
+
+def correct_decision(it: dict) -> str:
+    exp = it["expected_status"]
+    if exp == "approved":
+        return "approve"
+    if exp == "rejected":
+        return "reject"
+    return REVIEWER_DECISION.get(it["scenario"], "hold")
+
+
+def _score_copilot(it: dict, p: dict) -> dict:
+    right = correct_decision(it)
+    rec = p["recommendation"]
+    return dict(id=it["id"], file=it["file"], format=it["format"], lang=it["lang"], scenario=it["scenario"], outcome="ok",
+                correct=right, recommended=rec, agree=rec == right, unsafe=rec == "approve" and right != "approve",
+                steps=len(p.get("steps") or []), tokens_in=p.get("tokens_in", 0) or 0, tokens_out=p.get("tokens_out", 0) or 0,
+                finished=p.get("finished", True))
+
+
+def summarize_copilot(rows: list[dict]) -> dict:
+    """Copilot figures over scored rows. Error rows are counted but never enter a percentage or an average."""
+    ok = [r for r in rows if r.get("outcome", "ok") == "ok"]
+    n = len(ok)
+    by: dict[str, dict] = {}
+    for r in ok:
+        b = by.setdefault(r["scenario"], dict(n=0, agree=0, unsafe=0))
+        b["n"] += 1
+        b["agree"] += r["agree"]
+        b["unsafe"] += r["unsafe"]
+    avg = lambda k: round(sum(r[k] for r in ok) / n, 1) if n else None  # noqa: E731
+    return dict(count=n, errors=len(rows) - n, agreement=round(sum(r["agree"] for r in ok) / n, 4) if n else None,
+                unsafe_approves=sum(r["unsafe"] for r in ok), holds=sum(r["recommended"] == "hold" for r in ok),
+                recommended={k: sum(r["recommended"] == k for r in ok) for k in ("approve", "reject", "hold")},
+                avg_steps=avg("steps"), avg_tokens_in=avg("tokens_in"), avg_tokens_out=avg("tokens_out"),
+                unfinished=sum(not r["finished"] for r in ok), by_scenario=by,
+                rows=rows)
+
+
+def copilot_rules(desk: Desk, items: list[dict], ids: dict) -> dict:
+    """The keyless copilot on every sample the desk sent to review, scored against the right decision."""
+    from .agent import investigate_rules
+    rows = []
+    for it in items:
+        rid = ids.get(it["id"])
+        if rid is None or desk.get_run(rid)["status"] != "needs_review":
+            continue
+        rows.append(_score_copilot(it, investigate_rules(desk, rid, "evaluation")))
+    return dict(summarize_copilot(rows), mode="rules")
+
+
+def evaluate_copilot_ai(llm: dict, rules: list[dict] | None = None, *, sample_size: int = 10, seed: int = 1, rpm: float = 4,
+                        root: Path = SAMPLES, chat=None, extractor=None, sleep: Callable[[float], None] = time.sleep,
+                        clock: Callable[[], float] = time.monotonic, progress: Callable[[dict], None] | None = None) -> dict:
+    """Gemini's copilot on a stratified sample of the items the built-in reader sends to review. Reading is free (the
+    built-in reader), so the key is only spent on investigations, paced at rpm model calls a minute. A provider error
+    is that item's error row and is left out of the figures; nothing falls back to the rule-based copilot."""
+    from .agent import STEP_LIMIT, investigate_gemini
+    from .providers import build_tool_chat
+    data = load_answers(root)
+    items = data["invoices"]
+    desk = _desk(data, rules)
+    ids = {it["id"]: desk.submit(it["file"], (root / it["file"]).read_bytes(), guess_type(it["file"], None), "evaluation",
+                                 mode="rules", source="evaluation") for it in items}
+    review = [it for it in items if desk.get_run(ids[it["id"]])["status"] == "needs_review"]
+    sample = stratified_pick(review, sample_size, seed)
+    chat = chat or build_tool_chat(llm)
+    gap = 60.0 / max(rpm, 0.1)
+
+    class Paced:  # every model call waits its turn, so a long investigation does not burst past the free-tier limit
+        model = getattr(chat, "model", None)
+        last = None
+
+        def turn(self, *a):
+            if Paced.last is not None and clock() - Paced.last < gap:
+                sleep(gap - (clock() - Paced.last))
+            Paced.last = clock()
+            return chat.turn(*a)
+
+    rows: list[dict] = []
+    stopped = None
+    for it in sample:
+        if progress:
+            progress(dict(done=len(rows), total=len(sample), errors=sum(r["outcome"] == "error" for r in rows)))
+        try:
+            p = investigate_gemini(desk, ids[it["id"]], "evaluation", llm, chat=Paced(), extractor=extractor)
+        except Exception as exc:  # noqa: BLE001 - recorded, never replaced by the rule-based copilot
+            msg = str(exc)[:240]
+            if "quota" in msg.lower() and "day" in msg.lower():
+                stopped = dict(reason="quota", message=msg)
+                break
+            rows.append(dict(id=it["id"], file=it["file"], format=it["format"], lang=it["lang"], scenario=it["scenario"],
+                             outcome="error", error=msg))
+            continue
+        rows.append(_score_copilot(it, p))
+    if progress:
+        progress(dict(done=len(rows), total=len(sample), errors=sum(r["outcome"] == "error" for r in rows)))
+    return dict(summarize_copilot(rows), mode="gemini", provider=llm.get("provider"), model=getattr(chat, "model", None),
+                seed=seed, sample_size=sample_size, picked=[i["id"] for i in sample], review_items=len(review),
+                step_limit=STEP_LIMIT, stopped=stopped)
+
+
 def _desk(data: dict, rules: list[dict] | None, extractor_factory=None) -> Desk:
     desk = Desk(":memory:", today=date.fromisoformat(data["as_of"]), sync=True, extractor_factory=extractor_factory, seed_vendors=True)
     desk.settings()
@@ -109,6 +220,8 @@ def evaluate(mode: str = "rules", llm: dict | None = None, rules: list[dict] | N
     stats = desk.stats()
     out = summarize_rows(per)
     out.update(mode=mode, as_of=data["as_of"], tokens_in=stats["tokens_in"], tokens_out=stats["tokens_out"], rows=per)
+    if mode == "rules":  # after the scoring above: the copilot only adds proposals and audit rows, never a status
+        out["copilot"] = copilot_rules(desk, items, ids)
     out["_runs"] = _runs(desk, list(ids.values()))
     return out
 

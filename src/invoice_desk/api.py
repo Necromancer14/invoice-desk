@@ -17,8 +17,9 @@ from . import __version__
 from .auth import Auth, AuthError, allows
 from .db import dumps, loads
 from .desk import MAX_BYTES, Desk, DeskError
-from .evaluation import ai_history, evaluate, evaluate_ai, evaluated_ids, save_ai_rows
-from .providers import ProviderError, build_extractor, public_providers
+from .agent import investigate
+from .evaluation import ai_history, evaluate, evaluate_ai, evaluate_copilot_ai, evaluated_ids, save_ai_rows
+from .providers import ProviderError, build_extractor, build_tool_chat, public_providers
 from .rules import HELP_FUNCS, RULE_TYPES
 from .samples import DEMO_SET, demo_plan, list_samples, sample_bytes
 from .schema import FIELDS
@@ -89,8 +90,10 @@ def _int(body: dict, key: str, default: int, lo: int, hi: int) -> int:
     return v
 
 
-def create_app(desk: Desk | None = None, auth: Auth | None = None, rate_limit: int = 40, eval_transport=None) -> FastAPI:
-    """eval_transport: an httpx transport for the AI evaluation's provider calls (tests use a fake one)."""
+def create_app(desk: Desk | None = None, auth: Auth | None = None, rate_limit: int = 40, eval_transport=None,
+               agent_transport=None) -> FastAPI:
+    """eval_transport: an httpx transport for the AI evaluation's provider calls (tests use a fake one).
+    agent_transport: the same for the review copilot's Gemini calls, in the review panel and its evaluation."""
     desk = desk or Desk(os.environ.get("INVOICE_DESK_DB", ":memory:"), seed_vendors=True)
     auth = auth or Auth()
     limiter = RateLimiter(rate_limit)
@@ -185,6 +188,29 @@ def create_app(desk: Desk | None = None, auth: Auth | None = None, rate_limit: i
     def reprocess(rid: int, request: Request, user=Depends(need("reviewer"))):
         desk.reprocess(rid, user["sub"], llm_from(request))
         return dict(ok=True)
+
+    # ------------------------------------------------------------ review copilot
+    @app.post("/api/runs/{rid}/investigate")
+    def investigate_run(rid: int, request: Request, body: dict | None = None, user=Depends(need("reviewer"))):
+        """mode=rules (default, no key) or ai (Gemini, key from the request headers). Suggests; never decides."""
+        mode = (body or {}).get("mode", "rules")
+        if desk.get_run(rid)["source"] == "evaluation":
+            raise HTTPException(409, "evaluation runs are scored against the answer key, not reviewed")
+        if mode == "ai":
+            limiter.check("agent:" + (request.client.host if request.client else "local"))
+            llm = llm_from(request) or {}
+            try:
+                chat = build_tool_chat(llm, agent_transport)
+                reader = build_extractor(llm, agent_transport)  # for reread(); no call is made until the agent asks
+            except ProviderError as exc:
+                raise HTTPException(400, str(exc)) from exc
+            return investigate(desk, rid, user["sub"], "ai", llm, chat=chat, extractor=reader)
+        return investigate(desk, rid, user["sub"], mode)
+
+    @app.get("/api/runs/{rid}/proposals")
+    def run_proposals(rid: int, user=Depends(need("viewer"))):
+        desk.get_run(rid)  # 404 for an unknown run
+        return desk.proposals(rid)
 
     # ------------------------------------------------------- vendors and purchase orders
     async def _csv_text(file: UploadFile) -> str:
@@ -380,6 +406,19 @@ def create_app(desk: Desk | None = None, auth: Auth | None = None, rate_limit: i
         except Exception as exc:
             job.update(status="error", error=f"{type(exc).__name__}: {exc}")
 
+    def _run_eval_copilot(job_id: str, llm: dict, opts: dict):
+        job = jobs[job_id]
+        try:
+            res = evaluate_copilot_ai(llm, desk.rules(), sample_size=opts["sample_size"], seed=opts["seed"], rpm=opts["rpm"],
+                                      chat=build_tool_chat(llm, agent_transport), extractor=build_extractor(llm, agent_transport),
+                                      progress=job.update)
+            res.update(rules_version=desk.rules_version(), rpm=opts["rpm"], ran_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
+            desk.db.run("INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                        ("eval_copilot_ai", dumps(res)))
+            job.update(status="done", stopped=res["stopped"], errors=res["errors"])
+        except Exception as exc:
+            job.update(status="error", error=f"{type(exc).__name__}: {exc}")
+
     def _run_eval(job_id: str, mode: str, llm: dict | None):
         try:
             res = evaluate(mode=mode, llm=llm, rules=desk.rules())
@@ -409,10 +448,23 @@ def create_app(desk: Desk | None = None, auth: Auth | None = None, rate_limit: i
                 raise HTTPException(409, "an AI evaluation is already running")
             opts = dict(sample_size=_int(body, "sample_size", 20, 1, 60), rpm=_int(body, "rpm", 4, 1, 60),
                         seed=_int(body, "seed", 1, 0, 1_000_000), only_new=bool(body.get("only_new")))
+        elif mode == "copilot_ai":
+            try:
+                build_tool_chat(llm or {})
+            except ProviderError as exc:
+                raise HTTPException(400, str(exc)) from exc
+            if any(j.get("status") == "running" and j.get("mode") == mode for j in jobs.values()):
+                raise HTTPException(409, "a copilot evaluation is already running")
+            opts = dict(sample_size=_int(body, "sample_size", 10, 1, 60), rpm=_int(body, "rpm", 4, 1, 60),
+                        seed=_int(body, "seed", 1, 0, 1_000_000))
         elif mode != "rules":
-            raise HTTPException(400, "mode must be rules or ai")
+            raise HTTPException(400, "mode must be rules, ai or copilot_ai")
         job = f"job{len(jobs) + 1}"
         jobs[job] = dict(status="running", mode=mode)
+        if mode == "copilot_ai":  # works on its own scratch database; the kept evaluation runs stay as they are
+            desk.audit(user["sub"], "evaluation.run", f"copilot {llm['provider']} n={opts['sample_size']} rpm={opts['rpm']}")
+            threading.Thread(target=_run_eval_copilot, args=(job, llm, opts), daemon=True).start()
+            return dict(job=job)
         desk.clear_evaluation_runs()  # only the most recent evaluation's runs are kept
         desk.audit(user["sub"], "evaluation.run", mode if mode == "rules" else f"ai {llm['provider']} n={opts['sample_size']} rpm={opts['rpm']}")
         if mode == "ai":
@@ -429,8 +481,9 @@ def create_app(desk: Desk | None = None, auth: Auth | None = None, rate_limit: i
     def eval_results(user=Depends(need("viewer"))):
         row = desk.db.one("SELECT value FROM settings WHERE key='eval_rules'")
         last = desk.db.one("SELECT value FROM settings WHERE key='eval_ai_last'")
+        cop = desk.db.one("SELECT value FROM settings WHERE key='eval_copilot_ai'")
         out = dict(rules=loads(row["value"]) if row else None, ai_models=ai_history(desk.db),
-                   ai_last=loads(last["value"]) if last else None)
+                   ai_last=loads(last["value"]) if last else None, copilot_ai=loads(cop["value"]) if cop else None)
         recorded = RECORDED / "evaluation_ai.json"
         out["recorded_ai"] = loads(recorded.read_text(encoding="utf-8")) if recorded.exists() else None
         return out
