@@ -3,7 +3,7 @@ import { api } from "../api";
 import type { AuditRow } from "../types";
 import { Empty, Err, Head, tk, useApp, useLoad, when } from "../common";
 
-const GROUPS = [["", tk("Everything")], ["run", tk("Invoices")], ["review", tk("Reviews")], ["rule", tk("Rule changes")], ["vendor", tk("Vendors")], ["po", tk("Purchase orders")], ["settings", tk("Settings")], ["demo", tk("Resets")]];
+const GROUPS = [["", tk("Everything")], ["run", tk("Invoices")], ["review", tk("Reviews")], ["agent", tk("Copilot")],["rule", tk("Rule changes")], ["vendor", tk("Vendors")], ["po", tk("Purchase orders")], ["settings", tk("Settings")], ["demo", tk("Resets")]];
 
 export default function Audit() {
   const { t } = useApp();

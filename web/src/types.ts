@@ -51,7 +51,32 @@ export type TimelineEvent = { at: string } & (
   | { kind: "reprocess"; actor: string }
   | { kind: "vendor_link"; actor: string }
   | { kind: "reviewed"; actor: string; decision: "approve" | "reject"; note: string; edited: string[] }
+  | { kind: "copilot"; actor: string; recommendation: Recommendation }
 );
+/** What the review copilot suggests. It never decides: a person approves or rejects. */
+export type Recommendation = "approve" | "reject" | "hold";
+/** A finding of the rule-based copilot (and the guard note in Gemini mode): a code the portal words, plus its values. */
+export interface Finding { code: string; effect: "reject" | "hold" | "soft" | "info"; runs?: number[]; [k: string]: unknown }
+export interface CopilotStep {
+  n: number; tool: string; args: Record<string, unknown>; ok: boolean; ms: number;
+  result: { code: string; [k: string]: unknown };
+}
+export interface Proposal {
+  id: number; run_id: number; mode: "rules" | "gemini"; model: string | null; recommendation: Recommendation;
+  summary: { en: string; ar: string } | null; findings: Finding[]; evidence: string[]; steps: CopilotStep[]; finished: boolean;
+  tokens_in: number; tokens_out: number; requested_by: string; created_at: string;
+}
+export interface CopilotRow {
+  id: string; file: string; scenario: string; outcome: "ok" | "error"; correct?: Recommendation; recommended?: Recommendation;
+  agree?: boolean; unsafe?: boolean; steps?: number; tokens_in?: number; tokens_out?: number; error?: string;
+}
+export interface CopilotEval {
+  mode: "rules" | "gemini"; count: number; errors: number; agreement: number | null; unsafe_approves: number; holds: number;
+  recommended: Record<Recommendation, number>; avg_steps: number | null; avg_tokens_in: number | null; avg_tokens_out: number | null;
+  unfinished: number; by_scenario: Record<string, { n: number; agree: number; unsafe: number }>; rows: CopilotRow[];
+  model?: string | null; provider?: string; review_items?: number; sample_size?: number; seed?: number; rpm?: number;
+  ran_at?: string; rules_version?: number; stopped?: { reason: string; message: string } | null; step_limit?: number;
+}
 export interface Stats {
   total: number; by_status: Record<Status, number>; review_queue: number; auto_approve_rate: number | null; human_corrected: number;
   avg_extract_ms: number | null; avg_time_to_review_s: number | null; tokens_in: number; tokens_out: number; cost: number | null;
@@ -95,6 +120,7 @@ export interface EvalResult {
   field_accuracy: number | null; decision_agreement: number | null; auto_approve_rate: number | null;
   review_rate: number | null; unsafe_auto_approvals: number; false_rejections: number; tokens_in?: number; tokens_out?: number;
   by_field: Record<string, number>; by_format: Record<string, Slice>; by_lang: Record<string, Slice>; by_scenario: Record<string, Slice>; rows: EvalRow[];
+  copilot?: CopilotEval;
 }
 export interface EvalErrorRow { id: string; file: string; format: string; lang: string; scenario: string; outcome: "error"; error: string }
 /** Everything evaluated so far with one AI model, combined across runs. */

@@ -3,6 +3,7 @@ import { api } from "../api";
 import type { QueueItem, RunDetail } from "../types";
 import { Empty, Err, Head, ago, money, useApp, useLoad } from "../common";
 import { CheckList, Document, Evidence, ReviewForm, RunHeader } from "./RunDetail";
+import Copilot from "./Copilot";
 
 const typing = (e: KeyboardEvent) => {
   const el = e.target as HTMLElement;
@@ -134,6 +135,7 @@ export default function Review({ openId }: { openId?: number }) {
                   <div className="doc-pane"><Document run={current} /></div>
                   <div className="col run-side">
                     <section className="panel why"><h2>{t("Why this needs a person")}</h2><CheckList run={current} /></section>
+                    <Copilot run={current} onRun={(r) => setRun((now) => (now && now.id === r.id ? r : now))} />
                     <ReviewForm run={current} onDone={() => decided(current.id)}>
                       <section className="panel"><Evidence run={current} onChange={setRun} checks={false} /></section>
                     </ReviewForm>

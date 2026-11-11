@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { api, session } from "../api";
-import type { AiLastRun, AiTotals, EvalResult, Provider, Status } from "../types";
+import type { AiLastRun, AiTotals, CopilotEval, EvalResult, Provider, Recommendation, Status } from "../types";
 import { Err, Head, STATUS_LABEL, can, day, num, pct, tk, useApp, useLoad, when } from "../common";
+import { REC_SHORT } from "./Copilot";
 
-interface EvalAll { rules: EvalResult | null; ai_models: AiTotals[]; ai_last: AiLastRun | null; recorded_ai: EvalResult | null }
+interface EvalAll { rules: EvalResult | null; ai_models: AiTotals[]; ai_last: AiLastRun | null; recorded_ai: EvalResult | null; copilot_ai: CopilotEval | null }
 interface Job { status: string; error?: string; done?: number; total?: number; errors?: number; message?: string; stopped?: AiLastRun["stopped"] }
 interface AiOptions { sample_size: number; rpm: number; only_new: boolean; seed: number }
 
@@ -56,6 +57,73 @@ function Metrics({ r, title, note, hideCount }: { r: EvalResult; title: string; 
       {wrong.length > 0 && <p className="mt3"><button className="btn small" onClick={() => setShow(!show)}>{show ? t("Hide the {n} disagreements", { n: wrong.length }) : t("Show the {n} disagreements", { n: wrong.length })}</button></p>}
       {show && <div className="tw"><table><thead><tr><th>{t("File")}</th><th>{t("Scenario")}</th><th>{t("Expected")}</th><th>{t("Got")}</th></tr></thead><tbody>
         {wrong.map((x) => <tr key={x.id}><td><bdi dir="ltr">{x.file}</bdi></td><td>{SCENARIO[x.scenario] ? t(SCENARIO[x.scenario]) : x.scenario.replace(/_/g, " ")}</td><td>{decision(x.expected)}</td><td>{decision(x.got)}</td></tr>)}</tbody></table></div>}
+    </div>
+  );
+}
+
+const scenarioLabel = (t: (s: string) => string, s: string) => (SCENARIO[s] ? t(SCENARIO[s]) : s.replace(/_/g, " "));
+
+/** How often the review copilot's suggestion matched the right decision, on the items the desk sent to review. */
+function CopilotMetrics({ c, title }: { c: CopilotEval; title: string }) {
+  const { t } = useApp();
+  const [show, setShow] = useState(false);
+  const wrong = c.rows.filter((x) => x.outcome === "ok" && !x.agree);
+  const errors = c.rows.filter((x) => x.outcome === "error");
+  const nInv = t("n = {n}", { n: c.count });
+  const rec = (r?: Recommendation) => (r ? t(REC_SHORT[r]) : "–");
+  const meta = [
+    c.mode === "gemini" && c.model ? `${c.model}` : "",
+    c.mode === "gemini" ? t("{done} of {n} review items, picked by seed {seed}", { done: c.count, n: c.review_items ?? 0, seed: c.seed ?? 1 }) : t("{n} invoices", { n: c.count }),
+    c.errors ? t("{n} errors", { n: c.errors }) : "", c.rules_version != null ? t("rules version {v}", { v: c.rules_version }) : "", c.ran_at ? when(c.ran_at) : "",
+  ].filter(Boolean);
+  return (
+    <div className="panel">
+      <h2>{title}</h2>
+      <p className="muted small"><bdi>{meta.join(" · ")}</bdi></p>
+      <p className="small mt2">{t("Measured on synthetic samples only: the invoices the built-in reader sends to review. The right decision comes from the answer key; where the key expects review, it is our judgement for each kind of problem, written down in evaluation.py. A suggestion to find out more counts as right only where that is the right decision, and is never unsafe.")}</p>
+      <div className="facts mt3">
+        <div className="fact"><b>{pct(c.agreement)}</b><span>{t("suggestions that match the right decision")}</span><small className="n-note">{nInv}</small></div>
+        <div className="fact"><b className={c.unsafe_approves ? "bad-figure" : undefined}>{num(c.unsafe_approves)}</b><span>{t("suggested approving when it should not have")}</span><small className="n-note">{nInv}</small></div>
+        <div className="fact"><b>{num(c.holds)}</b><span>{t("suggested finding out more")}</span><small className="n-note">{nInv}</small></div>
+        <div className="fact"><b>{num(c.avg_steps, 1)}</b><span>{t("steps per invoice")}</span><small className="n-note">{nInv}</small></div>
+        {c.mode === "gemini" && <div className="fact"><b>{num(c.avg_tokens_in)} / {num(c.avg_tokens_out)}</b><span>{t("tokens in / out per invoice")}</span><small className="n-note">{nInv}</small></div>}
+      </div>
+      <h3 className="sec-title mt5">{t("By kind of invoice")}</h3>
+      <div className="tw"><table><thead><tr><th>{t("Kind")}</th><th className="n">{t("Invoices (n)")}</th><th className="n">{t("Right suggestion")}</th><th className="n">{t("Unsafe approve")}</th></tr></thead><tbody>
+        {Object.entries(c.by_scenario).map(([k, b]) => <tr key={k}><td>{scenarioLabel(t, k)}</td><td className="n">{num(b.n)}</td><td className="n">{pct(b.agree / b.n)}</td><td className="n">{num(b.unsafe)}</td></tr>)}
+      </tbody></table></div>
+      {wrong.length > 0 && <p className="mt3"><button className="btn small" onClick={() => setShow(!show)}>{show ? t("Hide the {n} disagreements", { n: wrong.length }) : t("Show the {n} disagreements", { n: wrong.length })}</button></p>}
+      {show && <div className="tw"><table><thead><tr><th>{t("File")}</th><th>{t("Scenario")}</th><th>{t("Right decision")}</th><th>{t("Suggested")}</th></tr></thead><tbody>
+        {wrong.map((x) => <tr key={x.id}><td><bdi dir="ltr">{x.file}</bdi></td><td>{scenarioLabel(t, x.scenario)}</td><td>{rec(x.correct)}</td><td>{rec(x.recommended)}</td></tr>)}</tbody></table></div>}
+      {errors.length > 0 && <ul className="small plain-list mt3">{errors.map((e) => <li key={e.id}><bdi dir="ltr">{e.file}</bdi>: <span dir="auto">{e.error}</span></li>)}</ul>}
+    </div>
+  );
+}
+
+interface CopilotOptions { sample_size: number; rpm: number; seed: number }
+const COPILOT_DEFAULTS: CopilotOptions = { sample_size: 10, rpm: 4, seed: 1 };
+
+function CopilotRunForm({ running, onRun }: { running: boolean; onRun: (o: CopilotOptions) => void }) {
+  const { t } = useApp();
+  const [o, setO] = useState<CopilotOptions>(COPILOT_DEFAULTS);
+  const ready = session.provider === "gemini" && session.aiReady();
+  const setNum = (k: keyof CopilotOptions, lo: number, hi: number) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    const v = Math.round(Number(e.target.value));
+    setO({ ...o, [k]: Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : lo });
+  };
+  return (
+    <div className="panel col">
+      <h2>{t("Evaluate the copilot with Gemini")}</h2>
+      <p className="muted small">{t("The built-in reader reads every sample for free, then Gemini investigates a sample of the invoices that land in review, paced for free-tier limits. Each investigation takes several calls. A failed investigation is counted as an error, never handed to the rule-based copilot.")}</p>
+      {!ready && <div className="notice warn">{t("Pick Google Gemini and add its key in Settings")}</div>}
+      <div className="grid eval-opts">
+        <label className="f">{t("How many invoices")}<input type="number" dir="ltr" min={1} max={41} value={o.sample_size} onChange={setNum("sample_size", 1, 41)} /></label>
+        <label className="f">{t("Requests per minute")}<input type="number" dir="ltr" min={1} max={60} value={o.rpm} onChange={setNum("rpm", 1, 60)} /></label>
+        <label className="f">{t("Sample seed")} <span className="hint">{t("(same seed, same invoices)")}</span><input type="number" dir="ltr" min={0} value={o.seed} onChange={setNum("seed", 0, 1_000_000)} /></label>
+      </div>
+      <div className="row wrap">
+        <button className="btn primary" disabled={running || !ready} onClick={() => onRun(o)}>{running ? t("Running…") : t("Run the copilot with Gemini")}</button>
+      </div>
     </div>
   );
 }
@@ -127,10 +195,10 @@ export default function Evaluation() {
   const [err, setErr] = useState<string | null>(null);
   const admin = can(role, "admin");
 
-  async function run(mode: "rules" | "ai", opts?: AiOptions) {
+  async function run(mode: "rules" | "ai" | "copilot_ai", opts?: AiOptions | CopilotOptions) {
     setRunning(mode); setErr(null); setJob(null);
     try {
-      const { job: id } = await api<{ job: string }>("/evaluation/run", { body: { mode, ...opts }, ai: mode === "ai" });
+      const { job: id } = await api<{ job: string }>("/evaluation/run", { body: { mode, ...opts }, ai: mode !== "rules" });
       for (let i = 0; i < 4000; i++) {
         await new Promise((r) => setTimeout(r, 1500));
         const j = await api<Job>(`/evaluation/jobs/${id}`);
@@ -161,6 +229,12 @@ export default function Evaluation() {
               m.first_at.slice(0, 10) === m.last_at.slice(0, 10) ? day(m.first_at) : `${day(m.first_at)} – ${day(m.last_at)}`].join(" · ")} />
         ))}
         {!data?.ai_models.length && data?.recorded_ai && <Metrics r={data.recorded_ai} title={t("AI model, recorded run shipped with the project")} note={t("not live")} />}
+        {data?.rules?.copilot && <CopilotMetrics c={data.rules.copilot} title={t("Review copilot, rule-based")} />}
+        {admin && <CopilotRunForm running={!!running} onRun={(o) => run("copilot_ai", o)} />}
+        {running === "copilot_ai" && job && job.total != null && (
+          <div className="notice" role="status">{t("{a}, {b}", { a: t("Evaluating {done} of {n}", { done: job.done ?? 0, n: job.total }), b: t("{n} errors so far", { n: job.errors ?? 0 }) })}</div>
+        )}
+        {data?.copilot_ai && <CopilotMetrics c={data.copilot_ai} title={t("Review copilot, Gemini")} />}
         {data && !data.rules && !data.ai_models.length && !data.recorded_ai && <div className="panel muted">{t("No results yet. Run the evaluation to fill this page.")}</div>}
       </div>
     </>

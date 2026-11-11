@@ -3,6 +3,7 @@ import { api, fileBlobUrl } from "../api";
 import type { Fields, PoStatus, RunDetail as Run, TimelineEvent } from "../types";
 import { reason } from "../reasons";
 import { CheckMark, Err, FIELD_LABEL, StatusPill, can, money, num, pct, tk, useApp, when } from "../common";
+import { MODE_LABEL, REC_SHORT } from "./Copilot";
 
 /** ltr: codes, dates and amounts, typed and shown left-to-right even in Arabic. Labels come from FIELD_LABEL. */
 const EDIT_FIELDS: { key: keyof Fields; type?: "number" | "date"; wide?: boolean; ltr?: boolean }[] = [
@@ -301,6 +302,8 @@ export function Timeline({ events }: { events: TimelineEvent[] }) {
       case "failed": return ["x", t("Processing failed")];
       case "reprocess": return ["", t("Read again at the request of {name}", { name: own(e.actor) })];
       case "vendor_link": return ["", t("{name} linked the seller to a vendor", { name: own(e.actor) })];
+      case "copilot": return ["", t("Copilot ({mode}) suggested: {rec}", {
+        mode: t(e.actor === "agent:gemini" ? MODE_LABEL.gemini : MODE_LABEL.rules), rec: t(REC_SHORT[e.recommendation] ?? REC_SHORT.hold) })];
       case "reviewed": return [e.decision === "approve" ? "h" : "x", <>
         {e.decision === "approve" ? t("Approved by {name}", { name: own(e.actor) }) : t("Rejected by {name}", { name: own(e.actor) })}
         {e.edited.length > 0 && <div className="small">{t("Corrected: {fields}", { fields: list(e.edited.map((f) => t(FIELD_LABEL[f] || f))) })}</div>}

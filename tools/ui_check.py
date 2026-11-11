@@ -479,8 +479,69 @@ def run_timeline(page: Page) -> None:
     check("timeline: Arabic wording", "اعتمدها" in last and "رقم الفاتورة" in last, last)
 
 
+def copilot_panel(page: Page) -> None:
+    """Review copilot: the rule-based mode suggests with evidence and steps, changes no status, shows in the timeline and
+    in Arabic; a viewer sees it without the button; Gemini mode (answered here by a stand-in, no network) shows its own
+    summary and model, and only that request carries the key."""
+    sign_in(page)
+    load_samples(page, ["inv-083.txt", "inv-086.txt"])
+    items = api(page, "GET", "/runs?status=needs_review")["body"]["items"]
+    rid = next((r["id"] for r in items if r["filename"] == "inv-083.txt"), None)
+    check("copilot: the changed-IBAN sample waits for review", rid is not None)
+    if rid is None:
+        return
+    page.evaluate(f"location.hash = '#/review/{rid}'; location.reload()")
+    expect(page.locator(".copilot")).to_contain_text("No suggestion yet")
+    check("copilot: no Gemini button without a Gemini key", page.get_by_role("button", name="Investigate with Gemini").count() == 0)
+    page.locator(".copilot").get_by_role("button", name="Investigate", exact=True).click()
+    expect(page.locator(".cp-rec")).to_contain_text("Suggests rejecting")
+    check("copilot: labels the mode", page.locator(".cp-mode").inner_text().strip() == "Rule-based")
+    check("copilot: explains the IBAN with the vendor master", "IBAN on the invoice" in page.locator(".cp-findings").first.inner_text())
+    n = int(re.search(r"\((\d+)\)", page.locator(".cp-steps summary").inner_text())[1])
+    page.locator(".cp-steps summary").click()
+    check("copilot: shows the steps it took", n >= 3 and page.locator(".cp-steps li").count() == n)
+    check("copilot: the invoice still waits for a person", api(page, "GET", f"/runs/{rid}")["body"]["status"] == "needs_review")
+    log = api(page, "GET", "/audit?action=agent")["body"]
+    check("copilot: every step is in the audit log as agent:rules",
+          sum(a["actor"] == "agent:rules" and a["action"] == "agent.step" for a in log) == n and any(a["action"] == "agent.propose" for a in log))
+    expect(page.locator(".decide").get_by_role("button", name="Approve")).to_be_visible()
+    page.evaluate(f"location.hash = '#/runs/{rid}'")
+    expect(page.locator(".tl li").last).to_contain_text("suggested: reject")
+
+    page.evaluate(f"localStorage.setItem('id-lang', 'ar'); location.hash = '#/review/{rid}'; location.reload()")
+    expect(page.locator(".cp-rec")).to_contain_text("يقترح الرفض")
+    text = page.locator(".cp-findings").first.inner_text()
+    check("copilot: findings in Arabic", "الآيبان" in text and "IBAN on" not in text, text[:120])
+    check("copilot: right to left in Arabic", page.evaluate("getComputedStyle(document.querySelector('.copilot')).direction") == "rtl")
+
+    page.evaluate("localStorage.removeItem('id-token')")   # back to the role screen
+    sign_in(page, "viewer")
+    page.evaluate(f"location.hash = '#/review/{rid}'")
+    expect(page.locator(".cp-rec")).to_be_visible()
+    check("copilot: a viewer sees the suggestion but cannot investigate", page.locator(".copilot button.btn").count() == 0)
+
+    page.evaluate("localStorage.removeItem('id-token')")
+    sign_in(page)
+    page.evaluate("sessionStorage.setItem('id-llm-key-gemini', 'FAKE-UI-KEY'); localStorage.setItem('id-llm-provider', 'gemini')")
+    keys: list = []
+    page.on("request", lambda r: keys.append((r.url, r.headers.get("x-llm-key"))) if "/api/" in r.url else None)
+    fake = {"id": 999, "run_id": rid, "mode": "gemini", "model": "gemini-ui-check", "recommendation": "hold",
+            "summary": {"en": "The IBAN changed; call the vendor.", "ar": "تغيّر الآيبان؛ اتصل بالمورّد."},
+            "findings": [], "evidence": ["iban_history: master IBAN differs"], "finished": True, "tokens_in": 1200, "tokens_out": 90,
+            "requested_by": "demo-admin", "created_at": "2026-11-10T10:00:00+00:00",
+            "steps": [{"n": 1, "tool": "get_invoice", "args": {"id": rid}, "ok": True, "ms": 3, "result": {"code": "invoice", "failed": 1}}]}
+    page.route(f"**/api/runs/{rid}/investigate", lambda route: route.fulfill(status=200, json=fake))
+    page.evaluate(f"location.hash = '#/review/{rid}'; location.reload()")
+    page.get_by_role("button", name="Investigate with Gemini").click()
+    expect(page.locator(".cp-summary")).to_contain_text("The IBAN changed")
+    check("copilot: Gemini mode and model are labelled", "Gemini" in page.locator(".cp-mode").inner_text() and "gemini-ui-check" in page.locator(".cp-mode").inner_text())
+    with_key = [u for u, k in keys if k]
+    check("copilot: only the Gemini request carries the key", with_key == [f"{BASE}/api/runs/{rid}/investigate"], str(with_key))
+    page.unroute_all(behavior="ignoreErrors")
+
+
 CHECKS = [mixed_direction, reasons_in_arabic, review_badge, waking_screen, rule_with_open_limit, error_messages, damaged_file, provider_failure, xml_reads_as_an_invoice,
-          vendors_and_risk, demo_start, review_layout, dashboard_layout, runs_sorting, run_timeline]
+          vendors_and_risk, demo_start, review_layout, dashboard_layout, runs_sorting, run_timeline, copilot_panel]
 
 if __name__ == "__main__":
     with sync_playwright() as pw:

@@ -381,6 +381,17 @@ th[aria-sort] { color: var(--ink); }
 .run-side { gap: var(--s3); min-width: 0; container-type: inline-size; }
 .run-side .panel { padding: var(--s4) var(--s5); }
 .why h2 { margin-bottom: var(--s1); }
+/* review copilot: suggestion, findings, steps */
+.copilot { gap: var(--s2); }
+.cp-head { justify-content: space-between; gap: var(--s2); }
+.cp-mode { color: var(--ink-2); background: var(--surface-2); }
+.cp-rec b { font-weight: 600; }
+.cp-summary { margin: 0; }
+.cp-findings { margin: 0; padding-inline-start: 18px; display: flex; flex-direction: column; gap: 6px; font-size: var(--t-md); }
+.cp-findings li.e-info { color: var(--ink-2); }
+.cp-steps summary { cursor: pointer; font-size: var(--t-md); font-weight: 500; }
+.cp-steps .tl { margin-top: var(--s2); }
+.cp-err { color: var(--bad); }
 .lines { margin-top: var(--s4); border: 1px solid var(--line); border-radius: var(--r-md); }
 .lines th, .lines td { padding: 6px 8px; font-size: var(--t-sm); }
 .lines td.n { white-space: nowrap; }

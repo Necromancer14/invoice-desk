@@ -142,7 +142,7 @@ class Tools:
     def find_vendor(self, name_or_vat) -> tuple[dict, dict]:
         r = self.desk.find_vendor(str(name_or_vat or ""))
         v = r["vendor"]
-        return r, (dict(code="vendor_found", vendor_id=v["id"], name=v["name_en"] or v["name_ar"], status=v["status"])
+        return r, (dict(code="vendor_found", vendor_id=v["id"], name=v["name_en"] or v["name_ar"], name_ar=v["name_ar"], status=v["status"])
                    if v else dict(code="vendor_not_found", query=str(name_or_vat or "")[:80]))
 
     def vendor_history(self, vendor_id) -> tuple[dict, dict]:
@@ -368,7 +368,7 @@ def investigate_rules(desk: Desk, rid: int, actor: str) -> dict:
         add("instructions_in_document", "info")
     if vendor:
         h = history or {}
-        add("known_vendor", "info", vendor=vendor.get("name_en") or vendor.get("name_ar"), vendor_id=vendor["id"],
+        add("known_vendor", "info", vendor=vendor.get("name_en") or vendor.get("name_ar"), vendor_ar=vendor.get("name_ar"), vendor_id=vendor["id"],
             earlier=h.get("count", 0), approved=h.get("approved", 0), rejected=h.get("rejected", 0),
             runs=[b["id"] for b in h.get("latest", [])][:5])
     elif not desk.vendor_book() and readable:

@@ -116,6 +116,12 @@ with sync_playwright() as pw:
             page.wait_for_selector(".modal pre.xml")
             axe(page, f"XML invoice view {lang}/{theme}")
             page.keyboard.press("Escape")
+            # the review copilot with a suggestion, its findings and its steps opened
+            page.evaluate("location.hash = '#/review'")
+            page.locator(".copilot .btn").first.click()
+            page.wait_for_selector(".cp-rec")
+            page.locator(".cp-steps summary").click()
+            axe(page, f"review copilot {lang}/{theme}")
     page.evaluate("localStorage.setItem('id-lang', 'en'); localStorage.setItem('id-theme', 'light'); location.reload()")
     page.wait_for_selector(".nav")
     keyboard(page)
