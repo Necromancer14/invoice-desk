@@ -92,8 +92,8 @@ def test_gemini_request_and_parse():
 
 def test_gemini_default_model():
     gemini = next(p for p in public_providers() if p["id"] == "gemini")
-    assert gemini["model"] == "gemini-3.5-flash-lite" and gemini["alt_models"] == ["gemini-3.8-flash"]
-    assert build_extractor({"provider": "gemini", "key": "k"}).model == "gemini-3.5-flash-lite"
+    assert gemini["model"] == "gemini-3.1-flash-lite" and gemini["alt_models"] == ["gemini-3.8-flash"]
+    assert build_extractor({"provider": "gemini", "key": "k"}).model == "gemini-3.1-flash-lite"
 
 
 def test_gemini_unknown_model_says_what_to_do():

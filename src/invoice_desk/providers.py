@@ -18,7 +18,7 @@ from .extractors import (IMAGE_TYPES, JSON_PROMPT, ClaudeExtractor, Extraction, 
 PROVIDERS: dict[str, dict] = {
     # Google retires model names for new keys without much notice, so the default is only a starting point:
     # the Model box stays editable and alt_models are shown as other names to try.
-    "gemini": dict(label="Google Gemini", kind="gemini", free=True, model="gemini-3.5-flash-lite", alt_models=["gemini-3.8-flash"],
+    "gemini": dict(label="Google Gemini", kind="gemini", free=True, model="gemini-3.1-flash-lite", alt_models=["gemini-3.8-flash"],
                    images=True, pdf=True, key_url="https://aistudio.google.com/apikey",
                    note="Free key from Google AI Studio, no card needed. Reads images and PDFs. Google may use free-tier content to improve its products, so only use made-up invoices."),
     "groq": dict(label="Groq", kind="openai", base="https://api.groq.com/openai/v1", free=True, model="llama-3.3-70b-versatile", images=False, pdf=False,
