@@ -128,7 +128,11 @@ def _score_copilot(it: dict, p: dict, could_not_read: bool = False) -> dict:
                 correct=right, recommended=rec, agree=rec == right, unsafe=rec == "approve" and right != "approve",
                 deferred=rec == "hold" and could_not_read, could_not_read=could_not_read,
                 steps=sum(s.get("tool") != "guard" for s in p.get("steps") or []), tokens_in=p.get("tokens_in", 0) or 0,
-                tokens_out=p.get("tokens_out", 0) or 0, finished=p.get("finished", True))
+                tokens_out=p.get("tokens_out", 0) or 0, finished=p.get("finished", True),
+                # what it said and why, so a miss or a deferral can be read on the page instead of guessed at
+                summary=p.get("summary"), reasons=p.get("reasons") or [], context=p.get("context") or [],
+                tools=[s["tool"] for s in p.get("steps") or []],
+                reread=any(s.get("tool") == "reread" and s.get("ok") for s in p.get("steps") or []))
 
 
 def summarize_copilot(rows: list[dict]) -> dict:

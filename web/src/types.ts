@@ -73,6 +73,8 @@ export interface Proposal {
 export interface CopilotRow {
   id: string; file: string; scenario: string; outcome: "ok" | "error"; correct?: Recommendation; recommended?: Recommendation;
   agree?: boolean; unsafe?: boolean; deferred?: boolean; could_not_read?: boolean; steps?: number; tokens_in?: number; tokens_out?: number; error?: string;
+  /** What it said and why (kept from this version on; older stored results do not have them). */
+  summary?: { en: string; ar: string } | null; reasons?: Item[]; context?: Item[]; tools?: string[]; reread?: boolean;
 }
 export interface CopilotEval {
   mode: "rules" | "gemini"; count: number; errors: number; agreement: number | null; unsafe_approves: number; holds: number;

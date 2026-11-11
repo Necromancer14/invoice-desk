@@ -562,19 +562,36 @@ def copilot_evaluation(page: Page) -> None:
     started = api(page, "POST", "/evaluation/run", {"mode": "rules"})
     check("copilot evaluation: the run started", started["status"] == 200 and bool(started["body"]), str(started))
     # done means the job finished and the results are stored; wait for the results themselves
-    page.wait_for_function("""async () => { const r = await fetch('/api/evaluation', { headers: { Authorization: 'Bearer ' + localStorage.getItem('id-token') } });
-        const j = await r.json(); return !!(j.rules && j.rules.copilot); }""", polling=1000, timeout=90000)
-    data = api(page, "GET", "/evaluation")["body"]["rules"]["copilot"]
+    data = None
+    for _ in range(90):
+        rules = (api(page, "GET", "/evaluation")["body"] or {}).get("rules")
+        if rules and rules.get("copilot"):
+            data = rules["copilot"]
+            break
+        page.wait_for_timeout(1000)
+    check("copilot evaluation: results were stored", data is not None)
+    if data is None:
+        return
     page.evaluate("location.hash = '#/evaluation'; location.reload()")
     panel = page.locator(".panel", has_text="Review copilot, rule-based")
     expect(panel).to_be_visible()
     facts = panel.locator(".fact")
     check("copilot evaluation: exactly three headline figures", facts.count() == 3, str(facts.count()))
     text = panel.inner_text()
-    check("copilot evaluation: agreement on the items it could read", "on the items it could read" in text and f"n = {data['answered']}" in text)
+    check("copilot evaluation: agreement is labelled as being on the items it could read", "on the items it could read" in text)
     check("copilot evaluation: deferral rate with its count", "deferred" in text and f"{data['deferred']} of {data['count']} items" in text)
     check("copilot evaluation: unsafe approve suggestions", facts.nth(2).locator("b").inner_text() == str(data["unsafe_approves"]))
     check("copilot evaluation: worded as synthetic samples only", "synthetic samples only" in text and "counted as deferred, not as wrong" in text)
+    agreed = sum(1 for r in data["rows"] if r["agree"] and not r["deferred"])
+    total = panel.locator(".total-row").inner_text()
+    headline = facts.nth(0).locator("b").inner_text()
+    check("copilot evaluation: the headline says how many agreed of how many it could read",
+          f"{agreed} of {data['answered']} agree" in facts.nth(0).inner_text() and f"not counted: {data['deferred']} deferred" in facts.nth(0).inner_text())
+    check("copilot evaluation: the table's All items row is the same figure as the headline",
+          f"{agreed} of {data['answered']} ({headline})" in total.replace("\t", " ").replace("\n", " "), f"{headline!r} vs {total!r}")
+    panel.get_by_role("button", name=re.compile(r"^Show the \d+ deferred item")).click()
+    first = panel.locator("table").last.locator("tbody tr").first.inner_text()
+    check("copilot evaluation: a deferred item shows what the copilot said", "I suggest" in first, first[:120])
     page.evaluate("localStorage.setItem('id-lang', 'ar'); location.reload()")
     panel = page.locator(".panel", has_text="مساعد المراجعة، بالقواعد")
     expect(panel).to_be_visible()

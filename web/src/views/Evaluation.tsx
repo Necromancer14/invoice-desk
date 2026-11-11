@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { api, session } from "../api";
-import type { AiLastRun, AiTotals, CopilotEval, EvalResult, Provider, Recommendation, Status } from "../types";
+import type { AiLastRun, AiTotals, CopilotEval, CopilotRow, EvalResult, Provider, Recommendation, Status } from "../types";
 import { Err, Head, STATUS_LABEL, can, day, num, pct, tk, useApp, useLoad, when } from "../common";
-import { REC_SHORT } from "./Copilot";
+import { ItemRow, REC_SHORT } from "./Copilot";
 
 interface EvalAll { rules: EvalResult | null; ai_models: AiTotals[]; ai_last: AiLastRun | null; recorded_ai: EvalResult | null; copilot_ai: CopilotEval | null }
 interface Job { status: string; error?: string; done?: number; total?: number; errors?: number; message?: string; stopped?: AiLastRun["stopped"] }
@@ -65,11 +65,23 @@ const scenarioLabel = (t: (s: string) => string, s: string) => (SCENARIO[s] ? t(
 
 /** How often the review copilot's suggestion matched the right decision, on the items the desk sent to review. */
 function CopilotMetrics({ c, title }: { c: CopilotEval; title: string }) {
-  const { t } = useApp();
-  const [show, setShow] = useState(false);
-  const wrong = c.rows.filter((x) => x.outcome === "ok" && !x.agree && !x.deferred);
+  const { t, lang } = useApp();
+  const [show, setShow] = useState<"" | "wrong" | "deferred">("");
+  const ok = c.rows.filter((x) => x.outcome === "ok");
+  const wrong = ok.filter((x) => !x.agree && !x.deferred);
+  const deferred = ok.filter((x) => x.deferred);
+  const agreed = ok.filter((x) => x.agree && !x.deferred).length;       // the figure's numerator; c.answered is its n
   const errors = c.rows.filter((x) => x.outcome === "error");
   const nInv = t("n = {n}", { n: c.count });
+  const said = (x: CopilotRow) => {
+    const s = x.summary ? (lang === "ar" ? x.summary.ar || x.summary.en : x.summary.en || x.summary.ar) : "";
+    const items = x.reasons ?? [];
+    return !s && !items.length ? "–" : <>
+      {s && <div dir="auto">{s}</div>}
+      {items.length > 0 && <ul className="cp-findings">{items.map((it, i) => <ItemRow key={i} it={it} />)}</ul>}</>;
+  };
+  const list = (rows: CopilotRow[], key: "wrong" | "deferred", label: string) => rows.length > 0 && (
+    <p className="mt3"><button className="btn small" onClick={() => setShow(show === key ? "" : key)}>{label}</button></p>);
   const rec = (r?: Recommendation) => (r ? t(REC_SHORT[r]) : "–");
   const meta = [
     c.mode === "gemini" && c.model ? `${c.model}` : "",
@@ -82,18 +94,23 @@ function CopilotMetrics({ c, title }: { c: CopilotEval; title: string }) {
       <p className="muted small"><bdi>{meta.join(" · ")}</bdi></p>
       <p className="small mt2">{t("Measured on synthetic samples only: the invoices the built-in reader sends to review. The right decision comes from the answer key; where the key expects review, it is our judgement for each kind of problem, written down in evaluation.py. When the file could not be read or was read with low confidence, a suggestion to find out more is counted as deferred, not as wrong, and is left out of the agreement figure. A suggestion to find out more is never unsafe.")}</p>
       <div className="facts mt3">
-        <div className="fact"><b>{pct(c.agreement)}</b><span>{t("agreement with the right decision, on the items it could read")}</span><small className="n-note">{t("n = {n}", { n: c.answered })}</small></div>
+        <div className="fact"><b>{pct(c.agreement)}</b><span>{t("agreement with the right decision, on the items it could read")}</span><small className="n-note">{t("{a} of {n} agree · not counted: {d} deferred", { a: agreed, n: c.answered, d: c.deferred })}</small></div>
         <div className="fact"><b>{pct(c.deferral_rate)}</b><span>{t("deferred: it asked to find out more because the file could not be read")}</span><small className="n-note">{t("{d} of {n} items", { d: c.deferred, n: c.count })}</small></div>
         <div className="fact"><b className={c.unsafe_approves ? "bad-figure" : undefined}>{num(c.unsafe_approves)}</b><span>{t("suggested approving when it should not have")}</span><small className="n-note">{nInv}</small></div>
       </div>
       <p className="muted small mt2">{[t("{n} steps per invoice", { n: num(c.avg_steps, 1) }), c.mode === "gemini" ? t("{a} tokens in, {b} out", { a: num(c.avg_tokens_in), b: num(c.avg_tokens_out) }) : ""].filter(Boolean).join(" · ")}</p>
       <h3 className="sec-title mt5">{t("By kind of invoice")}</h3>
       <div className="tw"><table><thead><tr><th>{t("Kind")}</th><th className="n">{t("Invoices (n)")}</th><th className="n">{t("Deferred")}</th><th className="n">{t("Right suggestion")}</th><th className="n">{t("Unsafe approve")}</th></tr></thead><tbody>
-        {Object.entries(c.by_scenario).map(([k, b]) => <tr key={k}><td>{scenarioLabel(t, k)}</td><td className="n">{num(b.n)}</td><td className="n">{num(b.deferred)}</td><td className="n">{b.n > b.deferred ? pct(b.agree / (b.n - b.deferred)) : "–"}</td><td className="n">{num(b.unsafe)}</td></tr>)}
+        {Object.entries(c.by_scenario).map(([k, b]) => <tr key={k}><td>{scenarioLabel(t, k)}</td><td className="n">{num(b.n)}</td><td className="n">{num(b.deferred)}</td>
+          <td className="n">{b.n > b.deferred ? t("{n} of {total}", { n: b.agree, total: b.n - b.deferred }) : "–"}</td><td className="n">{num(b.unsafe)}</td></tr>)}
+        {/* the same numbers as the headline: agreed of answered, so the table and the figure cannot disagree */}
+        <tr className="total-row"><th scope="row">{t("All items")}</th><td className="n">{num(c.count)}</td><td className="n">{num(c.deferred)}</td>
+          <td className="n">{c.answered > 0 ? `${t("{n} of {total}", { n: agreed, total: c.answered })} (${pct(c.agreement)})` : "–"}</td><td className="n">{num(c.unsafe_approves)}</td></tr>
       </tbody></table></div>
-      {wrong.length > 0 && <p className="mt3"><button className="btn small" onClick={() => setShow(!show)}>{show ? t("Hide the {n} disagreements", { n: wrong.length }) : t("Show the {n} disagreements", { n: wrong.length })}</button></p>}
-      {show && <div className="tw"><table><thead><tr><th>{t("File")}</th><th>{t("Scenario")}</th><th>{t("Right decision")}</th><th>{t("Suggested")}</th></tr></thead><tbody>
-        {wrong.map((x) => <tr key={x.id}><td><bdi dir="ltr">{x.file}</bdi></td><td>{scenarioLabel(t, x.scenario)}</td><td>{rec(x.correct)}</td><td>{rec(x.recommended)}</td></tr>)}</tbody></table></div>}
+      {list(wrong, "wrong", show === "wrong" ? t("Hide the {n} disagreements", { n: wrong.length }) : t("Show the {n} disagreements", { n: wrong.length }))}
+      {list(deferred, "deferred", show === "deferred" ? t("Hide the {n} deferred items", { n: deferred.length }) : t("Show the {n} deferred items", { n: deferred.length }))}
+      {(show === "wrong" || show === "deferred") && <div className="tw"><table><thead><tr><th>{t("File")}</th><th>{t("Scenario")}</th><th>{t("Right decision")}</th><th>{t("Suggested")}</th><th>{t("What it said")}</th></tr></thead><tbody>
+        {(show === "wrong" ? wrong : deferred).map((x) => <tr key={x.id}><td><bdi dir="ltr">{x.file}</bdi></td><td>{scenarioLabel(t, x.scenario)}</td><td>{rec(x.correct)}</td><td>{rec(x.recommended)}</td><td>{said(x)}</td></tr>)}</tbody></table></div>}
       {errors.length > 0 && <ul className="small plain-list mt3">{errors.map((e) => <li key={e.id}><bdi dir="ltr">{e.file}</bdi>: <span dir="auto">{e.error}</span></li>)}</ul>}
     </div>
   );

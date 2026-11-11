@@ -392,6 +392,8 @@ th[aria-sort] { color: var(--ink); }
 .cp-findings { list-style: none; padding-inline-start: 0; }
 .cp-src { display: inline-block; margin-inline-end: 8px; padding: 0 7px; border: 1px solid var(--line-strong); border-radius: var(--r-pill); font-size: var(--t-xs); line-height: 18px; font-weight: 600; color: var(--ink-2); background: var(--surface-2); vertical-align: 1px; }
 .cp-context-title { color: var(--ink-2); }
+.total-row th, .total-row td { font-weight: 600; border-top: 2px solid var(--line-strong); text-align: start; }
+.total-row td.n { text-align: end; }
 .cp-context { font-size: var(--t-sm); }
 .cp-steps summary { cursor: pointer; font-size: var(--t-md); font-weight: 500; }
 .cp-steps .tl { margin-top: var(--s2); }

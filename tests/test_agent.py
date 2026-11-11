@@ -324,6 +324,11 @@ def test_gemini_copilot_evaluation_on_a_paced_sample():
                               sleep=waits.append, clock=lambda: 0.0)
     assert res["mode"] == "gemini" and res["count"] == 4 and res["review_items"] == 41 and len(res["picked"]) == 4
     assert res["avg_steps"] == 0 and res["avg_tokens_in"] == 100 and len(waits) == 3       # paced between calls
+    for r in res["rows"]:                                                                  # what it said is kept with every row
+        assert r["summary"]["en"].startswith("I suggest") and r["summary"]["ar"].startswith("أقترح")
+        assert isinstance(r["reasons"], list) and isinstance(r["context"], list) and [t for t in r["tools"] if t != "guard"] == [] and r["reread"] is False
+    by = res["by_scenario"].values()
+    assert round(sum(b["agree"] for b in by) / (res["count"] - res["deferred"]), 4) == res["agreement"] if res["answered"] else True
     res = evaluate_copilot_ai({"provider": "gemini", "key": KEY}, sample_size=2, chat=chat(
         [httpx.Response(500, json={"error": {"message": "boom"}})], []), sleep=lambda s: None)
     assert res["count"] == 0 and res["errors"] == 2 and res["agreement"] is None
@@ -584,6 +589,9 @@ def test_deferred_items_are_not_wrong_and_the_three_figures():
     assert (s["count"], s["deferred"], s["answered"]) == (6, 2, 4)
     assert s["agreement"] == 0.5 and s["deferral_rate"] == round(2 / 6, 4) and s["unsafe_approves"] == 1   # 2 of the 4 answered are right
     assert s["by_scenario"]["s"] == dict(n=6, deferred=2, agree=2, unsafe=1)
+    # the headline and the table are the same numbers: agreed of (all minus deferred), never of all
+    by = s["by_scenario"].values()
+    assert sum(b["agree"] for b in by) / (sum(b["n"] for b in by) - sum(b["deferred"] for b in by)) == s["agreement"] == 0.5
     assert summarize_copilot([])["agreement"] is None
 
 
@@ -594,4 +602,8 @@ def test_rule_based_evaluation_reports_deferred_items():
     assert deferred and all(r["recommended"] == "hold" and r["could_not_read"] for r in deferred)
     assert c["deferral_rate"] == round(len(deferred) / 41, 4)
     assert c["agreement"] == round(sum(r["agree"] for r in c["rows"] if not r["deferred"]) / c["answered"], 4)
+    by = c["by_scenario"].values()                                                         # the table adds up to the headline
+    assert sum(b["n"] for b in by) == c["count"] and sum(b["deferred"] for b in by) == c["deferred"]
+    assert round(sum(b["agree"] for b in by) / c["answered"], 4) == c["agreement"]
+    assert all(r["summary"]["en"].startswith("I suggest") and r["tools"][0] == "get_invoice" for r in c["rows"])
     assert next(r for r in c["rows"] if r["id"] == "inv-018")["correct"] == "hold"       # the override is in force

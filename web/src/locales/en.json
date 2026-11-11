@@ -1,5 +1,7 @@
 {
   "{n} checks failed": {"one": "{n} check failed", "other": "{n} checks failed"},
+  "Show the {n} deferred items": {"one": "Show the {n} deferred item", "other": "Show the {n} deferred items"},
+  "Hide the {n} deferred items": {"one": "Hide the {n} deferred item", "other": "Hide the {n} deferred items"},
   "{n} earlier invoices from this vendor used the IBAN in the vendor master.": {"one": "{n} earlier invoice from this vendor used the IBAN in the vendor master.", "other": "{n} earlier invoices from this vendor used the IBAN in the vendor master."},
   "{n} invoices": {"one": "{n} invoice", "other": "{n} invoices"},
   "{n} invoices received": {"one": "{n} invoice received", "other": "{n} invoices received"},

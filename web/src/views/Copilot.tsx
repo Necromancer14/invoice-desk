@@ -93,7 +93,7 @@ const SOURCE_LABEL: Record<Source, string> = {
 };
 
 /** A reason or a context item: the source label, then the text (worded here for the rule-based copilot, as sent for Gemini). */
-function ItemRow({ it }: { it: Item }) {
+export function ItemRow({ it }: { it: Item }) {
   const { t, lang } = useApp();
   const text = "code" in it ? <FindingText f={{ ...it, effect: it.effect ?? "info" } as Finding} />
     : <span dir="auto">{lang === "ar" ? it.ar || it.en : it.en || it.ar}</span>;
