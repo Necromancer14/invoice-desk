@@ -253,7 +253,8 @@ class Tools:
                   if c["status"] == "fail" and c["severity"] == "info"],
             passed_checks=[c["name"] for c in out["checks"] if c["status"] == "pass"][:30],
             note="These are the desk's own checks. Dates, amounts and VAT arithmetic are judged by them, not by you.")
-        return result, dict(code="checks", failed=len(failed), keys=[x["key"] for x in failed][:8], passed=out["passed"], on=on)
+        return result, dict(code="checks", failed=len(failed), keys=[x["key"] for x in failed][:8], passed=out["passed"], on=on,
+                            types=sorted({x["type"] for x in failed if x["type"]}))
 
     def simulate_rule(self, rule) -> tuple[dict, dict]:
         if not isinstance(rule, dict):

@@ -119,6 +119,19 @@ def unreadable(desk: Desk, rid: int) -> bool:
     return any(x["status"] == "fail" and types.get(x["key"]) == "min_confidence" for x in desk.get_run(rid).get("results") or [])
 
 
+def gemini_could_not_read(steps: list[dict]) -> bool:
+    """For Gemini the built-in reader failing is not enough, because Gemini reads the file itself. It still could not read
+    it when its re-read failed, or when the checks run on its re-read still found the confidence too low. A copilot that
+    never tried to re-read the file, or re-read it fine and still held, has not deferred."""
+    rereads = [s for s in steps if s.get("tool") == "reread"]
+    if not rereads:
+        return False
+    if not any(s.get("ok") for s in rereads):
+        return True                                         # it tried and the re-read failed
+    after = [s for s in steps if s.get("tool") == "run_checks" and s.get("ok") and (s.get("result") or {}).get("on") == "reread"]
+    return bool(after) and "min_confidence" in (after[-1].get("result") or {}).get("types", [])
+
+
 def _score_copilot(it: dict, p: dict, could_not_read: bool = False) -> dict:
     """could_not_read: the run's file was unreadable or low confidence. A suggestion to find out more then counts as
     deferred, not as right or wrong: the copilot did not have what it needed to say anything else."""
@@ -217,7 +230,7 @@ def evaluate_copilot_ai(llm: dict, rules: list[dict] | None = None, *, sample_si
             rows.append(dict(id=it["id"], file=it["file"], format=it["format"], lang=it["lang"], scenario=it["scenario"],
                              outcome="error", error=msg))
             continue
-        rows.append(_score_copilot(it, p, unreadable(desk, ids[it["id"]])))
+        rows.append(_score_copilot(it, p, unreadable(desk, ids[it["id"]]) and gemini_could_not_read(p.get("steps") or [])))
     if progress:
         progress(dict(done=len(rows), total=len(sample), errors=sum(r["outcome"] == "error" for r in rows)))
     return dict(summarize_copilot(rows), mode="gemini", provider=llm.get("provider"), model=getattr(chat, "model", None),

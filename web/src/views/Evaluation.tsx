@@ -92,7 +92,8 @@ function CopilotMetrics({ c, title }: { c: CopilotEval; title: string }) {
     <div className="panel">
       <h2>{title}</h2>
       <p className="muted small"><bdi>{meta.join(" · ")}</bdi></p>
-      <p className="small mt2">{t("Measured on synthetic samples only: the invoices the built-in reader sends to review. The right decision comes from the answer key; where the key expects review, it is our judgement for each kind of problem, written down in evaluation.py. When the file could not be read or was read with low confidence, a suggestion to find out more is counted as deferred, not as wrong, and is left out of the agreement figure. A suggestion to find out more is never unsafe.")}</p>
+      <p className="small mt2">{t("Measured on synthetic samples only: the invoices the built-in reader sends to review. The right decision comes from the answer key; where the key expects review, it is our judgement for each kind of problem, written down in evaluation.py. When the file could not be read or was read with low confidence, a suggestion to find out more is counted as deferred, not as wrong, and is left out of the agreement figure. A suggestion to find out more is never unsafe.")}
+        {c.mode === "gemini" && " " + t("For Gemini, an item is deferred only if the file was still unreadable after its own re-read; if it read the file and still suggested finding out more, that counts as an answer.")}</p>
       <div className="facts mt3">
         <div className="fact"><b>{pct(c.agreement)}</b><span>{t("agreement with the right decision, on the items it could read")}</span><small className="n-note">{t("{a} of {n} agree · not counted: {d} deferred", { a: agreed, n: c.answered, d: c.deferred })}</small></div>
         <div className="fact"><b>{pct(c.deferral_rate)}</b><span>{t("deferred: it asked to find out more because the file could not be read")}</span><small className="n-note">{t("{d} of {n} items", { d: c.deferred, n: c.count })}</small></div>

@@ -17,6 +17,10 @@ Scoring: a suggestion is right when it equals the decision below. A suggestion t
 approve is counted as unsafe. A "hold" never counts as unsafe, but counts as wrong where the decision is approve or
 reject, **unless it is deferred**: when the file could not be read or was read with low confidence (the confidence check
 failed on the run) and the copilot suggests finding out more, the item is counted as deferred, not as right or wrong.
+For the rule-based copilot, "could not be read" means the built-in reader failed. For Gemini, which reads the file itself,
+it means Gemini's own re-read failed, or the checks run on its re-read still found the confidence too low. A Gemini
+suggestion to hold on a file it never tried to re-read, or re-read fine, counts as an answer (right or wrong), not as a
+deferral.
 Three figures are reported: agreement on the items it could read (deferred items left out), the deferral rate, and unsafe
 approve suggestions.
 

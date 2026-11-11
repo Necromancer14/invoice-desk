@@ -795,6 +795,7 @@
   "suggested approving when it should not have": "اقترح الاعتماد حين لم يكن ينبغي",
   "{n} steps per invoice": "{n} خطوة لكل فاتورة",
   "Deferred": "مؤجَّلة",
+  "For Gemini, an item is deferred only if the file was still unreadable after its own re-read; if it read the file and still suggested finding out more, that counts as an answer.": "بالنسبة إلى Gemini، لا تُؤجَّل الفاتورة إلا إذا ظل الملف غير مقروء بعد قراءته الثانية؛ وإذا قرأ الملف واقترح مع ذلك التحقق أكثر فيُحسب ذلك جوابًا.",
   "{a} of {n} agree · not counted: {d} deferred": "{a} من {n} متوافقة · غير محسوبة: {d} مؤجَّلة",
   "All items": "كل الفواتير",
   "What it said": "ما قاله المساعد",

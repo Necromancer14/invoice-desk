@@ -11,8 +11,8 @@ from invoice_desk.agent import (SOURCES, STEP_LIMIT, fallback_summary, hidden_in
                                 summary_problem)
 from invoice_desk.api import create_app
 from invoice_desk.desk import Desk, DeskError
-from invoice_desk.evaluation import (REVIEWER_DECISION, REVIEWER_OVERRIDES, correct_decision, evaluate, evaluate_copilot_ai,
-                                     summarize_copilot)
+from invoice_desk.evaluation import (REVIEWER_DECISION, REVIEWER_OVERRIDES, _score_copilot, correct_decision, evaluate,
+                                     evaluate_copilot_ai, gemini_could_not_read, summarize_copilot, unreadable)
 from invoice_desk.samples import load_answers
 from invoice_desk.extractors import Extraction
 from invoice_desk.providers import GeminiToolChat, ProviderError, build_tool_chat
@@ -593,6 +593,42 @@ def test_deferred_items_are_not_wrong_and_the_three_figures():
     by = s["by_scenario"].values()
     assert sum(b["agree"] for b in by) / (sum(b["n"] for b in by) - sum(b["deferred"] for b in by)) == s["agreement"] == 0.5
     assert summarize_copilot([])["agreement"] is None
+
+
+class LowConfidenceReread:
+    def extract(self, blob, ct, name):
+        return Extraction({"seller_name": "Tuwaiq Engineering"}, 0.3, {}, [], "gemini", "m", 5, 1)
+
+
+class BrokenReread:
+    def extract(self, blob, ct, name):
+        raise RuntimeError("the model could not read this file")
+
+
+@pytest.mark.parametrize("reader, steps, could_not_read", [
+    (RereadAll(), ["reread", "run_checks"], False),                 # it read the file fine
+    (LowConfidenceReread(), ["reread", "run_checks"], True),        # still low confidence after its own re-read
+    (BrokenReread(), ["reread"], True),                             # it tried and the re-read failed
+    (None, [], False),                                              # it never tried to re-read: not a deferral
+])
+def test_gemini_defers_only_when_it_still_could_not_read_the_file(reader, steps, could_not_read):
+    d = seeded()
+    rid = submit(d, "inv-001.png")                                  # the built-in reader could not read it
+    assert unreadable(d, rid)
+    script = [[call(t, id=rid)] for t in steps] + [[propose("hold")]]
+    p = investigate_gemini(d, rid, "rev", None, chat(script, []), extractor=reader)
+    assert [s["tool"] for s in p["steps"] if s["tool"] != "guard"] == steps
+    assert gemini_could_not_read(p["steps"]) is could_not_read
+    row = _score_copilot(dict(id="inv-001", file="inv-001.png", format="png", lang="en", scenario="clean", expected_status="needs_review"),
+                         p, unreadable(d, rid) and gemini_could_not_read(p["steps"]))
+    assert row["deferred"] is could_not_read and row["agree"] is False and row["recommended"] == "hold"       # right decision: approve
+
+
+def test_gemini_evaluation_does_not_defer_a_hold_it_never_tried_to_read():
+    res = evaluate_copilot_ai({"provider": "gemini", "key": KEY}, sample_size=41, rpm=60, chat=chat([[propose("hold")]], []),
+                              sleep=lambda s: None, clock=lambda: 0.0)
+    assert res["count"] == 41 and res["deferred"] == 0 and res["answered"] == 41     # no re-read, so nothing is deferred
+    assert any(r["could_not_read"] is False and r["deferred"] is False for r in res["rows"] if r["file"].endswith(".png"))
 
 
 def test_rule_based_evaluation_reports_deferred_items():
