@@ -216,4 +216,4 @@ python tools/a11y_check.py  # with a fresh server and `npm ci` in web/: axe-core
 
 ## Licence
 
-MIT.
+All rights reserved. The source is published for viewing and evaluation only; see [LICENSE](LICENSE).
