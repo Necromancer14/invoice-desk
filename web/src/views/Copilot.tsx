@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { api, session } from "../api";
-import type { CopilotStep, Finding, Proposal, Recommendation, RunDetail } from "../types";
+import type { CopilotStep, Finding, Item, Proposal, Recommendation, RunDetail, Source } from "../types";
 import { Err, FIELD_LABEL, can, money, num, pct, tk, useApp, when } from "../common";
 
 /** What the copilot suggests, as a sentence and as a short word for the timeline. */
@@ -85,6 +85,20 @@ function FindingText({ f }: { f: Finding }) {
   return <>{withRuns(text, f.runs, open)}</>;
 }
 
+/** The small label that says where an item came from. */
+const SOURCE_LABEL: Record<Source, string> = {
+  invoice: tk("Invoice"), vendor: tk("Vendor"), vendor_history: tk("Vendor history"), iban_history: tk("IBAN history"),
+  purchase_order: tk("Purchase order"), similar_invoices: tk("Similar invoices"), reread: tk("Read again"), rule_test: tk("Rule test"),
+};
+
+/** A reason or a context item: the source label, then the text (worded here for the rule-based copilot, as sent for Gemini). */
+function ItemRow({ it }: { it: Item }) {
+  const { t, lang } = useApp();
+  const text = "code" in it ? <FindingText f={{ ...it, effect: it.effect ?? "info" } as Finding} />
+    : <span dir="auto">{lang === "ar" ? it.ar || it.en : it.en || it.ar}</span>;
+  return <li className={`e-${it.effect ?? "info"}`}><span className="cp-src">{t(SOURCE_LABEL[it.source] ?? SOURCE_LABEL.invoice)}</span>{text}</li>;
+}
+
 function StepText({ s }: { s: CopilotStep }) {
   const { t, lang } = useApp();
   const r = s.result;
@@ -152,9 +166,13 @@ export default function Copilot({ run, onRun }: { run: RunDetail; onRun?: (r: Ru
         <>
           <div className={`notice ${REC_TONE[p.recommendation]} cp-rec`} role="status"><b>{t(REC_LABEL[p.recommendation])}</b></div>
           {summary && <p className="cp-summary" dir="auto">{summary}</p>}
-          {p.findings.length > 0 && <ul className="cp-findings">{p.findings.map((f, i) => <li key={i} className={`e-${f.effect}`}><FindingText f={f} /></li>)}</ul>}
-          {p.evidence.length > 0 && (
-            <div><h3 className="sec-title">{t("Evidence it gave")}</h3><ul className="cp-findings">{p.evidence.map((e, i) => <li key={i} dir="auto">{e}</li>)}</ul></div>
+          {p.reasons.length > 0 && (
+            <section aria-labelledby="cp-reasons"><h3 className="sec-title" id="cp-reasons">{t("Reasons")}</h3>
+              <ul className="cp-findings">{p.reasons.map((it, i) => <ItemRow key={i} it={it} />)}</ul></section>
+          )}
+          {p.context.length > 0 && (
+            <section aria-labelledby="cp-context"><h3 className="sec-title cp-context-title" id="cp-context">{t("Context")}</h3>
+              <ul className="cp-findings cp-context">{p.context.map((it, i) => <ItemRow key={i} it={it} />)}</ul></section>
           )}
           <details className="cp-steps">
             <summary>{t("Steps it took ({n})", { n: p.steps.length })}</summary>

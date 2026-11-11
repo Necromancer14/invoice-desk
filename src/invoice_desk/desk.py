@@ -746,15 +746,24 @@ class Desk:
         """Store what the copilot suggests. A proposal is advice: the run's status is never touched here."""
         cur = self.db.run("INSERT INTO proposals(run_id,mode,model,recommendation,summary,findings,evidence,steps,finished,tokens_in,"
                           "tokens_out,requested_by,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                          (rid, p["mode"], p.get("model"), p["recommendation"], dumps(p.get("summary")), dumps(p.get("findings") or []),
-                           dumps(p.get("evidence") or []), dumps(p.get("steps") or []), 1 if p.get("finished", True) else 0,
+                          # reasons and context share the findings column (as one object); evidence is no longer used
+                          (rid, p["mode"], p.get("model"), p["recommendation"], dumps(p.get("summary")),
+                           dumps(dict(reasons=p.get("reasons") or [], context=p.get("context") or [])),
+                           "[]", dumps(p.get("steps") or []), 1 if p.get("finished", True) else 0,
                            p.get("tokens_in", 0), p.get("tokens_out", 0), p.get("requested_by"), now()))
         return self.proposals(rid)[0] if cur.lastrowid else {}
 
     def proposals(self, rid: int, limit: int = 5) -> list[dict]:
         rows = self.db.all("SELECT * FROM proposals WHERE run_id=? ORDER BY id DESC LIMIT ?", (rid, limit))
-        return [dict(r, summary=loads(r["summary"]), findings=loads(r["findings"], []), evidence=loads(r["evidence"], []),
-                     steps=loads(r["steps"], []), finished=bool(r["finished"])) for r in rows]
+        out = []
+        for r in rows:
+            body = loads(r["findings"], {})
+            if isinstance(body, list):  # an older proposal: findings with an effect; the facts that only informed are context
+                body = dict(reasons=[f for f in body if f.get("effect") != "info"], context=[f for f in body if f.get("effect") == "info"])
+            out.append({k: v for k, v in r.items() if k not in ("findings", "evidence")} | dict(
+                summary=loads(r["summary"]), reasons=body.get("reasons", []), context=body.get("context", []),
+                steps=loads(r["steps"], []), finished=bool(r["finished"])))
+        return out
 
     def get_blob(self, rid: int) -> tuple[bytes, str, str]:
         r = self.db.one("SELECT blob,content_type,filename FROM runs WHERE id=?", (rid,))

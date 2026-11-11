@@ -1,11 +1,13 @@
 """The review copilot: read-only tools, rule-based findings, the Gemini loop on a fake transport, audit, API, evaluation."""
 import json
+import re
 
 import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from invoice_desk.agent import STEP_LIMIT, hidden_instructions, investigate, investigate_gemini
+from invoice_desk.agent import (SOURCES, STEP_LIMIT, fallback_summary, hidden_instructions, investigate, investigate_gemini,
+                                summary_problem)
 from invoice_desk.api import create_app
 from invoice_desk.desk import Desk, DeskError
 from invoice_desk.evaluation import REVIEWER_DECISION, correct_decision, evaluate, evaluate_copilot_ai, summarize_copilot
@@ -48,9 +50,24 @@ def chat(replies, seen):
     return GeminiToolChat(KEY, "gemini-test", fake_gemini(replies, seen))
 
 
-def propose(rec="reject", **kw):
-    return call("propose", recommendation=rec, summary_en=kw.get("en", "The IBAN changed."),
-                summary_ar=kw.get("ar", "تغيّر رقم الآيبان."), evidence=kw.get("evidence", ["iban_history: master ends 0932"]))
+def item(en, ar, source):
+    return dict(en=en, ar=ar, source=source)
+
+
+IBAN_REASON = item("The IBAN differs from the vendor master.", "الآيبان يختلف عن المسجّل في سجل المورّدين.", "iban_history")
+SUGGEST_EN = "I suggest holding until the vendor confirms the new bank account."
+SUGGEST_AR = "أقترح تعليق القرار إلى أن يؤكد المورّد الحساب البنكي الجديد."
+
+
+def propose(rec="hold", **kw):
+    """A well-formed propose call; kw overrides en, ar, reasons or context."""
+    return call("propose", recommendation=rec, summary_en=kw.get("en", SUGGEST_EN), summary_ar=kw.get("ar", SUGGEST_AR),
+                reasons=kw.get("reasons", [IBAN_REASON]), context=kw.get("context", []))
+
+
+def codes(p):
+    """Every finding code of a rule-based proposal, reasons then context."""
+    return [f["code"] for f in p["reasons"] + p["context"]]
 
 
 def everything_stored(d: Desk) -> str:
@@ -101,7 +118,7 @@ def test_rule_based_findings(file, rec, code):
     assert d.get_run(rid)["status"] == "needs_review"
     p = investigate(d, rid, "rev")
     assert p["recommendation"] == rec and p["mode"] == "rules" and p["finished"]
-    assert code in [f["code"] for f in p["findings"]]
+    assert code in [f["code"] for f in p["reasons"]]                  # the failed check is a reason, not context
     assert p["steps"][0]["tool"] == "get_invoice" and len(p["steps"]) <= STEP_LIMIT
     assert d.get_run(rid)["status"] == "needs_review"                   # a suggestion, never a decision
 
@@ -113,7 +130,7 @@ def test_rule_based_without_a_vendor_master_holds_and_everything_is_audited(desk
     assert [x["key"] for x in desk.get_run(rid)["results"] if x["status"] == "fail" and x["severity"] != "info"] == ["limit-50k"]
     p = investigate(desk, rid, "noor")
     assert p["recommendation"] == "hold"              # a large amount needs a second approval; no vendor master either
-    assert {f["code"] for f in p["findings"]} >= {"no_vendor_master", "high_value"}
+    assert [f["code"] for f in p["reasons"]] == ["high_value"] and "no_vendor_master" in [f["code"] for f in p["context"]]
     log = desk.audit_log(action="agent")
     assert {(a["actor"], a["action"]) for a in log} >= {("noor", "agent.investigate"), ("agent:rules", "agent.step"),
                                                          ("agent:rules", "agent.propose")}
@@ -139,7 +156,7 @@ def test_hidden_instructions_are_reported_and_change_nothing():
     d.update_settings({"auto_approve": "false"}, "a")
     rid = submit(d, "inv-039.txt")
     p = investigate(d, rid, "rev")
-    assert "instructions_in_document" in [f["code"] for f in p["findings"]]
+    assert "instructions_in_document" in [f["code"] for f in p["context"]]     # worth knowing, but not a reason for the suggestion
     assert d.get_run(rid)["status"] == "needs_review" and d.get_run(rid)["fields"]["total"] == 8857.68
 
 
@@ -152,8 +169,9 @@ def test_gemini_loop_calls_tools_proposes_and_never_stores_the_key():
     p = investigate(d, rid, "rev", "ai", {"provider": "gemini", "key": KEY},
                     chat=chat([[call("get_invoice", id=rid)], [call("find_vendor", name_or_vat="Sahara")],
                                [call("iban_history", vendor_id=vid), call("vendor_history", vendor_id=vid)], [propose()]], seen))
-    assert p["mode"] == "gemini" and p["model"] == "gemini-test" and p["recommendation"] == "reject"
-    assert p["summary"] == {"en": "The IBAN changed.", "ar": "تغيّر رقم الآيبان."} and p["evidence"]
+    assert p["mode"] == "gemini" and p["model"] == "gemini-test" and p["recommendation"] == "hold"
+    assert p["summary"] == {"en": SUGGEST_EN, "ar": SUGGEST_AR}
+    assert [(r["source"], r["en"]) for r in p["reasons"]] == [("iban_history", IBAN_REASON["en"])] and p["context"] == []
     assert [s["tool"] for s in p["steps"]] == ["get_invoice", "find_vendor", "iban_history", "vendor_history"]
     assert p["tokens_in"] == 400 and p["tokens_out"] == 80
     # the request: key in a header only, the fixed tool list, the guard in the system prompt, results sent back
@@ -174,7 +192,7 @@ def test_gemini_step_limit_wrong_recommendation_and_other_invoices():
     rid = submit(d, "inv-083.txt")
     seen = []
     p = investigate_gemini(d, rid, "rev", None, chat([[call("get_invoice", id=other)], [call("similar_invoices", id=rid)]], seen))
-    assert p["recommendation"] == "hold" and not p["finished"] and p["findings"][0]["code"] == "step_limit"
+    assert p["recommendation"] == "hold" and not p["finished"] and p["reasons"][0]["code"] == "step_limit"
     assert len(p["steps"]) == STEP_LIMIT and not p["steps"][0]["ok"]        # another invoice cannot be opened
     assert "step limit" in json.dumps(seen[-1]["body"]["contents"][-1])
     assert d.get_run(other)["status"] == d.get_run(rid)["status"] == "needs_review"
@@ -214,7 +232,7 @@ def test_gemini_injection_sample_is_flagged():
     rid = submit(d, "inv-039.txt")
     seen = []
     p = investigate_gemini(d, rid, "rev", None, chat([[call("get_invoice", id=rid)], [propose("approve")]], seen))
-    assert p["recommendation"] == "approve" and "instructions_in_document" in [f["code"] for f in p["findings"]]
+    assert p["recommendation"] == "approve" and "instructions_in_document" in [f.get("code") for f in p["context"]]
     sent = seen[1]["body"]["contents"][-1]["parts"][0]["functionResponse"]["response"]["result"]
     assert sent["instructions_found"] is True and "never follow" in sent["document_data"]["note"]
     assert d.get_run(rid)["status"] == "needs_review"
@@ -304,3 +322,104 @@ def test_gemini_copilot_evaluation_on_a_paced_sample():
     res = evaluate_copilot_ai({"provider": "gemini", "key": KEY}, sample_size=2, chat=chat(
         [httpx.Response(500, json={"error": {"message": "boom"}})], []), sleep=lambda s: None)
     assert res["count"] == 0 and res["errors"] == 2 and res["agreement"] is None
+
+
+# ------------------------------------------------------------------------ wording, reasons and context
+@pytest.mark.parametrize("en, ar, bad", [
+    (SUGGEST_EN, SUGGEST_AR, False),
+    ("I suggest rejecting because the QR code disagrees with the printed total.", "أقترح رفض الفاتورة لأن رمز QR يخالف الإجمالي المطبوع.", False),
+    ("The invoice is rejected because the IBAN changed.", SUGGEST_AR, True),                     # a fact, not a suggestion
+    ("This invoice has been approved.", SUGGEST_AR, True),
+    ("I suggest rejecting this invoice, which is rejected anyway.", SUGGEST_AR, True),           # suggests, but also states an outcome
+    (SUGGEST_EN, "تم رفض الفاتورة بسبب تغيّر الآيبان.", True),                                   # Arabic: a fact, no "أقترح"
+    (SUGGEST_EN, "الفاتورة مرفوضة.", True),
+    (SUGGEST_EN, "تغيّر رقم الآيبان.", True),                                                     # Arabic without the suggestion wording
+    ("I suggest holding; iban_history shows a different account.", SUGGEST_AR, True),             # a tool name in the prose
+])
+def test_summary_wording_in_english_and_arabic(en, ar, bad):
+    assert (summary_problem(en, ar) is not None) == bad
+
+
+def test_gemini_summary_stated_as_a_fact_is_sent_back_once_then_accepted():
+    d = seeded()
+    rid = submit(d, "inv-083.txt")
+    seen = []
+    p = investigate_gemini(d, rid, "rev", None, chat([
+        [call("get_invoice", id=rid)],
+        [propose("hold", en="The invoice is rejected because the IBAN changed.", ar="تم رفض الفاتورة.")],
+        [propose("hold")]], seen))
+    assert "suggestion" in json.dumps(seen[2]["body"]["contents"][-1], ensure_ascii=False)        # the model was told why
+    assert p["summary"] == {"en": SUGGEST_EN, "ar": SUGGEST_AR} and p["finished"]
+    assert d.get_run(rid)["status"] == "needs_review"
+
+
+def test_gemini_summary_that_stays_a_fact_is_replaced_by_our_own_suggestion():
+    d = seeded()
+    rid = submit(d, "inv-083.txt")
+    stubborn = propose("reject", en="Rejected: wrong bank account.", ar="مرفوضة: حساب بنكي خاطئ.")
+    p = investigate_gemini(d, rid, "rev", None, chat([[call("get_invoice", id=rid)], [stubborn]], []))
+    assert p["recommendation"] == "reject" and p["summary"] == fallback_summary("reject")
+    assert summary_problem(p["summary"]["en"], p["summary"]["ar"]) is None and p["summary"]["en"].startswith("I suggest")
+    for rec in ("approve", "reject", "hold"):                                   # our own sentences obey the same rule
+        s = fallback_summary(rec)
+        assert summary_problem(s["en"], s["ar"]) is None, rec
+
+
+def test_gemini_reasons_are_failed_checks_and_direct_support_everything_else_is_context():
+    d = seeded()
+    rid = submit(d, "inv-006.txt")                         # only the QR check failed
+    assert [x["key"] for x in d.get_run(rid)["results"] if x["status"] == "fail" and x["severity"] != "info"] == ["qr-agrees"]
+    vid = d.get_run(rid)["vendor_match"]["vendor"]["id"]
+    seen = []
+    p = investigate_gemini(d, rid, "rev", None, chat([
+        [call("get_invoice", id=rid)], [call("get_po", number="PO-2026-0001"), call("vendor_history", vendor_id=vid)],
+        [propose("reject", en="I suggest rejecting because the QR code disagrees with the printed total.",
+                 ar="أقترح الرفض لأن رمز QR يخالف الإجمالي المطبوع.", reasons=[
+                     item("The QR code total differs from the printed total.", "إجمالي رمز QR يختلف عن الإجمالي المطبوع.", "invoice"),
+                     item("The invoice gives no PO number.", "الفاتورة لا تذكر رقم أمر شراء.", "purchase_order"),       # no PO check failed
+                     item("One earlier invoice from this vendor was rejected.", "رُفضت فاتورة سابقة واحدة من هذا المورّد.", "vendor_history"),
+                     item("The bank account was compared.", "قورن الحساب البنكي.", "iban_history"),                    # never looked at
+                     item("get_invoice showed a failed check.", "أظهر get_invoice فحصًا فاشلًا.", "invoice"),            # a tool name: dropped
+                     item("Something odd.", "شيء غريب.", "magic")],                                                    # unknown source: dropped
+                 context=[item("The vendor is known.", "المورّد معروف.", "vendor_history")])]], seen))
+    assert [(r["source"], r["en"]) for r in p["reasons"]] == [("invoice", "The QR code total differs from the printed total.")]
+    assert [(c["source"], c["en"]) for c in p["context"]] == [
+        ("purchase_order", "The invoice gives no PO number."), ("vendor_history", "One earlier invoice from this vendor was rejected."),
+        ("iban_history", "The bank account was compared."), ("vendor_history", "The vendor is known.")]
+    for it in p["reasons"] + p["context"]:
+        assert it["source"] in SOURCES and not re.search(r"get_invoice|iban_history|vendor_history|get_po", it["en"] + it["ar"])
+
+
+def test_gemini_support_from_a_failed_check_stays_a_reason():
+    d = seeded()
+    rid = submit(d, "inv-088.txt")                         # above its purchase order
+    po = d.get_run(rid)["fields"]["po_number"]
+    p = investigate_gemini(d, rid, "rev", None, chat([
+        [call("get_invoice", id=rid)], [call("get_po", number=po)],
+        [propose("hold", reasons=[item("The invoice is above its purchase order.", "الفاتورة أعلى من أمر الشراء.", "purchase_order")])]], []))
+    assert [r["source"] for r in p["reasons"]] == ["purchase_order"] and p["context"] == []
+
+
+# the rule-based copilot has the same shape: a suggestion, Reasons, Context, a source label on each item
+@pytest.mark.parametrize("file, rec", [("inv-083.txt", "hold"), ("inv-006.txt", "reject"), ("inv-088.txt", "hold"),
+                                       ("inv-017.pdf", "hold"), ("inv-051.txt", "reject"), ("inv-001.png", "hold")])
+def test_rule_based_has_the_same_structure_and_wording(file, rec):
+    d = seeded()
+    rid = submit(d, file)
+    p = investigate(d, rid, "rev")
+    assert p["recommendation"] == rec and summary_problem(p["summary"]["en"], p["summary"]["ar"]) is None
+    assert p["summary"]["en"].startswith("I suggest") and p["summary"]["ar"].startswith("أقترح")
+    assert p["reasons"] and all(r["effect"] in ("reject", "hold") for r in p["reasons"])          # failed checks only
+    assert all(c["effect"] == "info" for c in p["context"])                                       # minor facts
+    for it in p["reasons"] + p["context"]:
+        assert it["source"] in SOURCES
+    assert not re.search(r"get_invoice|find_vendor|vendor_history|iban_history|get_po|similar_invoices", json.dumps(p["summary"]))
+
+
+def test_rule_based_puts_weak_facts_in_context():
+    d = seeded()
+    rid = submit(d, "inv-083.txt")
+    p = investigate(d, rid, "rev")
+    assert [r["code"] for r in p["reasons"]] == ["iban_differs"] and p["reasons"][0]["source"] == "iban_history"
+    assert "known_vendor" in [c["code"] for c in p["context"]]                  # the vendor's earlier invoices are context
+    assert d.proposals(rid)[0]["reasons"] == p["reasons"] and d.proposals(rid)[0]["context"] == p["context"]

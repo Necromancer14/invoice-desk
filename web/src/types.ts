@@ -57,13 +57,17 @@ export type TimelineEvent = { at: string } & (
 export type Recommendation = "approve" | "reject" | "hold";
 /** A finding of the rule-based copilot (and the guard note in Gemini mode): a code the portal words, plus its values. */
 export interface Finding { code: string; effect: "reject" | "hold" | "info"; runs?: number[]; [k: string]: unknown }
+/** Where an item of the finding came from. Shown as a small label; tool names never appear in the text. */
+export type Source = "invoice" | "vendor" | "vendor_history" | "iban_history" | "purchase_order" | "similar_invoices" | "reread" | "rule_test";
+/** One reason or context item: the rule-based copilot sends a code the portal words, Gemini sends its own English and Arabic text. */
+export type Item = { source: Source; effect?: "reject" | "hold" | "info"; runs?: number[]; [k: string]: unknown } & ({ code: string } | { en: string; ar: string });
 export interface CopilotStep {
   n: number; tool: string; args: Record<string, unknown>; ok: boolean; ms: number;
   result: { code: string; [k: string]: unknown };
 }
 export interface Proposal {
   id: number; run_id: number; mode: "rules" | "gemini"; model: string | null; recommendation: Recommendation;
-  summary: { en: string; ar: string } | null; findings: Finding[]; evidence: string[]; steps: CopilotStep[]; finished: boolean;
+  summary: { en: string; ar: string } | null; reasons: Item[]; context: Item[]; steps: CopilotStep[]; finished: boolean;
   tokens_in: number; tokens_out: number; requested_by: string; created_at: string;
 }
 export interface CopilotRow {

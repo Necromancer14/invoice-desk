@@ -497,6 +497,13 @@ def copilot_panel(page: Page) -> None:
     expect(page.locator(".cp-rec")).to_contain_text("Suggests finding out more")   # a changed IBAN: verify, not reject
     check("copilot: labels the mode", page.locator(".cp-mode").inner_text().strip() == "Rule-based")
     check("copilot: explains the IBAN with the vendor master", "IBAN on the invoice" in page.locator(".cp-findings").first.inner_text())
+    check("copilot: the summary is a suggestion", page.locator(".cp-summary").inner_text().startswith("I suggest"), page.locator(".cp-summary").inner_text())
+    heads = page.locator(".copilot h3.sec-title").all_inner_texts()
+    check("copilot: Reasons first, then Context", heads == ["Reasons", "Context"], str(heads))
+    check("copilot: each item carries a source label, not a tool name",
+          page.locator(".copilot .cp-src").first.inner_text() == "IBAN history" and "iban_history" not in page.locator(".copilot").inner_text())
+    check("copilot: the weak fact is under Context", "Known vendor" in page.locator(".cp-context").inner_text()
+          and "Known vendor" not in page.locator("#cp-reasons + .cp-findings").inner_text())
     n = int(re.search(r"\((\d+)\)", page.locator(".cp-steps summary").inner_text())[1])
     page.locator(".cp-steps summary").click()
     check("copilot: shows the steps it took", n >= 3 and page.locator(".cp-steps li").count() == n)
@@ -513,6 +520,9 @@ def copilot_panel(page: Page) -> None:
     text = page.locator(".cp-findings").first.inner_text()
     check("copilot: findings in Arabic", "الآيبان" in text and "IBAN on" not in text, text[:120])
     check("copilot: right to left in Arabic", page.evaluate("getComputedStyle(document.querySelector('.copilot')).direction") == "rtl")
+    check("copilot: Arabic summary, headings and source labels",
+          page.locator(".cp-summary").inner_text().startswith("أقترح") and page.locator(".copilot h3.sec-title").all_inner_texts() == ["الأسباب", "السياق"]
+          and page.locator(".copilot .cp-src").first.inner_text() == "سجل الآيبان")
 
     page.evaluate("localStorage.removeItem('id-token')")   # back to the role screen
     sign_in(page, "viewer")
@@ -526,14 +536,19 @@ def copilot_panel(page: Page) -> None:
     keys: list = []
     page.on("request", lambda r: keys.append((r.url, r.headers.get("x-llm-key"))) if "/api/" in r.url else None)
     fake = {"id": 999, "run_id": rid, "mode": "gemini", "model": "gemini-ui-check", "recommendation": "hold",
-            "summary": {"en": "The IBAN changed; call the vendor.", "ar": "تغيّر الآيبان؛ اتصل بالمورّد."},
-            "findings": [], "evidence": ["iban_history: master IBAN differs"], "finished": True, "tokens_in": 1200, "tokens_out": 90,
+            "summary": {"en": "I suggest holding until the vendor confirms the new bank account.", "ar": "أقترح تعليق القرار إلى أن يؤكد المورّد الحساب البنكي الجديد."},
+            "reasons": [{"source": "iban_history", "en": "The IBAN differs from the vendor master.", "ar": "الآيبان يختلف عن سجل المورّدين."}],
+            "context": [{"source": "vendor_history", "en": "One earlier invoice was rejected.", "ar": "رُفضت فاتورة سابقة واحدة."}],
+            "finished": True, "tokens_in": 1200, "tokens_out": 90,
             "requested_by": "demo-admin", "created_at": "2026-11-10T10:00:00+00:00",
             "steps": [{"n": 1, "tool": "get_invoice", "args": {"id": rid}, "ok": True, "ms": 3, "result": {"code": "invoice", "failed": 1}}]}
     page.route(f"**/api/runs/{rid}/investigate", lambda route: route.fulfill(status=200, json=fake))
     page.evaluate(f"location.hash = '#/review/{rid}'; location.reload()")
     page.get_by_role("button", name="Investigate with Gemini").click()
-    expect(page.locator(".cp-summary")).to_contain_text("The IBAN changed")
+    expect(page.locator(".cp-summary")).to_contain_text("I suggest holding")
+    check("copilot: Gemini items show their source label and sit under Reasons and Context",
+          page.locator("#cp-reasons + .cp-findings .cp-src").inner_text() == "IBAN history"
+          and "One earlier invoice was rejected" in page.locator(".cp-context").inner_text())
     check("copilot: Gemini mode and model are labelled", "Gemini" in page.locator(".cp-mode").inner_text() and "gemini-ui-check" in page.locator(".cp-mode").inner_text())
     with_key = [u for u, k in keys if k]
     check("copilot: only the Gemini request carries the key", with_key == [f"{BASE}/api/runs/{rid}/investigate"], str(with_key))

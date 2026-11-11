@@ -389,6 +389,10 @@ th[aria-sort] { color: var(--ink); }
 .cp-summary { margin: 0; }
 .cp-findings { margin: 0; padding-inline-start: 18px; display: flex; flex-direction: column; gap: 6px; font-size: var(--t-md); }
 .cp-findings li.e-info { color: var(--ink-2); }
+.cp-findings { list-style: none; padding-inline-start: 0; }
+.cp-src { display: inline-block; margin-inline-end: 8px; padding: 0 7px; border: 1px solid var(--line-strong); border-radius: var(--r-pill); font-size: var(--t-xs); line-height: 18px; font-weight: 600; color: var(--ink-2); background: var(--surface-2); vertical-align: 1px; }
+.cp-context-title { color: var(--ink-2); }
+.cp-context { font-size: var(--t-sm); }
 .cp-steps summary { cursor: pointer; font-size: var(--t-md); font-weight: 500; }
 .cp-steps .tl { margin-top: var(--s2); }
 .cp-err { color: var(--bad); }
