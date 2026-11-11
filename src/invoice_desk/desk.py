@@ -742,6 +742,30 @@ class Desk:
                 out.append(dict(self._brief(e), why=why))
         return out[:limit]
 
+    def agent_today(self) -> date:
+        """Today for the copilot's prompt: the server clock in Saudi time (UTC+3, no daylight saving). A desk made with a
+        fixed date (tests, the evaluation) keeps it. The checks themselves use _today(), so dates are judged by code."""
+        return self.today or datetime.now(timezone(timedelta(hours=3))).date()
+
+    def check_fields(self, rid: int, fields: dict | None = None, confidence: float | None = None) -> dict:
+        """Run the full current rule set on these fields for this run and say what passed and what failed. Nothing is
+        written. fields replace the run's current ones key by key (a re-read, say); confidence defaults to the run's own."""
+        r = self.db.one("SELECT * FROM runs WHERE id=?", (rid,))
+        if not r:
+            raise DeskError("run not found", 404)
+        f = empty_fields()
+        f.update(self._current_fields(r) or {})
+        f.update({k: v for k, v in (fields or {}).items() if k in FIELDS})
+        if confidence is None:
+            confidence = (loads(r["extraction"], {}) or {}).get("confidence", 1.0)
+        rules = self.rules()
+        types = {x["key"]: x["type"] for x in rules}
+        results = run_rules(rules, f, self._ctx(rid, confidence))
+        checks = [dict(key=x["key"], name=x["name"], type=types.get(x["key"]), severity=x["severity"], status=x["status"],
+                       detail=x["detail"], risk=x.get("risk")) for x in results]
+        return dict(checks=checks, failed=[c["key"] for c in checks if c["status"] == "fail" and c["severity"] != "info"],
+                    passed=sum(c["status"] == "pass" for c in checks), today=self._today().isoformat())
+
     def save_proposal(self, rid: int, p: dict) -> dict:
         """Store what the copilot suggests. A proposal is advice: the run's status is never touched here."""
         cur = self.db.run("INSERT INTO proposals(run_id,mode,model,recommendation,summary,findings,evidence,steps,finished,tokens_in,"

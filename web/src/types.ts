@@ -58,7 +58,7 @@ export type Recommendation = "approve" | "reject" | "hold";
 /** A finding of the rule-based copilot (and the guard note in Gemini mode): a code the portal words, plus its values. */
 export interface Finding { code: string; effect: "reject" | "hold" | "info"; runs?: number[]; [k: string]: unknown }
 /** Where an item of the finding came from. Shown as a small label; tool names never appear in the text. */
-export type Source = "invoice" | "vendor" | "vendor_history" | "iban_history" | "purchase_order" | "similar_invoices" | "reread" | "rule_test";
+export type Source = "invoice" | "checks" | "vendor" | "vendor_history" | "iban_history" | "purchase_order" | "similar_invoices" | "reread" | "rule_test";
 /** One reason or context item: the rule-based copilot sends a code the portal words, Gemini sends its own English and Arabic text. */
 export type Item = { source: Source; effect?: "reject" | "hold" | "info"; runs?: number[]; [k: string]: unknown } & ({ code: string } | { en: string; ar: string });
 export interface CopilotStep {
@@ -72,12 +72,14 @@ export interface Proposal {
 }
 export interface CopilotRow {
   id: string; file: string; scenario: string; outcome: "ok" | "error"; correct?: Recommendation; recommended?: Recommendation;
-  agree?: boolean; unsafe?: boolean; steps?: number; tokens_in?: number; tokens_out?: number; error?: string;
+  agree?: boolean; unsafe?: boolean; deferred?: boolean; could_not_read?: boolean; steps?: number; tokens_in?: number; tokens_out?: number; error?: string;
 }
 export interface CopilotEval {
   mode: "rules" | "gemini"; count: number; errors: number; agreement: number | null; unsafe_approves: number; holds: number;
+  /** Items it gave an answer on (the rest were deferred), how many it deferred, and that as a share of all items. */
+  answered: number; deferred: number; deferral_rate: number | null;
   recommended: Record<Recommendation, number>; avg_steps: number | null; avg_tokens_in: number | null; avg_tokens_out: number | null;
-  unfinished: number; by_scenario: Record<string, { n: number; agree: number; unsafe: number }>; rows: CopilotRow[];
+  unfinished: number; by_scenario: Record<string, { n: number; deferred: number; agree: number; unsafe: number }>; rows: CopilotRow[];
   model?: string | null; provider?: string; review_items?: number; sample_size?: number; seed?: number; rpm?: number;
   ran_at?: string; rules_version?: number; stopped?: { reason: string; message: string } | null; step_limit?: number;
 }

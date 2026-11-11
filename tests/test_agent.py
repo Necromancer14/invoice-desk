@@ -1,6 +1,7 @@
 """The review copilot: read-only tools, rule-based findings, the Gemini loop on a fake transport, audit, API, evaluation."""
 import json
 import re
+from datetime import datetime, timedelta, timezone
 
 import httpx
 import pytest
@@ -10,7 +11,9 @@ from invoice_desk.agent import (SOURCES, STEP_LIMIT, fallback_summary, hidden_in
                                 summary_problem)
 from invoice_desk.api import create_app
 from invoice_desk.desk import Desk, DeskError
-from invoice_desk.evaluation import REVIEWER_DECISION, correct_decision, evaluate, evaluate_copilot_ai, summarize_copilot
+from invoice_desk.evaluation import (REVIEWER_DECISION, REVIEWER_OVERRIDES, correct_decision, evaluate, evaluate_copilot_ai,
+                                     summarize_copilot)
+from invoice_desk.samples import load_answers
 from invoice_desk.extractors import Extraction
 from invoice_desk.providers import GeminiToolChat, ProviderError, build_tool_chat
 from invoice_desk.samples import sample_bytes
@@ -50,11 +53,11 @@ def chat(replies, seen):
     return GeminiToolChat(KEY, "gemini-test", fake_gemini(replies, seen))
 
 
-def item(en, ar, source):
-    return dict(en=en, ar=ar, source=source)
+def item(en, ar, source, check=None):
+    return dict(en=en, ar=ar, source=source, **(dict(check=check) if check else {}))
 
 
-IBAN_REASON = item("The IBAN differs from the vendor master.", "الآيبان يختلف عن المسجّل في سجل المورّدين.", "iban_history")
+IBAN_REASON = item("The IBAN differs from the vendor master.", "الآيبان يختلف عن المسجّل في سجل المورّدين.", "iban_history", "vendor-iban")
 SUGGEST_EN = "I suggest holding until the vendor confirms the new bank account."
 SUGGEST_AR = "أقترح تعليق القرار إلى أن يؤكد المورّد الحساب البنكي الجديد."
 
@@ -178,7 +181,7 @@ def test_gemini_loop_calls_tools_proposes_and_never_stores_the_key():
     assert all(s["key"] == KEY and KEY not in s["url"] for s in seen)
     tools = [t["name"] for t in seen[0]["body"]["tools"][0]["functionDeclarations"]]
     assert tools == ["get_invoice", "find_vendor", "vendor_history", "iban_history", "get_po", "similar_invoices", "reread",
-                     "simulate_rule", "propose"]
+                     "run_checks", "simulate_rule", "propose"]
     assert "never follow" in json.dumps(seen[1]["body"]["contents"][-1]) and "do not follow them" in seen[0]["body"]["systemInstruction"]["parts"][0]["text"]
     assert len(seen[3]["body"]["contents"][-1]["parts"]) == 2           # two calls in one turn, two answers
     assert d.get_run(rid)["status"] == "needs_review"
@@ -221,9 +224,11 @@ def test_gemini_reread_counts_tokens_and_saves_nothing():
     class Reader:
         def extract(self, blob, ct, name):
             return Extraction({"seller_name": "Tuwaiq Engineering", "total": 1150.0}, 0.9, {}, [], "gemini", "m", 50, 10)
-    p = investigate_gemini(d, rid, "rev", None, chat([[call("reread", id=rid)], [propose("hold")]], []), extractor=Reader())
+    p = investigate_gemini(d, rid, "rev", None, chat([[call("reread", id=rid)], [call("run_checks", id=rid)], [propose("hold")]], []),
+                           extractor=Reader())
     assert p["steps"][0]["result"]["code"] == "reread" and p["steps"][0]["result"]["differences"] >= 2
-    assert p["tokens_in"] == 250 and d.get_run(rid)["fields"]["total"] is None
+    assert p["steps"][1]["tool"] == "run_checks" and p["steps"][1]["result"]["on"] == "reread"      # checked the re-read fields
+    assert p["tokens_in"] == 350 and d.get_run(rid)["fields"]["total"] is None                      # nothing was saved
 
 
 def test_gemini_injection_sample_is_flagged():
@@ -314,7 +319,7 @@ def test_rule_based_copilot_is_scored_in_the_built_in_evaluation():
 
 def test_gemini_copilot_evaluation_on_a_paced_sample():
     seen, waits = [], []
-    replies = [lambda b: [propose("reject" if "iban" in json.dumps(b).lower() else "hold")]]
+    replies = [lambda b: [propose("hold")]]
     res = evaluate_copilot_ai({"provider": "gemini", "key": KEY}, sample_size=4, rpm=60, chat=chat(replies, seen),
                               sleep=waits.append, clock=lambda: 0.0)
     assert res["mode"] == "gemini" and res["count"] == 4 and res["review_items"] == 41 and len(res["picked"]) == 4
@@ -356,7 +361,8 @@ def test_gemini_summary_stated_as_a_fact_is_sent_back_once_then_accepted():
 def test_gemini_summary_that_stays_a_fact_is_replaced_by_our_own_suggestion():
     d = seeded()
     rid = submit(d, "inv-083.txt")
-    stubborn = propose("reject", en="Rejected: wrong bank account.", ar="مرفوضة: حساب بنكي خاطئ.")
+    stubborn = propose("reject", en="Rejected: wrong bank account.", ar="مرفوضة: حساب بنكي خاطئ.", reasons=[
+        item("The IBAN differs from the vendor master.", "الآيبان يختلف عن سجل المورّدين.", "invoice", "vendor-iban")])
     p = investigate_gemini(d, rid, "rev", None, chat([[call("get_invoice", id=rid)], [stubborn]], []))
     assert p["recommendation"] == "reject" and p["summary"] == fallback_summary("reject")
     assert summary_problem(p["summary"]["en"], p["summary"]["ar"]) is None and p["summary"]["en"].startswith("I suggest")
@@ -375,7 +381,7 @@ def test_gemini_reasons_are_failed_checks_and_direct_support_everything_else_is_
         [call("get_invoice", id=rid)], [call("get_po", number="PO-2026-0001"), call("vendor_history", vendor_id=vid)],
         [propose("reject", en="I suggest rejecting because the QR code disagrees with the printed total.",
                  ar="أقترح الرفض لأن رمز QR يخالف الإجمالي المطبوع.", reasons=[
-                     item("The QR code total differs from the printed total.", "إجمالي رمز QR يختلف عن الإجمالي المطبوع.", "invoice"),
+                     item("The QR code total differs from the printed total.", "إجمالي رمز QR يختلف عن الإجمالي المطبوع.", "invoice", "qr-agrees"),
                      item("The invoice gives no PO number.", "الفاتورة لا تذكر رقم أمر شراء.", "purchase_order"),       # no PO check failed
                      item("One earlier invoice from this vendor was rejected.", "رُفضت فاتورة سابقة واحدة من هذا المورّد.", "vendor_history"),
                      item("The bank account was compared.", "قورن الحساب البنكي.", "iban_history"),                    # never looked at
@@ -388,6 +394,10 @@ def test_gemini_reasons_are_failed_checks_and_direct_support_everything_else_is_
         ("iban_history", "The bank account was compared."), ("vendor_history", "The vendor is known.")]
     for it in p["reasons"] + p["context"]:
         assert it["source"] in SOURCES and not re.search(r"get_invoice|iban_history|vendor_history|get_po", it["en"] + it["ar"])
+    guard = [s for s in p["steps"] if s["tool"] == "guard"]                          # what was left out is on record
+    assert [s["result"]["text"] for s in guard] == ["get_invoice showed a failed check.", "Something odd."]
+    assert all(s["result"]["code"] == "dropped" and not s["ok"] for s in guard)
+    assert sum(a["action"] == "agent.step" and a["detail"].startswith("guard") for a in d.audit_log(action="agent.step")) == 2
 
 
 def test_gemini_support_from_a_failed_check_stays_a_reason():
@@ -423,3 +433,165 @@ def test_rule_based_puts_weak_facts_in_context():
     assert [r["code"] for r in p["reasons"]] == ["iban_differs"] and p["reasons"][0]["source"] == "iban_history"
     assert "known_vendor" in [c["code"] for c in p["context"]]                  # the vendor's earlier invoices are context
     assert d.proposals(rid)[0]["reasons"] == p["reasons"] and d.proposals(rid)[0]["context"] == p["context"]
+
+
+# ------------------------------------------------------- the model never judges dates: code runs the checks
+FUTURE_EN = "The issue date is in the future."
+FUTURE_AR = "تاريخ الإصدار في المستقبل."
+
+
+def test_a_wrong_future_date_claim_never_becomes_a_reject_reason():
+    """The real bug: the model called a past date (2026-08-28, with today 2026-11-05) "in the future" and suggested rejecting."""
+    d = seeded()
+    rid = submit(d, "inv-083.txt")
+    assert d.get_run(rid)["fields"]["issue_date"] < TODAY.isoformat()                       # the date is in the past
+    assert "issue-date" not in [x["key"] for x in d.get_run(rid)["results"] if x["status"] == "fail"]
+    claim = propose("reject", en="I suggest rejecting because the issue date is in the future.",
+                    ar="أقترح الرفض لأن تاريخ الإصدار في المستقبل.", reasons=[item(FUTURE_EN, FUTURE_AR, "invoice", "issue-date")])
+    seen = []
+    p = investigate_gemini(d, rid, "rev", None, chat([[call("get_invoice", id=rid)], [claim]], seen))
+    assert p["recommendation"] != "reject" and p["reasons"] == []                           # no reject, and no reason at all
+    assert not any("future" in json.dumps(x).lower() for x in (p["summary"], p["reasons"], p["context"]))
+    told = json.dumps(seen[2]["body"]["contents"][-1], ensure_ascii=False)
+    assert "no check about that failed" in told and "run_checks" in told                    # sent back with the reason why
+    drops = [s["result"] for s in p["steps"] if s["tool"] == "guard"]
+    assert [x["what"] for x in drops] == ["reason", "suggestion"]                           # both recorded in the steps
+    assert any("future" in x["text"] or "no check" in x["why"] or "did not fail" in x["why"] for x in drops)
+    assert d.get_run(rid)["status"] == "needs_review"
+
+
+@pytest.mark.parametrize("check", [None, "issue-date", "Issue-Date"])
+def test_the_false_claim_is_dropped_whether_or_not_it_names_a_check(check):
+    d = seeded()
+    rid = submit(d, "inv-006.txt")                          # only the QR check failed; the date is fine
+    good = item("The QR code total differs from the printed total.", "إجمالي رمز QR يختلف عن الإجمالي المطبوع.", "invoice", "qr-agrees")
+    p = investigate_gemini(d, rid, "rev", None, chat([[call("get_invoice", id=rid)], [propose(
+        "reject", en="I suggest rejecting because the QR code disagrees with the printed total.",
+        ar="أقترح الرفض لأن رمز QR يخالف الإجمالي المطبوع.", reasons=[good, item(FUTURE_EN, FUTURE_AR, "invoice", check)])]], []))
+    assert p["recommendation"] == "reject" and [r["check"] for r in p["reasons"]] == ["qr-agrees"]  # the real reason stands
+    assert [s["result"]["text"] for s in p["steps"] if s["tool"] == "guard"] == [FUTURE_EN]
+
+
+def test_the_same_claim_stands_when_the_date_check_really_failed():
+    d = seeded()
+    rid = submit(d, "inv-042.txt")                          # issue date 2031: the date check failed
+    assert "issue-date" in [x["key"] for x in d.get_run(rid)["results"] if x["status"] == "fail"]
+    p = investigate_gemini(d, rid, "rev", None, chat([[call("get_invoice", id=rid)], [propose(
+        "reject", en="I suggest rejecting because the issue date is in the future.", ar="أقترح الرفض لأن تاريخ الإصدار في المستقبل.",
+        reasons=[item(FUTURE_EN, FUTURE_AR, "invoice", "issue-date")])]], []))
+    assert p["recommendation"] == "reject" and [r["check"] for r in p["reasons"]] == ["issue-date"]
+    assert not [s for s in p["steps"] if s["tool"] == "guard"]
+
+
+def test_a_reason_about_the_document_must_name_a_check_that_failed():
+    d = seeded()
+    rid = submit(d, "inv-083.txt")
+    p = investigate_gemini(d, rid, "rev", None, chat([[call("get_invoice", id=rid)], [propose("hold", reasons=[
+        item("The seller name looks unusual.", "اسم البائع يبدو غير معتاد.", "invoice"),                        # a claim, no check
+        item("The totals are fine.", "الإجماليات سليمة.", "invoice", "totals"),                                   # names a check that passed
+        item("The IBAN differs from the vendor master.", "الآيبان يختلف.", "invoice", "vendor-iban")])]], []))
+    assert [r["check"] for r in p["reasons"]] == ["vendor-iban"]
+    assert [s["result"]["why"][:10] for s in p["steps"] if s["tool"] == "guard"] == ["a reason a", "it rests o"]
+
+
+def test_run_checks_runs_the_whole_rule_set_in_code_and_saves_nothing():
+    d = seeded()
+    rid = submit(d, "inv-083.txt")
+    before = d.get_run(rid)
+    out = d.check_fields(rid)
+    assert out["failed"] == ["vendor-iban"] and out["today"] == TODAY.isoformat() and out["passed"] >= 10
+    assert next(c for c in out["checks"] if c["key"] == "issue-date")["status"] == "pass"
+    bad = d.check_fields(rid, {"issue_date": "2031-01-01"})                  # the same rules on other fields
+    assert "issue-date" in bad["failed"]
+    after = d.get_run(rid)
+    assert (before["fields"], before["results"], before["status"]) == (after["fields"], after["results"], after["status"])
+    with pytest.raises(DeskError):
+        d.check_fields(999)
+
+
+class RereadAll:
+    """A re-read that finds every field of a good invoice, with a past issue date."""
+    def extract(self, blob, ct, name):
+        f = {"invoice_number": "TQ-1", "issue_date": "2026-08-28", "due_date": "2026-09-28", "seller_name": "Tuwaiq Engineering",
+             "seller_vat": "300000000000003", "currency": "SAR", "subtotal": 1000.0, "vat_amount": 150.0, "total": 1150.0}
+        return Extraction(f, 0.95, {}, [], "gemini", "m", 50, 10)
+
+
+def test_after_a_reread_the_agent_must_call_run_checks_and_reasons_come_from_it():
+    d = seeded()
+    rid = submit(d, "inv-001.png")                              # unreadable: required fields and confidence failed
+    old = {x["key"] for x in d.get_run(rid)["results"] if x["status"] == "fail"}
+    assert {"required", "confidence"} <= old
+    stale = item("Required fields are missing.", "حقول مطلوبة ناقصة.", "invoice", "required")           # true of the OLD reading only
+    seen = []
+    p = investigate_gemini(d, rid, "rev", None, chat([
+        [call("get_invoice", id=rid)], [call("reread", id=rid)],
+        [propose("hold", reasons=[stale])],                                                                 # refused: run_checks first
+        [call("run_checks", id=rid)],
+        [propose("hold", reasons=[stale, item("The IBAN could not be compared.", "تعذّرت مقارنة الآيبان.", "checks", "vendor-iban")])]],
+        seen), extractor=RereadAll())
+    assert "call run_checks first" in json.dumps(seen[3]["body"]["contents"][-1])
+    checks = next(s for s in p["steps"] if s["tool"] == "run_checks")
+    assert checks["result"]["on"] == "reread" and "required" not in checks["result"]["keys"] and "confidence" not in checks["result"]["keys"]
+    assert p["reasons"] == [] and [s["result"]["text"] for s in p["steps"] if s["tool"] == "guard"] == [
+        "Required fields are missing.", "The IBAN could not be compared."]                                # neither failed on the re-read
+    assert d.get_run(rid)["fields"]["total"] is None and d.get_run(rid)["status"] == "needs_review"      # nothing saved
+
+
+def test_run_checks_only_accepts_values_the_run_or_the_reread_has():
+    d = seeded()
+    rid = submit(d, "inv-083.txt")
+    f = d.get_run(rid)["fields"]
+    p = investigate_gemini(d, rid, "rev", None, chat([
+        [call("run_checks", id=rid, fields={"issue_date": "2031-01-01"})],            # invented: refused
+        [call("run_checks", id=rid, fields={"issue_date": f["issue_date"]})], [call("run_checks", id=rid, fields={"colour": "red"})],
+        [propose("hold")]], []))
+    ok = [s["ok"] for s in p["steps"] if s["tool"] == "run_checks"]
+    assert ok == [False, True, False]
+    assert p["steps"][0]["result"]["message"].startswith("the value given for issue_date is neither on the run nor in the re-read")
+
+
+def test_the_prompt_carries_todays_date_and_the_rule_that_code_judges_dates():
+    d = seeded()
+    seen = []
+    investigate_gemini(d, submit(d, "inv-083.txt"), "rev", None, chat([[propose("hold")]], seen))
+    system = seen[0]["body"]["systemInstruction"]["parts"][0]["text"]
+    assert f"Today's date is {TODAY.isoformat()} (Asia/Riyadh)" in system and "run_checks" in system
+    assert "Never judge a date, an amount or VAT arithmetic yourself" in system
+    live = Desk(":memory:", sync=True)                                                   # no fixed date: the server clock, UTC+3
+    assert abs((live.agent_today() - datetime.now(timezone(timedelta(hours=3))).date()).days) <= 1
+    assert seeded().agent_today() == TODAY
+
+
+# ------------------------------------------------------------------ the answer key and the deferred figure
+def test_three_clean_but_large_invoices_are_hold_in_the_answer_key():
+    assert REVIEWER_OVERRIDES == {"inv-018": "hold", "inv-026": "hold", "inv-053": "hold"}
+    answers = {i["id"]: i for i in load_answers()["invoices"]}
+    for iid in REVIEWER_OVERRIDES:
+        assert answers[iid]["scenario"] == "clean" and correct_decision(answers[iid]) == "hold"
+    assert correct_decision(answers["inv-001"]) == "approve"                       # the other clean one in review is unchanged
+    assert [i["file"] for i in answers.values() if i["id"] in REVIEWER_OVERRIDES] == ["inv-018.pdf", "inv-026.txt", "inv-053.txt"]
+
+
+def test_deferred_items_are_not_wrong_and_the_three_figures():
+    def row(rec, right, unread, scenario="s"):
+        return dict(scenario=scenario, outcome="ok", recommended=rec, agree=rec == right, unsafe=rec == "approve" and right != "approve",
+                    deferred=rec == "hold" and unread, steps=3, tokens_in=0, tokens_out=0, finished=True)
+    rows = [row("reject", "reject", False), row("hold", "reject", False),            # one right, one wrong (readable)
+            row("hold", "approve", True), row("hold", "reject", True),               # two deferred: unreadable and it asked for more
+            row("approve", "reject", False), row("reject", "reject", True)]          # unsafe approve; an unreadable file it still answered
+    s = summarize_copilot(rows)
+    assert (s["count"], s["deferred"], s["answered"]) == (6, 2, 4)
+    assert s["agreement"] == 0.5 and s["deferral_rate"] == round(2 / 6, 4) and s["unsafe_approves"] == 1   # 2 of the 4 answered are right
+    assert s["by_scenario"]["s"] == dict(n=6, deferred=2, agree=2, unsafe=1)
+    assert summarize_copilot([])["agreement"] is None
+
+
+def test_rule_based_evaluation_reports_deferred_items():
+    c = evaluate()["copilot"]
+    assert c["count"] == 41 and c["unsafe_approves"] == 0 and c["answered"] + c["deferred"] == 41
+    deferred = [r for r in c["rows"] if r["deferred"]]
+    assert deferred and all(r["recommended"] == "hold" and r["could_not_read"] for r in deferred)
+    assert c["deferral_rate"] == round(len(deferred) / 41, 4)
+    assert c["agreement"] == round(sum(r["agree"] for r in c["rows"] if not r["deferred"]) / c["answered"], 4)
+    assert next(r for r in c["rows"] if r["id"] == "inv-018")["correct"] == "hold"       # the override is in force

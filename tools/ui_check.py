@@ -555,8 +555,36 @@ def copilot_panel(page: Page) -> None:
     page.unroute_all(behavior="ignoreErrors")
 
 
+def copilot_evaluation(page: Page) -> None:
+    """Evaluation page: the copilot's three figures (agreement on what it could read, deferral rate, unsafe approve
+    suggestions) and the synthetic-samples wording, in English and Arabic."""
+    sign_in(page)
+    started = api(page, "POST", "/evaluation/run", {"mode": "rules"})
+    check("copilot evaluation: the run started", started["status"] == 200 and bool(started["body"]), str(started))
+    # done means the job finished and the results are stored; wait for the results themselves
+    page.wait_for_function("""async () => { const r = await fetch('/api/evaluation', { headers: { Authorization: 'Bearer ' + localStorage.getItem('id-token') } });
+        const j = await r.json(); return !!(j.rules && j.rules.copilot); }""", polling=1000, timeout=90000)
+    data = api(page, "GET", "/evaluation")["body"]["rules"]["copilot"]
+    page.evaluate("location.hash = '#/evaluation'; location.reload()")
+    panel = page.locator(".panel", has_text="Review copilot, rule-based")
+    expect(panel).to_be_visible()
+    facts = panel.locator(".fact")
+    check("copilot evaluation: exactly three headline figures", facts.count() == 3, str(facts.count()))
+    text = panel.inner_text()
+    check("copilot evaluation: agreement on the items it could read", "on the items it could read" in text and f"n = {data['answered']}" in text)
+    check("copilot evaluation: deferral rate with its count", "deferred" in text and f"{data['deferred']} of {data['count']} items" in text)
+    check("copilot evaluation: unsafe approve suggestions", facts.nth(2).locator("b").inner_text() == str(data["unsafe_approves"]))
+    check("copilot evaluation: worded as synthetic samples only", "synthetic samples only" in text and "counted as deferred, not as wrong" in text)
+    page.evaluate("localStorage.setItem('id-lang', 'ar'); location.reload()")
+    panel = page.locator(".panel", has_text="مساعد المراجعة، بالقواعد")
+    expect(panel).to_be_visible()
+    ar = panel.inner_text()
+    check("copilot evaluation: Arabic figures and wording", "مؤجَّلة" in ar and "عينات مصطنعة فقط" in ar and "في الفواتير التي استطاع قراءتها" in ar, ar[:200])
+    check("copilot evaluation: Arabic has no English figure labels", "deferred" not in ar and "could read" not in ar)
+
+
 CHECKS = [mixed_direction, reasons_in_arabic, review_badge, waking_screen, rule_with_open_limit, error_messages, damaged_file, provider_failure, xml_reads_as_an_invoice,
-          vendors_and_risk, demo_start, review_layout, dashboard_layout, runs_sorting, run_timeline, copilot_panel]
+          vendors_and_risk, demo_start, review_layout, dashboard_layout, runs_sorting, run_timeline, copilot_panel, copilot_evaluation]
 
 if __name__ == "__main__":
     with sync_playwright() as pw:

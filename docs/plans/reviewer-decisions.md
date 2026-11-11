@@ -15,11 +15,19 @@ the scenarios below, where the key expects review, use this table. A scenario mi
 
 Scoring: a suggestion is right when it equals the decision below. A suggestion to approve where the decision is not
 approve is counted as unsafe. A "hold" never counts as unsafe, but counts as wrong where the decision is approve or
-reject.
+reject, **unless it is deferred**: when the file could not be read or was read with low confidence (the confidence check
+failed on the run) and the copilot suggests finding out more, the item is counted as deferred, not as right or wrong.
+Three figures are reported: agreement on the items it could read (deferred items left out), the deferral rate, and unsafe
+approve suggestions.
+
+**Per-sample overrides.** `REVIEWER_OVERRIDES` in `evaluation.py` changes the right decision of single samples without
+touching the generated `answers.json`. Today it holds `inv-018`, `inv-026` and `inv-053` (clean invoices that reached
+review only because their total is above 50,000): hold, so a large amount needs a second approval like the other
+`over_limit` samples.
 
 | Scenario | Invoices expected in review | Why the rules sent it to review | Decision | Reason |
 |---|---|---|---|---|
-| `clean` | inv-018, inv-026, inv-053 (text and PDF); inv-001 (image) | The total is above 50,000 (the high value rule); inv-001 is an image the built-in reader could not read | approve | A genuine invoice from a known vendor. See point 1 below: this row now disagrees with the large amount rule |
+| `clean` | inv-001 (image) | An image the built-in reader could not read | approve | A genuine invoice. inv-018, inv-026 and inv-053 are also `clean` but are overridden to hold (total above 50,000, second approval) |
 | `qr_mismatch` | inv-006, inv-027 (text), inv-069, inv-092 (PDF), inv-077 (XML); inv-070 (image) | The QR code total differs from the printed total; inv-070 is an unreadable image | reject | Two amounts on one document: the document is invalid. Ask the vendor for a corrected invoice |
 | `future_date` | inv-042 | The issue date is in the future | reject | An invoice cannot be issued in the future. The document is invalid; ask for a corrected invoice |
 | `hijri_future` | inv-068 | The Hijri issue date converts to a future Gregorian date | reject | Same as above, found through the Hijri conversion |
@@ -40,10 +48,9 @@ foreign currency all suggest hold now. The copilot never suggests approve while 
 
 ## Points to check when you review
 
-1. **`clean` against the large amount rule.** Three `clean` samples (inv-018, inv-026, inv-053) went to review only
-   because their total is above 50,000. The table says approve, but the principle says a large amount needs a second
-   approval, so the copilot holds them and is scored wrong on all three. Either those samples move to hold, or the
-   copilot approves large amounts from known vendors. I left the `clean` row as asked.
+1. **`clean` and the large amount rule.** inv-018, inv-026 and inv-053 are `clean` but went to review only because
+   their total is above 50,000. They are now hold through `REVIEWER_OVERRIDES` (the `clean` row itself is unchanged),
+   so the copilot's hold on them is right.
 2. **Images.** Three rows include images the built-in reader cannot read at all (inv-001, inv-002, inv-070), and
    inv-051 is a text file read with low confidence. The right decision for those depends on what is on the page, which
    the answer key knows and the rule-based copilot cannot see, so it says "hold". Gemini can read the file again, so it

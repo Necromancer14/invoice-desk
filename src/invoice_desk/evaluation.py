@@ -96,7 +96,15 @@ REVIEWER_DECISION = {
 }
 
 
+# Samples whose right decision differs from their scenario's row. answers.json is generated and stays as it is.
+# These three are "clean" invoices that reached review only because the total is above 50,000; by the principle that a
+# large amount needs a second approval they are hold, like the other over_limit samples.
+REVIEWER_OVERRIDES = {"inv-018": "hold", "inv-026": "hold", "inv-053": "hold"}
+
+
 def correct_decision(it: dict) -> str:
+    if it.get("id") in REVIEWER_OVERRIDES and it["expected_status"] == "needs_review":
+        return REVIEWER_OVERRIDES[it["id"]]
     exp = it["expected_status"]
     if exp == "approved":
         return "approve"
@@ -105,27 +113,44 @@ def correct_decision(it: dict) -> str:
     return REVIEWER_DECISION.get(it["scenario"], "hold")
 
 
-def _score_copilot(it: dict, p: dict) -> dict:
+def unreadable(desk: Desk, rid: int) -> bool:
+    """The file could not be read, or was read with low confidence: the confidence check failed on the run."""
+    types = {r["key"]: r["type"] for r in desk.rules()}
+    return any(x["status"] == "fail" and types.get(x["key"]) == "min_confidence" for x in desk.get_run(rid).get("results") or [])
+
+
+def _score_copilot(it: dict, p: dict, could_not_read: bool = False) -> dict:
+    """could_not_read: the run's file was unreadable or low confidence. A suggestion to find out more then counts as
+    deferred, not as right or wrong: the copilot did not have what it needed to say anything else."""
     right = correct_decision(it)
     rec = p["recommendation"]
     return dict(id=it["id"], file=it["file"], format=it["format"], lang=it["lang"], scenario=it["scenario"], outcome="ok",
                 correct=right, recommended=rec, agree=rec == right, unsafe=rec == "approve" and right != "approve",
-                steps=len(p.get("steps") or []), tokens_in=p.get("tokens_in", 0) or 0, tokens_out=p.get("tokens_out", 0) or 0,
-                finished=p.get("finished", True))
+                deferred=rec == "hold" and could_not_read, could_not_read=could_not_read,
+                steps=sum(s.get("tool") != "guard" for s in p.get("steps") or []), tokens_in=p.get("tokens_in", 0) or 0,
+                tokens_out=p.get("tokens_out", 0) or 0, finished=p.get("finished", True))
 
 
 def summarize_copilot(rows: list[dict]) -> dict:
-    """Copilot figures over scored rows. Error rows are counted but never enter a percentage or an average."""
+    """Copilot figures over scored rows. Error rows are counted but never enter a percentage or an average.
+
+    Three headline figures: agreement on the items it could read (deferred items left out), the deferral rate, and
+    unsafe approve suggestions. A deferred item is one where it suggested finding out more because the file could not
+    be read or was read with low confidence."""
     ok = [r for r in rows if r.get("outcome", "ok") == "ok"]
     n = len(ok)
+    answered = [r for r in ok if not r.get("deferred")]
     by: dict[str, dict] = {}
     for r in ok:
-        b = by.setdefault(r["scenario"], dict(n=0, agree=0, unsafe=0))
+        b = by.setdefault(r["scenario"], dict(n=0, deferred=0, agree=0, unsafe=0))
         b["n"] += 1
-        b["agree"] += r["agree"]
+        b["deferred"] += bool(r.get("deferred"))
+        b["agree"] += bool(r["agree"]) and not r.get("deferred")
         b["unsafe"] += r["unsafe"]
     avg = lambda k: round(sum(r[k] for r in ok) / n, 1) if n else None  # noqa: E731
-    return dict(count=n, errors=len(rows) - n, agreement=round(sum(r["agree"] for r in ok) / n, 4) if n else None,
+    return dict(count=n, errors=len(rows) - n, answered=len(answered),
+                agreement=round(sum(r["agree"] for r in answered) / len(answered), 4) if answered else None,
+                deferred=n - len(answered), deferral_rate=round((n - len(answered)) / n, 4) if n else None,
                 unsafe_approves=sum(r["unsafe"] for r in ok), holds=sum(r["recommended"] == "hold" for r in ok),
                 recommended={k: sum(r["recommended"] == k for r in ok) for k in ("approve", "reject", "hold")},
                 avg_steps=avg("steps"), avg_tokens_in=avg("tokens_in"), avg_tokens_out=avg("tokens_out"),
@@ -141,7 +166,7 @@ def copilot_rules(desk: Desk, items: list[dict], ids: dict) -> dict:
         rid = ids.get(it["id"])
         if rid is None or desk.get_run(rid)["status"] != "needs_review":
             continue
-        rows.append(_score_copilot(it, investigate_rules(desk, rid, "evaluation")))
+        rows.append(_score_copilot(it, investigate_rules(desk, rid, "evaluation"), unreadable(desk, rid)))
     return dict(summarize_copilot(rows), mode="rules")
 
 
@@ -188,7 +213,7 @@ def evaluate_copilot_ai(llm: dict, rules: list[dict] | None = None, *, sample_si
             rows.append(dict(id=it["id"], file=it["file"], format=it["format"], lang=it["lang"], scenario=it["scenario"],
                              outcome="error", error=msg))
             continue
-        rows.append(_score_copilot(it, p))
+        rows.append(_score_copilot(it, p, unreadable(desk, ids[it["id"]])))
     if progress:
         progress(dict(done=len(rows), total=len(sample), errors=sum(r["outcome"] == "error" for r in rows)))
     return dict(summarize_copilot(rows), mode="gemini", provider=llm.get("provider"), model=getattr(chat, "model", None),

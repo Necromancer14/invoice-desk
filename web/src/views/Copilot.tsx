@@ -15,6 +15,7 @@ const TOOL_LABEL: Record<string, string> = {
   get_invoice: tk("Opened the invoice"), find_vendor: tk("Looked up the vendor"), vendor_history: tk("Read the vendor's history"),
   iban_history: tk("Compared IBANs with earlier invoices"), get_po: tk("Looked up the purchase order"),
   similar_invoices: tk("Looked for similar earlier invoices"), reread: tk("Read the file again"), simulate_rule: tk("Tried a rule change (dry run)"),
+  run_checks: tk("Ran the checks"), guard: tk("Left something out"),
 };
 const PO_STATUS: Record<string, string> = {
   found: tk("found"), not_found: tk("not found"), matched: tk("within the order"), over: tk("above the order"), closed: tk("closed"),
@@ -87,7 +88,7 @@ function FindingText({ f }: { f: Finding }) {
 
 /** The small label that says where an item came from. */
 const SOURCE_LABEL: Record<Source, string> = {
-  invoice: tk("Invoice"), vendor: tk("Vendor"), vendor_history: tk("Vendor history"), iban_history: tk("IBAN history"),
+  invoice: tk("Invoice"), checks: tk("Checks"), vendor: tk("Vendor"), vendor_history: tk("Vendor history"), iban_history: tk("IBAN history"),
   purchase_order: tk("Purchase order"), similar_invoices: tk("Similar invoices"), reread: tk("Read again"), rule_test: tk("Rule test"),
 };
 
@@ -120,6 +121,9 @@ function StepText({ s }: { s: CopilotStep }) {
     case "po": what = t("Purchase order {number}: {status}", { number: own(v("number")), status: t(PO_STATUS[r.status as string] || "not found") }); break;
     case "similar": what = t("similar earlier invoices: {n}", { n: num(v("count")) }); break;
     case "reread": what = t("fields that differ: {n}", { n: num(v("differences")) }); break;
+    case "checks": what = t("{n} checks failed", { n: v("failed") }) + (r.on === "reread" ? " · " + t("on the re-read fields") : ""); break;
+    case "dropped": what = r.what === "suggestion" ? t("A suggestion to reject became a suggestion to hold: no failed check backs it.")
+      : t("A reason was left out because no failed check backs it: {text}", { text: String(r.text ?? "") }); break;
     case "simulated": what = t("{changed} of {checked} past decisions would change", { changed: num(v("changed")), checked: num(v("checked")) }); break;
     case "error": return <><span>{TOOL_LABEL[s.tool] ? t(TOOL_LABEL[s.tool]) : t("Asked for {tool}", { tool: own(s.tool) })}</span>
       <div className="small cp-err">{t("Not done:")} <span dir="auto">{String(r.message ?? "")}</span></div></>;

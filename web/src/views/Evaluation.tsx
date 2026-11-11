@@ -67,7 +67,7 @@ const scenarioLabel = (t: (s: string) => string, s: string) => (SCENARIO[s] ? t(
 function CopilotMetrics({ c, title }: { c: CopilotEval; title: string }) {
   const { t } = useApp();
   const [show, setShow] = useState(false);
-  const wrong = c.rows.filter((x) => x.outcome === "ok" && !x.agree);
+  const wrong = c.rows.filter((x) => x.outcome === "ok" && !x.agree && !x.deferred);
   const errors = c.rows.filter((x) => x.outcome === "error");
   const nInv = t("n = {n}", { n: c.count });
   const rec = (r?: Recommendation) => (r ? t(REC_SHORT[r]) : "–");
@@ -80,17 +80,16 @@ function CopilotMetrics({ c, title }: { c: CopilotEval; title: string }) {
     <div className="panel">
       <h2>{title}</h2>
       <p className="muted small"><bdi>{meta.join(" · ")}</bdi></p>
-      <p className="small mt2">{t("Measured on synthetic samples only: the invoices the built-in reader sends to review. The right decision comes from the answer key; where the key expects review, it is our judgement for each kind of problem, written down in evaluation.py. A suggestion to find out more counts as right only where that is the right decision, and is never unsafe.")}</p>
+      <p className="small mt2">{t("Measured on synthetic samples only: the invoices the built-in reader sends to review. The right decision comes from the answer key; where the key expects review, it is our judgement for each kind of problem, written down in evaluation.py. When the file could not be read or was read with low confidence, a suggestion to find out more is counted as deferred, not as wrong, and is left out of the agreement figure. A suggestion to find out more is never unsafe.")}</p>
       <div className="facts mt3">
-        <div className="fact"><b>{pct(c.agreement)}</b><span>{t("suggestions that match the right decision")}</span><small className="n-note">{nInv}</small></div>
+        <div className="fact"><b>{pct(c.agreement)}</b><span>{t("agreement with the right decision, on the items it could read")}</span><small className="n-note">{t("n = {n}", { n: c.answered })}</small></div>
+        <div className="fact"><b>{pct(c.deferral_rate)}</b><span>{t("deferred: it asked to find out more because the file could not be read")}</span><small className="n-note">{t("{d} of {n} items", { d: c.deferred, n: c.count })}</small></div>
         <div className="fact"><b className={c.unsafe_approves ? "bad-figure" : undefined}>{num(c.unsafe_approves)}</b><span>{t("suggested approving when it should not have")}</span><small className="n-note">{nInv}</small></div>
-        <div className="fact"><b>{num(c.holds)}</b><span>{t("suggested finding out more")}</span><small className="n-note">{nInv}</small></div>
-        <div className="fact"><b>{num(c.avg_steps, 1)}</b><span>{t("steps per invoice")}</span><small className="n-note">{nInv}</small></div>
-        {c.mode === "gemini" && <div className="fact"><b>{num(c.avg_tokens_in)} / {num(c.avg_tokens_out)}</b><span>{t("tokens in / out per invoice")}</span><small className="n-note">{nInv}</small></div>}
       </div>
+      <p className="muted small mt2">{[t("{n} steps per invoice", { n: num(c.avg_steps, 1) }), c.mode === "gemini" ? t("{a} tokens in, {b} out", { a: num(c.avg_tokens_in), b: num(c.avg_tokens_out) }) : ""].filter(Boolean).join(" · ")}</p>
       <h3 className="sec-title mt5">{t("By kind of invoice")}</h3>
-      <div className="tw"><table><thead><tr><th>{t("Kind")}</th><th className="n">{t("Invoices (n)")}</th><th className="n">{t("Right suggestion")}</th><th className="n">{t("Unsafe approve")}</th></tr></thead><tbody>
-        {Object.entries(c.by_scenario).map(([k, b]) => <tr key={k}><td>{scenarioLabel(t, k)}</td><td className="n">{num(b.n)}</td><td className="n">{pct(b.agree / b.n)}</td><td className="n">{num(b.unsafe)}</td></tr>)}
+      <div className="tw"><table><thead><tr><th>{t("Kind")}</th><th className="n">{t("Invoices (n)")}</th><th className="n">{t("Deferred")}</th><th className="n">{t("Right suggestion")}</th><th className="n">{t("Unsafe approve")}</th></tr></thead><tbody>
+        {Object.entries(c.by_scenario).map(([k, b]) => <tr key={k}><td>{scenarioLabel(t, k)}</td><td className="n">{num(b.n)}</td><td className="n">{num(b.deferred)}</td><td className="n">{b.n > b.deferred ? pct(b.agree / (b.n - b.deferred)) : "–"}</td><td className="n">{num(b.unsafe)}</td></tr>)}
       </tbody></table></div>
       {wrong.length > 0 && <p className="mt3"><button className="btn small" onClick={() => setShow(!show)}>{show ? t("Hide the {n} disagreements", { n: wrong.length }) : t("Show the {n} disagreements", { n: wrong.length })}</button></p>}
       {show && <div className="tw"><table><thead><tr><th>{t("File")}</th><th>{t("Scenario")}</th><th>{t("Right decision")}</th><th>{t("Suggested")}</th></tr></thead><tbody>
