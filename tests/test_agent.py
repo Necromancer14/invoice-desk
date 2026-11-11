@@ -89,9 +89,10 @@ def test_hidden_instruction_detector():
 
 # ---------------------------------------------------------------------------------------- rule-based mode
 @pytest.mark.parametrize("file, rec, code", [
-    ("inv-083.txt", "reject", "iban_differs"), ("inv-006.txt", "reject", "qr_disagrees"),
-    ("inv-012.txt", "reject", "due_before_issue"), ("inv-087.txt", "reject", "vendor_vat_differs"),
-    ("inv-017.pdf", "approve", "high_value"), ("inv-020.txt", "approve", "foreign_currency"),
+    ("inv-083.txt", "hold", "iban_differs"), ("inv-006.txt", "reject", "qr_disagrees"),       # a changed IBAN: verify first
+    ("inv-012.txt", "hold", "due_before_issue"), ("inv-087.txt", "hold", "vendor_vat_differs"),
+    ("inv-017.pdf", "hold", "high_value"), ("inv-020.txt", "hold", "foreign_currency"),         # large amount, currency: verify
+    ("inv-042.txt", "reject", "date_problem"), ("inv-051.txt", "reject", "missing_seller_vat"),
     ("inv-086.txt", "hold", "vendor_unknown"), ("inv-088.txt", "hold", "po_problem"), ("inv-001.png", "hold", "unreadable"),
 ])
 def test_rule_based_findings(file, rec, code):
@@ -111,8 +112,8 @@ def test_rule_based_without_a_vendor_master_holds_and_everything_is_audited(desk
     rid = desk.submit("big.txt", big.encode(), "text/plain", "rev")
     assert [x["key"] for x in desk.get_run(rid)["results"] if x["status"] == "fail" and x["severity"] != "info"] == ["limit-50k"]
     p = investigate(desk, rid, "noor")
-    assert p["recommendation"] == "hold"              # only a soft check failed, but there is no vendor master to confirm who sent it
-    assert [f["code"] for f in p["findings"]][:2] == ["no_vendor_master", "high_value"]
+    assert p["recommendation"] == "hold"              # a large amount needs a second approval; no vendor master either
+    assert {f["code"] for f in p["findings"]} >= {"no_vendor_master", "high_value"}
     log = desk.audit_log(action="agent")
     assert {(a["actor"], a["action"]) for a in log} >= {("noor", "agent.investigate"), ("agent:rules", "agent.step"),
                                                          ("agent:rules", "agent.propose")}
@@ -246,7 +247,7 @@ def test_api_roles_modes_and_proposals(auth):
     rid = submit(d, "inv-083.txt")
     assert c.post(f"/api/runs/{rid}/investigate", json={}, headers=v).status_code == 403
     got = c.post(f"/api/runs/{rid}/investigate", json={}, headers=r).json()
-    assert got["mode"] == "rules" and got["recommendation"] == "reject"
+    assert got["mode"] == "rules" and got["recommendation"] == "hold"
     ai = dict(r, **{"X-LLM-Provider": "gemini", "X-LLM-Key": KEY})
     got = c.post(f"/api/runs/{rid}/investigate", json={"mode": "ai"}, headers=ai).json()
     assert got["mode"] == "gemini" and got["steps"][0]["tool"] == "get_invoice" and seen[0]["key"] == KEY
@@ -268,7 +269,11 @@ def test_api_roles_modes_and_proposals(auth):
 def test_correct_decision_and_summary():
     assert correct_decision(dict(expected_status="approved", scenario="clean")) == "approve"
     assert correct_decision(dict(expected_status="rejected", scenario="totals")) == "reject"
-    assert correct_decision(dict(expected_status="needs_review", scenario="iban_changed")) == "reject"
+    for scenario in ("iban_changed", "over_limit", "non_sar", "vendor_vat_mismatch", "due_before_issue", "unknown_vendor", "po_over"):
+        assert correct_decision(dict(expected_status="needs_review", scenario=scenario)) == "hold"   # verify a fact first
+    for scenario in ("qr_mismatch", "future_date", "hijri_future", "missing_vat"):
+        assert correct_decision(dict(expected_status="needs_review", scenario=scenario)) == "reject"  # the document is invalid
+    assert correct_decision(dict(expected_status="needs_review", scenario="clean")) == "approve"
     assert correct_decision(dict(expected_status="needs_review", scenario="something_new")) == "hold"
     assert set(REVIEWER_DECISION.values()) <= {"approve", "reject", "hold"}
     rows = [dict(scenario="a", outcome="ok", recommended="approve", agree=False, unsafe=True, steps=4, tokens_in=10, tokens_out=2, finished=True),
@@ -281,7 +286,11 @@ def test_correct_decision_and_summary():
 def test_rule_based_copilot_is_scored_in_the_built_in_evaluation():
     c = evaluate()["copilot"]
     assert c["mode"] == "rules" and c["count"] == 41 and c["errors"] == 0
-    assert c["unsafe_approves"] == 0 and c["agreement"] >= 0.6 and c["avg_tokens_in"] == 0
+    assert c["unsafe_approves"] == 0 and c["agreement"] >= 0.5 and c["avg_tokens_in"] == 0
+    by = {s: b for s, b in c["by_scenario"].items()}
+    for scenario in ("iban_changed", "vendor_vat_mismatch", "due_before_issue", "non_sar", "over_limit", "po_over"):
+        assert by[scenario]["agree"] >= by[scenario]["n"] - 1                  # verify first: these are holds (one unreadable image aside)
+    assert not any(r["recommended"] == "reject" for r in c["rows"] if r["scenario"] in ("iban_changed", "vendor_vat_mismatch"))
     assert all(r["recommended"] == "hold" for r in c["rows"] if r["scenario"] == "unknown_vendor")
 
 

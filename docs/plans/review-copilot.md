@@ -23,7 +23,9 @@ rejects. It has no tool that changes a run's status; its only write is a proposa
 | `simulate_rule(rule)` | `simulate` (dry run) |
 | `propose(recommendation, summary_en, summary_ar, evidence)` | `save_proposal`; never changes status |
 
-Recommendations: `approve`, `reject`, `hold` (find out more before deciding).
+Recommendations: `approve`, `reject`, `hold` (find out more before deciding). Reject when the document itself is
+invalid and needs a corrected invoice; hold when the invoice may be fine but a fact must be verified first (bank or VAT
+change, second approval for large amounts, currency). See `reviewer-decisions.md`.
 
 ## Guard
 Everything read from a document is data. The agent's system prompt carries the same rule as the extraction prompt

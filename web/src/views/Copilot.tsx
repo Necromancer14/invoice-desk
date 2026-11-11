@@ -50,8 +50,8 @@ function FindingText({ f }: { f: Finding }) {
       break;
     case "qr_disagrees": text = t("The QR code does not agree with the printed values. Ask the vendor for a corrected invoice."); break;
     case "date_problem": text = t("The issue date {date} is in the future or not a real date. Ask the vendor for a corrected invoice.", { date: own(v("date")) }); break;
-    case "due_before_issue": text = t("The due date {due} is before the issue date {issue}. Ask the vendor for a corrected invoice.", { due: own(v("due")), issue: own(v("issue")) }); break;
-    case "vendor_vat_differs": text = t("The seller VAT number on the invoice ({inv}) is not the one in the vendor master ({master}).", { inv: own(v("invoice_vat")), master: own(v("master_vat")) }); break;
+    case "due_before_issue": text = t("The due date {due} is before the issue date {issue}. Check with the vendor whether one of them is a typing error.", { due: own(v("due")), issue: own(v("issue")) }); break;
+    case "vendor_vat_differs": text = t("The seller VAT number on the invoice ({inv}) is not the one in the vendor master ({master}). Verify it with the vendor before paying.", { inv: own(v("invoice_vat")), master: own(v("master_vat")) }); break;
     case "vendor_unknown": text = t("The seller is not in the vendor master. Check who they are and add them before deciding."); break;
     case "vendor_blocked": text = t("The vendor is blocked in the vendor master."); break;
     case "po_problem":
@@ -61,7 +61,7 @@ function FindingText({ f }: { f: Finding }) {
       break;
     case "negative_total": text = t("The total is negative. Check whether this is a credit note."); break;
     case "high_value":
-      text = t("High value invoice: {total}.", { total: money(v("total"), v("currency")) }) + " " + ((f.earlier as number) > 0 && f.typical != null
+      text = t("High value invoice: {total}. A large amount needs a second approval.", { total: money(v("total"), v("currency")) }) + " " + ((f.earlier as number) > 0 && f.typical != null
         ? t("This vendor's usual approved invoice is about {typical}; the largest so far was {largest}.", { typical: sar(f.typical), largest: sar(f.largest) })
         : t("There are no earlier approved invoices from this vendor to compare with."));
       break;

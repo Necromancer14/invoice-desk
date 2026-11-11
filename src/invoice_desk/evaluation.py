@@ -87,10 +87,12 @@ def summarize_rows(rows: list[dict]) -> dict:
 # The decision a careful reviewer should reach for a sample the answer key expects in review. Samples the key
 # expects approved or rejected keep that outcome. This table is our judgement, written down so it can be argued with.
 REVIEWER_DECISION = {
-    "clean": "approve", "over_limit": "approve", "non_sar": "approve",          # genuine invoices that need a second look
-    "iban_changed": "reject", "qr_mismatch": "reject", "due_before_issue": "reject", "future_date": "reject",
-    "hijri_future": "reject", "missing_vat": "reject", "vendor_vat_mismatch": "reject",
-    "unknown_vendor": "hold", "po_over": "hold",                                 # someone has to find something out first
+    # Reject when the document itself is invalid and needs a corrected invoice. Hold when the invoice may be fine but a
+    # fact must be verified first (vendor bank or VAT change, second approval for large amounts, currency).
+    "clean": "approve",
+    "qr_mismatch": "reject", "future_date": "reject", "hijri_future": "reject", "missing_vat": "reject",
+    "over_limit": "hold", "non_sar": "hold", "iban_changed": "hold", "vendor_vat_mismatch": "hold", "due_before_issue": "hold",
+    "unknown_vendor": "hold", "po_over": "hold",
 }
 
 

@@ -56,7 +56,7 @@ export type TimelineEvent = { at: string } & (
 /** What the review copilot suggests. It never decides: a person approves or rejects. */
 export type Recommendation = "approve" | "reject" | "hold";
 /** A finding of the rule-based copilot (and the guard note in Gemini mode): a code the portal words, plus its values. */
-export interface Finding { code: string; effect: "reject" | "hold" | "soft" | "info"; runs?: number[]; [k: string]: unknown }
+export interface Finding { code: string; effect: "reject" | "hold" | "info"; runs?: number[]; [k: string]: unknown }
 export interface CopilotStep {
   n: number; tool: string; args: Record<string, unknown>; ok: boolean; ms: number;
   result: { code: string; [k: string]: unknown };

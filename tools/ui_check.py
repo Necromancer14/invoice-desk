@@ -494,7 +494,7 @@ def copilot_panel(page: Page) -> None:
     expect(page.locator(".copilot")).to_contain_text("No suggestion yet")
     check("copilot: no Gemini button without a Gemini key", page.get_by_role("button", name="Investigate with Gemini").count() == 0)
     page.locator(".copilot").get_by_role("button", name="Investigate", exact=True).click()
-    expect(page.locator(".cp-rec")).to_contain_text("Suggests rejecting")
+    expect(page.locator(".cp-rec")).to_contain_text("Suggests finding out more")   # a changed IBAN: verify, not reject
     check("copilot: labels the mode", page.locator(".cp-mode").inner_text().strip() == "Rule-based")
     check("copilot: explains the IBAN with the vendor master", "IBAN on the invoice" in page.locator(".cp-findings").first.inner_text())
     n = int(re.search(r"\((\d+)\)", page.locator(".cp-steps summary").inner_text())[1])
@@ -506,10 +506,10 @@ def copilot_panel(page: Page) -> None:
           sum(a["actor"] == "agent:rules" and a["action"] == "agent.step" for a in log) == n and any(a["action"] == "agent.propose" for a in log))
     expect(page.locator(".decide").get_by_role("button", name="Approve")).to_be_visible()
     page.evaluate(f"location.hash = '#/runs/{rid}'")
-    expect(page.locator(".tl li").last).to_contain_text("suggested: reject")
+    expect(page.locator(".tl li").last).to_contain_text("suggested: find out more")
 
     page.evaluate(f"localStorage.setItem('id-lang', 'ar'); location.hash = '#/review/{rid}'; location.reload()")
-    expect(page.locator(".cp-rec")).to_contain_text("يقترح الرفض")
+    expect(page.locator(".cp-rec")).to_contain_text("يقترح التحقق أكثر")
     text = page.locator(".cp-findings").first.inner_text()
     check("copilot: findings in Arabic", "الآيبان" in text and "IBAN on" not in text, text[:120])
     check("copilot: right to left in Arabic", page.evaluate("getComputedStyle(document.querySelector('.copilot')).direction") == "rtl")
